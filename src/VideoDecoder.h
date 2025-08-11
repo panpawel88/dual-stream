@@ -28,7 +28,7 @@ public:
     VideoDecoder();
     ~VideoDecoder();
     
-    bool Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice);
+    bool Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice, AVRational streamTimebase = {0, 1});
     void Cleanup();
     
     bool SendPacket(AVPacket* packet);
@@ -51,6 +51,7 @@ private:
     AVBufferRef* m_hwDeviceContext;
     AVFrame* m_frame;
     AVFrame* m_hwFrame;
+    AVRational m_streamTimebase;
     
     // DirectX 11 components
     ComPtr<ID3D11Device> m_d3dDevice;

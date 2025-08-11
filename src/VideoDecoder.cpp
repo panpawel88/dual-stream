@@ -21,7 +21,7 @@ VideoDecoder::~VideoDecoder() {
     Cleanup();
 }
 
-bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice) {
+bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice, AVRational streamTimebase) {
     if (m_initialized) {
         Cleanup();
     }
@@ -34,6 +34,7 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     m_d3dDevice = d3dDevice;
     m_d3dDevice->GetImmediateContext(&m_d3dContext);
     m_decoderInfo = decoderInfo;
+    m_streamTimebase = streamTimebase;
     
     std::cout << "Initializing video decoder with " << decoderInfo.name << "\n";
     
@@ -80,25 +81,33 @@ void VideoDecoder::Cleanup() {
 
 bool VideoDecoder::SendPacket(AVPacket* packet) {
     if (!m_initialized || !m_codecContext) {
+        std::cerr << "DEBUG: SendPacket failed - decoder not initialized or no codec context\n";
         return false;
     }
+    
+    std::cout << "DEBUG: Sending packet to decoder - Size: " << (packet ? packet->size : 0)
+              << ", PTS: " << (packet && packet->pts != AV_NOPTS_VALUE ? packet->pts : -1)
+              << ", DTS: " << (packet && packet->dts != AV_NOPTS_VALUE ? packet->dts : -1) << "\n";
     
     int ret = avcodec_send_packet(m_codecContext, packet);
     if (ret < 0) {
         if (ret == AVERROR_EOF) {
+            std::cout << "DEBUG: Decoder reached end of stream\n";
             return true; // End of stream
         }
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Error sending packet to decoder: " << errorBuf << "\n";
+        std::cerr << "DEBUG: Error sending packet to decoder: " << errorBuf << " (ret=" << ret << ")\n";
         return false;
     }
     
+    std::cout << "DEBUG: Packet sent to decoder successfully\n";
     return true;
 }
 
 bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
     if (!m_initialized || !m_codecContext) {
+        std::cerr << "DEBUG: ReceiveFrame failed - decoder not initialized or no codec context\n";
         return false;
     }
     
@@ -106,29 +115,53 @@ bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
     
     int ret = avcodec_receive_frame(m_codecContext, m_frame);
     if (ret < 0) {
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            return true; // No frame available yet or end of stream
+        if (ret == AVERROR(EAGAIN)) {
+            std::cout << "DEBUG: No frame available yet (EAGAIN)\n";
+            return true; // No frame available yet
+        } else if (ret == AVERROR_EOF) {
+            std::cout << "DEBUG: End of stream reached (EOF)\n";
+            return true; // End of stream
         }
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Error receiving frame from decoder: " << errorBuf << "\n";
+        std::cerr << "DEBUG: Error receiving frame from decoder: " << errorBuf << " (ret=" << ret << ")\n";
         return false;
     }
+    
+    std::cout << "DEBUG: Received frame from decoder - Size: " << m_frame->width << "x" << m_frame->height
+              << ", Format: " << m_frame->format 
+              << ", PTS: " << m_frame->pts
+              << ", Codec Timebase: " << m_codecContext->time_base.num << "/" << m_codecContext->time_base.den
+              << ", Stream Timebase: " << m_streamTimebase.num << "/" << m_streamTimebase.den << "\n";
     
     // Process frame based on decoder type
     bool success = false;
     if (m_useHardwareDecoding) {
+        std::cout << "DEBUG: Processing hardware frame\n";
         success = ProcessHardwareFrame(frame);
     } else {
+        std::cout << "DEBUG: Processing software frame\n";
         success = ProcessSoftwareFrame(frame);
     }
     
     if (success) {
-        // Set presentation time
+        // Set presentation time using stream timebase
         if (m_frame->pts != AV_NOPTS_VALUE) {
-            frame.presentationTime = static_cast<double>(m_frame->pts) * av_q2d(m_codecContext->time_base);
+            if (m_streamTimebase.den != 0) {
+                frame.presentationTime = static_cast<double>(m_frame->pts) * av_q2d(m_streamTimebase);
+                std::cout << "DEBUG: Frame presentation time (using stream timebase): " << frame.presentationTime << " seconds\n";
+            } else {
+                // Fallback to codec timebase if stream timebase is invalid
+                frame.presentationTime = static_cast<double>(m_frame->pts) * av_q2d(m_codecContext->time_base);
+                std::cout << "DEBUG: Frame presentation time (using codec timebase): " << frame.presentationTime << " seconds\n";
+            }
+        } else {
+            std::cout << "DEBUG: Frame has no PTS (AV_NOPTS_VALUE)\n";
         }
         frame.valid = true;
+        std::cout << "DEBUG: Frame processed successfully\n";
+    } else {
+        std::cerr << "DEBUG: Failed to process frame\n";
     }
     
     return success;
@@ -280,8 +313,58 @@ bool VideoDecoder::ProcessSoftwareFrame(DecodedFrame& outFrame) {
 
 bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
     if (!frame || !m_d3dDevice) {
+        std::cerr << "DEBUG: CreateTextureFromFrame failed - no frame or D3D device\n";
         return false;
     }
+    
+    std::cout << "DEBUG: Creating texture from frame - Size: " << frame->width << "x" << frame->height 
+              << ", Format: " << frame->format << "\n";
+    
+    // Convert YUV frame to RGB using libswscale
+    AVFrame* rgbFrame = av_frame_alloc();
+    if (!rgbFrame) {
+        std::cerr << "DEBUG: Failed to allocate RGB frame\n";
+        return false;
+    }
+    
+    // Set up RGB frame properties
+    rgbFrame->format = AV_PIX_FMT_BGRA;
+    rgbFrame->width = frame->width;
+    rgbFrame->height = frame->height;
+    
+    int ret = av_frame_get_buffer(rgbFrame, 32);
+    if (ret < 0) {
+        std::cerr << "DEBUG: Failed to allocate RGB frame buffer\n";
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    // Create conversion context
+    SwsContext* swsContext = sws_getContext(
+        frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+        frame->width, frame->height, AV_PIX_FMT_BGRA,
+        SWS_BILINEAR, nullptr, nullptr, nullptr
+    );
+    
+    if (!swsContext) {
+        std::cerr << "DEBUG: Failed to create SWS context for format conversion\n";
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    // Convert YUV to RGB
+    ret = sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
+                    rgbFrame->data, rgbFrame->linesize);
+    
+    sws_freeContext(swsContext);
+    
+    if (ret < 0) {
+        std::cerr << "DEBUG: Failed to convert YUV to RGB\n";
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    std::cout << "DEBUG: Successfully converted YUV to RGB\n";
     
     // Create texture description
     D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -289,23 +372,28 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     textureDesc.Height = frame->height;
     textureDesc.MipLevels = 1;
     textureDesc.ArraySize = 1;
-    textureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // Common format for video
+    textureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     textureDesc.SampleDesc.Count = 1;
     textureDesc.Usage = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     
-    // For now, create empty texture - we'll need to implement proper format conversion
-    // This is a placeholder implementation
-    HRESULT hr = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &texture);
+    // Create initial data for texture
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = rgbFrame->data[0];
+    initData.SysMemPitch = rgbFrame->linesize[0];
+    initData.SysMemSlicePitch = 0;
+    
+    // Create texture with actual frame data
+    HRESULT hr = m_d3dDevice->CreateTexture2D(&textureDesc, &initData, &texture);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create D3D11 texture. HRESULT: 0x" << std::hex << hr << "\n";
+        std::cerr << "DEBUG: Failed to create D3D11 texture with data. HRESULT: 0x" << std::hex << hr << "\n";
+        av_frame_free(&rgbFrame);
         return false;
     }
     
-    // TODO: Implement proper YUV to RGB conversion and texture upload
-    // This would involve using libswscale to convert the frame format
-    // and then updating the texture with the converted data
+    std::cout << "DEBUG: D3D11 texture created successfully with actual frame data!\n";
     
+    av_frame_free(&rgbFrame);
     return true;
 }
 

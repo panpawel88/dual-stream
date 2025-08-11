@@ -44,6 +44,9 @@ bool VideoDemuxer::Open(const std::string& filePath) {
     std::cout << "  Resolution: " << GetWidth() << "x" << GetHeight() << "\n";
     std::cout << "  Frame rate: " << GetFrameRate() << " FPS\n";
     std::cout << "  Duration: " << GetDuration() << " seconds\n";
+    AVRational timebase = GetTimeBase();
+    std::cout << "  Timebase: " << timebase.num << "/" << timebase.den 
+              << " (" << av_q2d(timebase) << " seconds per unit)\n";
     
     return true;
 }
@@ -54,21 +57,35 @@ void VideoDemuxer::Close() {
 
 bool VideoDemuxer::ReadFrame(AVPacket* packet) {
     if (!m_formatContext || m_videoStreamIndex < 0) {
+        std::cerr << "DEBUG: ReadFrame failed - no format context or invalid video stream index\n";
         return false;
     }
     
     while (true) {
         int ret = av_read_frame(m_formatContext, packet);
         if (ret < 0) {
-            return false; // End of file or error
+            if (ret == AVERROR_EOF) {
+                std::cout << "DEBUG: End of file reached\n";
+            } else {
+                char errorBuf[AV_ERROR_MAX_STRING_SIZE];
+                av_strerror(ret, errorBuf, sizeof(errorBuf));
+                std::cerr << "DEBUG: av_read_frame failed: " << errorBuf << " (ret=" << ret << ")\n";
+            }
+            return false;
         }
         
         // Only return packets from the video stream
         if (packet->stream_index == m_videoStreamIndex) {
+            std::cout << "DEBUG: Read video packet - Size: " << packet->size 
+                     << ", PTS: " << packet->pts 
+                     << ", DTS: " << packet->dts 
+                     << ", Stream: " << packet->stream_index
+                     << ", Flags: " << packet->flags << "\n";
             return true;
         }
         
         // Free packet if it's not from the video stream
+        std::cout << "DEBUG: Skipping non-video packet from stream " << packet->stream_index << "\n";
         av_packet_unref(packet);
     }
 }

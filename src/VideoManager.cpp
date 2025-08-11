@@ -150,11 +150,19 @@ bool VideoManager::SwitchToVideo(ActiveVideo video) {
 
 bool VideoManager::UpdateFrame() {
     if (!m_initialized || m_state != VideoState::PLAYING) {
+        if (!m_initialized) {
+            std::cout << "DEBUG: UpdateFrame skipped - not initialized\n";
+        } else if (m_state != VideoState::PLAYING) {
+            std::cout << "DEBUG: UpdateFrame skipped - state is not PLAYING (state=" << static_cast<int>(m_state) << ")\n";
+        }
         return true;
     }
     
+    std::cout << "DEBUG: UpdateFrame called - processing...\n";
+    
     // Handle seeking if needed
     if (m_needsSeek) {
+        std::cout << "DEBUG: Handling seek to time: " << m_targetSeekTime << "\n";
         if (!SeekToTime(m_targetSeekTime)) {
             std::cerr << "Failed to seek to time: " << m_targetSeekTime << "\n";
             return false;
@@ -164,8 +172,11 @@ bool VideoManager::UpdateFrame() {
     
     // Check if it's time to present a new frame
     if (!ShouldPresentFrame()) {
+        std::cout << "DEBUG: No new frame needed yet\n";
         return true; // No new frame needed yet
     }
+    
+    std::cout << "DEBUG: Time to present new frame\n";
     
     // Update playback time
     UpdatePlaybackTime();
@@ -176,6 +187,7 @@ bool VideoManager::UpdateFrame() {
     if (!ProcessVideoFrame(activeStream)) {
         // Check if we reached end of stream
         if (activeStream.state == VideoState::END_OF_STREAM) {
+            std::cout << "DEBUG: End of stream reached, handling...\n";
             if (!HandleEndOfStream(activeStream)) {
                 return false;
             }
@@ -186,6 +198,7 @@ bool VideoManager::UpdateFrame() {
     }
     
     m_lastFrameTime = std::chrono::steady_clock::now();
+    std::cout << "DEBUG: UpdateFrame completed successfully\n";
     return true;
 }
 
@@ -264,7 +277,7 @@ bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string&
     DecoderInfo decoderInfo = HardwareDecoder::GetBestDecoder(stream.demuxer.GetCodecID());
     
     // Initialize decoder
-    if (!stream.decoder.Initialize(stream.demuxer.GetCodecParameters(), decoderInfo, d3dDevice)) {
+    if (!stream.decoder.Initialize(stream.demuxer.GetCodecParameters(), decoderInfo, d3dDevice, stream.demuxer.GetTimeBase())) {
         std::cerr << "Failed to initialize decoder for: " << filePath << "\n";
         return false;
     }
@@ -302,25 +315,36 @@ bool VideoManager::ValidateStreams() {
 }
 
 bool VideoManager::ProcessVideoFrame(VideoStream& stream) {
+    std::cout << "DEBUG: Processing video frame for " << (m_activeVideo == ActiveVideo::VIDEO_1 ? "video 1" : "video 2") << "\n";
+    
     // Try to decode next frame
     if (!DecodeNextFrame(stream)) {
+        std::cerr << "DEBUG: Failed to decode next frame\n";
         return false;
     }
     
+    std::cout << "DEBUG: Video frame processed successfully\n";
     return true;
 }
 
 bool VideoManager::DecodeNextFrame(VideoStream& stream) {
+    std::cout << "DEBUG: Attempting to decode next frame\n";
+    
     AVPacket packet;
     av_init_packet(&packet);
     
     bool frameDecoded = false;
+    int attempts = 0;
     
     // Keep trying to decode frames until we get one or reach end of stream
     while (!frameDecoded) {
+        attempts++;
+        std::cout << "DEBUG: Decode attempt #" << attempts << "\n";
+        
         // Read packet from demuxer
         if (!stream.demuxer.ReadFrame(&packet)) {
             // End of stream
+            std::cout << "DEBUG: End of stream reached\n";
             stream.state = VideoState::END_OF_STREAM;
             av_packet_unref(&packet);
             return false;
@@ -328,7 +352,7 @@ bool VideoManager::DecodeNextFrame(VideoStream& stream) {
         
         // Send packet to decoder
         if (!stream.decoder.SendPacket(&packet)) {
-            std::cerr << "Failed to send packet to decoder\n";
+            std::cerr << "DEBUG: Failed to send packet to decoder\n";
             av_packet_unref(&packet);
             return false;
         }
@@ -337,15 +361,27 @@ bool VideoManager::DecodeNextFrame(VideoStream& stream) {
         DecodedFrame newFrame;
         if (stream.decoder.ReceiveFrame(newFrame)) {
             if (newFrame.valid) {
+                std::cout << "DEBUG: Valid frame decoded! PTS: " << newFrame.presentationTime << "\n";
                 stream.currentFrame = newFrame;
                 stream.currentTime = newFrame.presentationTime;
                 frameDecoded = true;
+            } else {
+                std::cout << "DEBUG: Frame received but not valid\n";
             }
+        } else {
+            std::cout << "DEBUG: No frame received from decoder\n";
         }
         
         av_packet_unref(&packet);
+        
+        // Prevent infinite loops
+        if (attempts > 100) {
+            std::cerr << "DEBUG: Too many decode attempts, giving up\n";
+            return false;
+        }
     }
     
+    std::cout << "DEBUG: Frame decoded successfully after " << attempts << " attempts\n";
     return frameDecoded;
 }
 
