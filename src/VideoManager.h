@@ -65,6 +65,10 @@ public:
     ActiveVideo GetActiveVideo() const { return m_activeVideo; }
     bool IsInitialized() const { return m_initialized; }
     
+    // Frame timing
+    double GetFrameInterval() const { return m_frameInterval; }
+    bool ShouldUpdateFrame() const;
+    
 private:
     bool m_initialized;
     VideoState m_state;

@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include <iostream>
 #include <algorithm>
+#include <cmath>
 
 VideoManager::VideoManager()
     : m_initialized(false)
@@ -48,6 +49,10 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     double frameRate = m_videos[0].demuxer.GetFrameRate();
     if (frameRate > 0) {
         m_frameInterval = 1.0 / frameRate;
+    } else {
+        // Fallback to 30 FPS if frame rate couldn't be determined
+        m_frameInterval = 1.0 / 30.0;
+        frameRate = 30.0;
     }
     
     LOG_INFO("VideoManager initialized successfully");
@@ -132,18 +137,37 @@ bool VideoManager::SwitchToVideo(ActiveVideo video) {
     }
     
     ActiveVideo previousVideo = m_activeVideo;
+    double currentTime = GetCurrentTime();
+    
+    LOG_INFO("Switching to video ", (video == ActiveVideo::VIDEO_1 ? "1" : "2"), " at time ", currentTime);
+    
+    // Switch active video first
     m_activeVideo = video;
     
-    LOG_INFO("Switching to video ", (video == ActiveVideo::VIDEO_1 ? "1" : "2"));
-    
-    // If playing, synchronize the new active video to current time
+    // If playing, synchronize the new active video to current playback time
     if (m_state == VideoState::PLAYING) {
-        double currentTime = GetCurrentTime();
-        if (!SynchronizeStreams()) {
-            std::cerr << "Failed to synchronize streams after switch\n";
+        VideoStream& newActiveStream = m_videos[static_cast<int>(m_activeVideo)];
+        
+        // Handle looping if current time exceeds new video's duration
+        double targetTime = currentTime;
+        if (targetTime >= newActiveStream.duration && newActiveStream.duration > 0.0) {
+            // Loop to the appropriate position within the video
+            targetTime = fmod(targetTime, newActiveStream.duration);
+            LOG_INFO("Seeking to looped position: ", targetTime);
+        }
+        
+        // Seek the new active video to the synchronized time
+        if (!SeekVideoStream(newActiveStream, targetTime)) {
+            std::cerr << "Failed to synchronize new active stream to time " <<  targetTime << "\n";
             m_activeVideo = previousVideo; // Revert
             return false;
         }
+        
+        // Update the stream's current time
+        newActiveStream.currentTime = targetTime;
+        newActiveStream.state = VideoState::PLAYING;
+        
+        LOG_INFO("Successfully synchronized video ", (video == ActiveVideo::VIDEO_1 ? "1" : "2"), " to time ", targetTime);
     }
     
     return true;
@@ -398,6 +422,10 @@ bool VideoManager::ShouldPresentFrame() const {
     return elapsedSeconds >= m_frameInterval;
 }
 
+bool VideoManager::ShouldUpdateFrame() const {
+    return ShouldPresentFrame();
+}
+
 void VideoManager::UpdatePlaybackTime() {
     // Playback time is managed by GetCurrentTime() method
     // This method can be used for additional time-related updates if needed
@@ -417,13 +445,69 @@ bool VideoManager::SynchronizeStreams() {
 }
 
 bool VideoManager::SeekVideoStream(VideoStream& stream, double timeInSeconds) {
+    LOG_DEBUG("SeekVideoStream to ", timeInSeconds, " seconds");
+    
     if (!stream.demuxer.SeekToTime(timeInSeconds)) {
+        LOG_DEBUG("Demuxer seek failed");
         return false;
     }
     
+    // Flush decoder to reset internal state
     stream.decoder.Flush();
-    stream.currentTime = timeInSeconds;
     stream.currentFrame.valid = false;
+    
+    // Decode frames until we reach the target time or get close to it
+    const double SEEK_TOLERANCE = 0.5; // 500ms tolerance for better seeking
+    bool foundFrame = false;
+    int attempts = 0;
+    const int MAX_SEEK_ATTEMPTS = 300; // Increased for longer GOP sizes
+    
+    LOG_DEBUG("Looking for frame at target time ", timeInSeconds);
+    
+    while (!foundFrame && attempts < MAX_SEEK_ATTEMPTS) {
+        attempts++;
+        
+        AVPacket packet;
+        av_init_packet(&packet);
+        
+        // Read packet from demuxer
+        if (!stream.demuxer.ReadFrame(&packet)) {
+            LOG_DEBUG("No more packets during seek");
+            av_packet_unref(&packet);
+            break;
+        }
+        
+        // Send packet to decoder
+        if (!stream.decoder.SendPacket(&packet)) {
+            LOG_DEBUG("Failed to send packet during seek");
+            av_packet_unref(&packet);
+            continue;
+        }
+        
+        // Try to receive decoded frame
+        DecodedFrame tempFrame;
+        if (stream.decoder.ReceiveFrame(tempFrame)) {
+            if (tempFrame.valid) {
+                LOG_DEBUG("Decoded frame at time ", tempFrame.presentationTime, " (target: ", timeInSeconds, ")");
+                
+                // Check if this frame is close enough to our target time
+                if (tempFrame.presentationTime >= timeInSeconds - SEEK_TOLERANCE) {
+                    stream.currentFrame = tempFrame;
+                    stream.currentTime = tempFrame.presentationTime;
+                    foundFrame = true;
+                    LOG_DEBUG("Found suitable frame at ", tempFrame.presentationTime, " seconds");
+                }
+            }
+        }
+        
+        av_packet_unref(&packet);
+    }
+    
+    if (!foundFrame) {
+        LOG_DEBUG("Could not find frame near target time after ", attempts, " attempts");
+        // Set current time anyway - we'll get the next available frame
+        stream.currentTime = timeInSeconds;
+    }
     
     return true;
 }
@@ -434,11 +518,33 @@ void VideoManager::ResetPlaybackTiming() {
 }
 
 bool VideoManager::HandleEndOfStream(VideoStream& stream) {
-    LOG_INFO("End of stream reached, restarting video");
-    return RestartVideo(stream);
+    LOG_INFO("End of stream reached for ", (&stream == &m_videos[0] ? "video 1" : "video 2"));
+    
+    // Calculate how much we've overshot the video duration
+    double overshoot = stream.currentTime - stream.duration;
+    
+    // Restart the video and seek to the overshoot position to maintain timing continuity
+    if (!RestartVideo(stream)) {
+        return false;
+    }
+    
+    // If we overshot, seek to the overshoot position for seamless looping
+    if (overshoot > 0.0 && overshoot < stream.duration) {
+        LOG_INFO("Seeking to overshoot position: ", overshoot);
+        if (!SeekVideoStream(stream, overshoot)) {
+            std::cerr << "Failed to seek to overshoot position\n";
+            // Continue anyway - not critical
+        } else {
+            stream.currentTime = overshoot;
+        }
+    }
+    
+    return true;
 }
 
 bool VideoManager::RestartVideo(VideoStream& stream) {
+    LOG_INFO("Restarting video ", (&stream == &m_videos[0] ? "1" : "2"));
+    
     // Seek back to beginning
     if (!SeekVideoStream(stream, 0.0)) {
         std::cerr << "Failed to restart video\n";
@@ -446,5 +552,8 @@ bool VideoManager::RestartVideo(VideoStream& stream) {
     }
     
     stream.state = VideoState::PLAYING;
+    stream.currentTime = 0.0;
+    
+    LOG_INFO("Video restarted successfully");
     return true;
 }

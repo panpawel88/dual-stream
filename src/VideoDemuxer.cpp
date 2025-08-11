@@ -98,6 +98,8 @@ bool VideoDemuxer::SeekToTime(double timeInSeconds) {
     
     int64_t timestamp = SecondsToPacketTime(timeInSeconds);
     
+    LOG_DEBUG("Seeking to time ", timeInSeconds, " seconds (timestamp: ", timestamp, ")");
+    
     int ret = av_seek_frame(m_formatContext, m_videoStreamIndex, timestamp, AVSEEK_FLAG_BACKWARD);
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
@@ -106,6 +108,7 @@ bool VideoDemuxer::SeekToTime(double timeInSeconds) {
         return false;
     }
     
+    LOG_DEBUG("Seek completed successfully");
     return true;
 }
 

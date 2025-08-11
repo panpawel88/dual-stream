@@ -106,10 +106,12 @@ int main(int argc, char* argv[]) {
             window.ClearKeyPress('2');
         }
         
-        // Update video frames
-        if (!videoManager.UpdateFrame()) {
-            std::cerr << "Failed to update video frame\n";
-            break;
+        // Update video frames only when needed (based on video frame rate)
+        if (videoManager.ShouldUpdateFrame()) {
+            if (!videoManager.UpdateFrame()) {
+                std::cerr << "Failed to update video frame\n";
+                break;
+            }
         }
         
         // Get current frame and render it
@@ -120,7 +122,8 @@ int main(int argc, char* argv[]) {
             renderer.Present(nullptr); // Render black screen if no frame available
         }
         
-        Sleep(16); // ~60 FPS
+        // Sleep for a short time to prevent busy waiting, but much shorter than frame interval
+        Sleep(1); // 1ms sleep to prevent excessive CPU usage
     }
     
     LOG_INFO("Application exiting...");
