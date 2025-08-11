@@ -1,4 +1,5 @@
 #include "D3D11Renderer.h"
+#include "Logger.h"
 #include <iostream>
 #include <d3dcompiler.h>
 
@@ -57,7 +58,7 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     m_width = width;
     m_height = height;
     
-    std::cout << "Initializing D3D11 renderer (" << width << "x" << height << ")\n";
+    LOG_INFO("Initializing D3D11 renderer (", width, "x", height, ")");
     
     // Create device and swap chain
     if (!CreateDeviceAndSwapChain()) {
@@ -105,7 +106,7 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     m_context->RSSetViewports(1, &viewport);
     
     m_initialized = true;
-    std::cout << "D3D11 renderer initialized successfully\n";
+    LOG_INFO("D3D11 renderer initialized successfully");
     return true;
 }
 
@@ -231,7 +232,7 @@ bool D3D11Renderer::CreateDeviceAndSwapChain() {
         return false;
     }
     
-    std::cout << "Created D3D11 device with feature level: " << std::hex << featureLevel << "\n";
+    LOG_INFO("Created D3D11 device with feature level: ", std::hex, featureLevel);
     return true;
 }
 

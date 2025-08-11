@@ -7,9 +7,10 @@ struct VideoPlayerArgs {
     std::string video1Path;
     std::string video2Path;
     bool valid;
+    bool debugLogging;
     std::string errorMessage;
     
-    VideoPlayerArgs() : valid(false) {}
+    VideoPlayerArgs() : valid(false), debugLogging(false) {}
 };
 
 class CommandLineParser {

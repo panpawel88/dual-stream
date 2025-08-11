@@ -1,4 +1,5 @@
 #include "VideoValidator.h"
+#include "Logger.h"
 #include <iostream>
 
 extern "C" {
@@ -17,8 +18,8 @@ bool VideoValidator::Initialize() {
     // Initialize FFmpeg
     av_log_set_level(AV_LOG_WARNING);
     
-    std::cout << "FFmpeg version: " << av_version_info() << "\n";
-    std::cout << "Initializing video validation...\n";
+    LOG_INFO("FFmpeg version: ", av_version_info());
+    LOG_INFO("Initializing video validation...");
     
     s_initialized = true;
     return true;
@@ -109,11 +110,11 @@ VideoInfo VideoValidator::GetVideoInfo(const std::string& filePath) {
         return info;
     }
     
-    std::cout << "Video info for " << filePath << ":\n";
-    std::cout << "  Resolution: " << info.width << "x" << info.height << "\n";
-    std::cout << "  Frame rate: " << info.frameRate << " FPS\n";
-    std::cout << "  Codec: " << info.codecName << "\n";
-    std::cout << "  Duration: " << (info.duration / AV_TIME_BASE) << " seconds\n";
+    LOG_INFO("Video info for ", filePath, ":");
+    LOG_INFO("  Resolution: ", info.width, "x", info.height);
+    LOG_INFO("  Frame rate: ", info.frameRate, " FPS");
+    LOG_INFO("  Codec: ", info.codecName);
+    LOG_INFO("  Duration: ", (info.duration / AV_TIME_BASE), " seconds");
     
     info.valid = true;
     
@@ -140,8 +141,8 @@ bool VideoValidator::ValidateCompatibility(const VideoInfo& video1, const VideoI
         return false;
     }
     
-    std::cout << "Video compatibility validation passed\n";
-    std::cout << "Both videos: " << video1.width << "x" << video1.height << "\n";
+    LOG_INFO("Video compatibility validation passed");
+    LOG_INFO("Both videos: ", video1.width, "x", video1.height);
     
     return true;
 }

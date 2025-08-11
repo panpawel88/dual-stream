@@ -8,9 +8,20 @@
 #include "VideoDemuxer.h"
 #include "D3D11Renderer.h"
 #include "VideoManager.h"
+#include "Logger.h"
 
 int main(int argc, char* argv[]) {
-    std::cout << "FFmpeg Video Player v1.0.0\n";
+    // Parse command line arguments first to get debug flag
+    VideoPlayerArgs args = CommandLineParser::Parse(argc, argv);
+    if (!args.valid) {
+        std::cerr << "Error: " << args.errorMessage << "\n";
+        return 1;
+    }
+    
+    // Initialize logger based on debug flag
+    Logger::GetInstance().SetLogLevel(args.debugLogging ? LogLevel::Debug : LogLevel::Info);
+    
+    LOG_INFO("FFmpeg Video Player v1.0.0");
     
     // Initialize FFmpeg
     if (!VideoValidator::Initialize()) {
@@ -25,17 +36,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Parse command line arguments
-    VideoPlayerArgs args = CommandLineParser::Parse(argc, argv);
-    if (!args.valid) {
-        std::cerr << "Error: " << args.errorMessage << "\n";
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
-        return 1;
-    }
-    
-    std::cout << "Video 1: " << args.video1Path << "\n";
-    std::cout << "Video 2: " << args.video2Path << "\n";
+    LOG_INFO("Video 1: ", args.video1Path);
+    LOG_INFO("Video 2: ", args.video2Path);
     
     // Validate video files and get their properties
     VideoInfo video1Info = VideoValidator::GetVideoInfo(args.video1Path);
@@ -59,7 +61,7 @@ int main(int argc, char* argv[]) {
     }
     
     window.Show();
-    std::cout << "Window created. Press 1/2 to switch videos, ESC to exit\n";
+    LOG_INFO("Window created. Press 1/2 to switch videos, ESC to exit");
     
     // Initialize D3D11 renderer
     D3D11Renderer renderer;
@@ -87,19 +89,19 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "Video playback started successfully\n";
+    LOG_INFO("Video playback started successfully");
     
     // Main message loop
     while (window.ProcessMessages()) {
         // Handle keyboard input for video switching
         if (window.IsKeyPressed('1')) {
-            std::cout << "Switching to video 1\n";
+            LOG_INFO("Switching to video 1");
             videoManager.SwitchToVideo(ActiveVideo::VIDEO_1);
             window.ClearKeyPress('1');
         }
         
         if (window.IsKeyPressed('2')) {
-            std::cout << "Switching to video 2\n";
+            LOG_INFO("Switching to video 2");
             videoManager.SwitchToVideo(ActiveVideo::VIDEO_2);
             window.ClearKeyPress('2');
         }
@@ -121,7 +123,7 @@ int main(int argc, char* argv[]) {
         Sleep(16); // ~60 FPS
     }
     
-    std::cout << "Application exiting...\n";
+    LOG_INFO("Application exiting...");
     HardwareDecoder::Cleanup();
     VideoValidator::Cleanup();
     return 0;

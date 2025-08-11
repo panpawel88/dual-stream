@@ -1,4 +1,5 @@
 #include "HardwareDecoder.h"
+#include "Logger.h"
 #include <iostream>
 
 extern "C" {
@@ -14,13 +15,13 @@ bool HardwareDecoder::Initialize() {
         return true;
     }
     
-    std::cout << "Initializing hardware decoder detection...\n";
+    LOG_INFO("Initializing hardware decoder detection...");
     
     DetectHardwareDecoders();
     
-    std::cout << "Available decoders:\n";
+    LOG_INFO("Available decoders:");
     for (const auto& decoder : s_availableDecoders) {
-        std::cout << "  - " << decoder.name << " (" << (decoder.available ? "Available" : "Unavailable") << ")\n";
+        LOG_INFO("  - ", decoder.name, " (", (decoder.available ? "Available" : "Unavailable"), ")");
     }
     
     s_initialized = true;
@@ -102,7 +103,7 @@ bool HardwareDecoder::TestNVDECAvailability() {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cout << "NVDEC not available: Failed to create CUDA device context: " << errorBuf << "\n";
+        LOG_INFO("NVDEC not available: Failed to create CUDA device context: ", errorBuf);
         return false;
     }
     
@@ -114,27 +115,27 @@ bool HardwareDecoder::TestNVDECAvailability() {
     const AVCodec* h264Decoder = avcodec_find_decoder_by_name("h264_cuvid");
     if (h264Decoder) {
         h264Available = true;
-        std::cout << "H264 NVDEC decoder found\n";
+        LOG_INFO("H264 NVDEC decoder found");
     }
     
     // Check for H265 NVDEC decoder  
     const AVCodec* h265Decoder = avcodec_find_decoder_by_name("hevc_cuvid");
     if (h265Decoder) {
         h265Available = true;
-        std::cout << "H265 NVDEC decoder found\n";
+        LOG_INFO("H265 NVDEC decoder found");
     }
     
     av_buffer_unref(&hwDeviceCtx);
     
     if (h264Available || h265Available) {
-        std::cout << "NVDEC hardware decoding available\n";
+        LOG_INFO("NVDEC hardware decoding available");
         return true;
     } else {
-        std::cout << "NVDEC hardware decoders not found\n";
+        LOG_INFO("NVDEC hardware decoders not found");
         return false;
     }
 #else
-    std::cout << "NVDEC not available: CUDA support not compiled in\n";
+    LOG_INFO("NVDEC not available: CUDA support not compiled in");
     return false;
 #endif
 }

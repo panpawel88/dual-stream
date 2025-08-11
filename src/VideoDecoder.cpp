@@ -1,4 +1,5 @@
 #include "VideoDecoder.h"
+#include "Logger.h"
 #include <iostream>
 
 extern "C" {
@@ -36,7 +37,7 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     m_decoderInfo = decoderInfo;
     m_streamTimebase = streamTimebase;
     
-    std::cout << "Initializing video decoder with " << decoderInfo.name << "\n";
+    LOG_INFO("Initializing video decoder with ", decoderInfo.name);
     
     // Allocate frames
     m_frame = av_frame_alloc();
@@ -53,16 +54,16 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
         success = InitializeHardwareDecoder(codecParams);
         if (success) {
             m_useHardwareDecoding = true;
-            std::cout << "Hardware decoding enabled\n";
+            LOG_INFO("Hardware decoding enabled");
         } else {
-            std::cout << "Hardware decoding failed, falling back to software\n";
+            LOG_INFO("Hardware decoding failed, falling back to software");
             success = InitializeSoftwareDecoder(codecParams);
             m_useHardwareDecoding = false;
         }
     } else {
         success = InitializeSoftwareDecoder(codecParams);
         m_useHardwareDecoding = false;
-        std::cout << "Software decoding enabled\n";
+        LOG_INFO("Software decoding enabled");
     }
     
     if (!success) {
@@ -81,33 +82,33 @@ void VideoDecoder::Cleanup() {
 
 bool VideoDecoder::SendPacket(AVPacket* packet) {
     if (!m_initialized || !m_codecContext) {
-        std::cerr << "DEBUG: SendPacket failed - decoder not initialized or no codec context\n";
+        LOG_DEBUG("SendPacket failed - decoder not initialized or no codec context");
         return false;
     }
     
-    std::cout << "DEBUG: Sending packet to decoder - Size: " << (packet ? packet->size : 0)
-              << ", PTS: " << (packet && packet->pts != AV_NOPTS_VALUE ? packet->pts : -1)
-              << ", DTS: " << (packet && packet->dts != AV_NOPTS_VALUE ? packet->dts : -1) << "\n";
+    LOG_DEBUG("Sending packet to decoder - Size: ", (packet ? packet->size : 0),
+              ", PTS: ", (packet && packet->pts != AV_NOPTS_VALUE ? packet->pts : -1),
+              ", DTS: ", (packet && packet->dts != AV_NOPTS_VALUE ? packet->dts : -1));
     
     int ret = avcodec_send_packet(m_codecContext, packet);
     if (ret < 0) {
         if (ret == AVERROR_EOF) {
-            std::cout << "DEBUG: Decoder reached end of stream\n";
+            LOG_DEBUG("Decoder reached end of stream");
             return true; // End of stream
         }
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "DEBUG: Error sending packet to decoder: " << errorBuf << " (ret=" << ret << ")\n";
+        LOG_DEBUG("Error sending packet to decoder: ", errorBuf, " (ret=", ret, ")");
         return false;
     }
     
-    std::cout << "DEBUG: Packet sent to decoder successfully\n";
+    LOG_DEBUG("Packet sent to decoder successfully");
     return true;
 }
 
 bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
     if (!m_initialized || !m_codecContext) {
-        std::cerr << "DEBUG: ReceiveFrame failed - decoder not initialized or no codec context\n";
+        LOG_DEBUG("ReceiveFrame failed - decoder not initialized or no codec context");
         return false;
     }
     
@@ -116,31 +117,30 @@ bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
     int ret = avcodec_receive_frame(m_codecContext, m_frame);
     if (ret < 0) {
         if (ret == AVERROR(EAGAIN)) {
-            std::cout << "DEBUG: No frame available yet (EAGAIN)\n";
+            LOG_DEBUG("No frame available yet (EAGAIN)");
             return true; // No frame available yet
         } else if (ret == AVERROR_EOF) {
-            std::cout << "DEBUG: End of stream reached (EOF)\n";
+            LOG_DEBUG("End of stream reached (EOF)");
             return true; // End of stream
         }
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "DEBUG: Error receiving frame from decoder: " << errorBuf << " (ret=" << ret << ")\n";
+        LOG_DEBUG("Error receiving frame from decoder: ", errorBuf, " (ret=", ret, ")");
         return false;
     }
     
-    std::cout << "DEBUG: Received frame from decoder - Size: " << m_frame->width << "x" << m_frame->height
-              << ", Format: " << m_frame->format 
-              << ", PTS: " << m_frame->pts
-              << ", Codec Timebase: " << m_codecContext->time_base.num << "/" << m_codecContext->time_base.den
-              << ", Stream Timebase: " << m_streamTimebase.num << "/" << m_streamTimebase.den << "\n";
+    LOG_DEBUG("Received frame from decoder - Size: ", m_frame->width, "x", m_frame->height,
+              ", Format: ", m_frame->format, ", PTS: ", m_frame->pts,
+              ", Codec Timebase: ", m_codecContext->time_base.num, "/", m_codecContext->time_base.den,
+              ", Stream Timebase: ", m_streamTimebase.num, "/", m_streamTimebase.den);
     
     // Process frame based on decoder type
     bool success = false;
     if (m_useHardwareDecoding) {
-        std::cout << "DEBUG: Processing hardware frame\n";
+        LOG_DEBUG("Processing hardware frame");
         success = ProcessHardwareFrame(frame);
     } else {
-        std::cout << "DEBUG: Processing software frame\n";
+        LOG_DEBUG("Processing software frame");
         success = ProcessSoftwareFrame(frame);
     }
     
@@ -149,19 +149,19 @@ bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
         if (m_frame->pts != AV_NOPTS_VALUE) {
             if (m_streamTimebase.den != 0) {
                 frame.presentationTime = static_cast<double>(m_frame->pts) * av_q2d(m_streamTimebase);
-                std::cout << "DEBUG: Frame presentation time (using stream timebase): " << frame.presentationTime << " seconds\n";
+                LOG_DEBUG("Frame presentation time (using stream timebase): ", frame.presentationTime, " seconds");
             } else {
                 // Fallback to codec timebase if stream timebase is invalid
                 frame.presentationTime = static_cast<double>(m_frame->pts) * av_q2d(m_codecContext->time_base);
-                std::cout << "DEBUG: Frame presentation time (using codec timebase): " << frame.presentationTime << " seconds\n";
+                LOG_DEBUG("Frame presentation time (using codec timebase): ", frame.presentationTime, " seconds");
             }
         } else {
-            std::cout << "DEBUG: Frame has no PTS (AV_NOPTS_VALUE)\n";
+            LOG_DEBUG("Frame has no PTS (AV_NOPTS_VALUE)");
         }
         frame.valid = true;
-        std::cout << "DEBUG: Frame processed successfully\n";
+        LOG_DEBUG("Frame processed successfully");
     } else {
-        std::cerr << "DEBUG: Failed to process frame\n";
+        LOG_DEBUG("Failed to process frame");
     }
     
     return success;
@@ -313,17 +313,17 @@ bool VideoDecoder::ProcessSoftwareFrame(DecodedFrame& outFrame) {
 
 bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
     if (!frame || !m_d3dDevice) {
-        std::cerr << "DEBUG: CreateTextureFromFrame failed - no frame or D3D device\n";
+        LOG_DEBUG("CreateTextureFromFrame failed - no frame or D3D device");
         return false;
     }
     
-    std::cout << "DEBUG: Creating texture from frame - Size: " << frame->width << "x" << frame->height 
-              << ", Format: " << frame->format << "\n";
+    LOG_DEBUG("Creating texture from frame - Size: ", frame->width, "x", frame->height, 
+              ", Format: ", frame->format);
     
     // Convert YUV frame to RGB using libswscale
     AVFrame* rgbFrame = av_frame_alloc();
     if (!rgbFrame) {
-        std::cerr << "DEBUG: Failed to allocate RGB frame\n";
+        LOG_DEBUG("Failed to allocate RGB frame");
         return false;
     }
     
@@ -334,7 +334,7 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     
     int ret = av_frame_get_buffer(rgbFrame, 32);
     if (ret < 0) {
-        std::cerr << "DEBUG: Failed to allocate RGB frame buffer\n";
+        LOG_DEBUG("Failed to allocate RGB frame buffer");
         av_frame_free(&rgbFrame);
         return false;
     }
@@ -347,7 +347,7 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     );
     
     if (!swsContext) {
-        std::cerr << "DEBUG: Failed to create SWS context for format conversion\n";
+        LOG_DEBUG("Failed to create SWS context for format conversion");
         av_frame_free(&rgbFrame);
         return false;
     }
@@ -359,12 +359,12 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     sws_freeContext(swsContext);
     
     if (ret < 0) {
-        std::cerr << "DEBUG: Failed to convert YUV to RGB\n";
+        LOG_DEBUG("Failed to convert YUV to RGB");
         av_frame_free(&rgbFrame);
         return false;
     }
     
-    std::cout << "DEBUG: Successfully converted YUV to RGB\n";
+    LOG_DEBUG("Successfully converted YUV to RGB");
     
     // Create texture description
     D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -386,12 +386,12 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     // Create texture with actual frame data
     HRESULT hr = m_d3dDevice->CreateTexture2D(&textureDesc, &initData, &texture);
     if (FAILED(hr)) {
-        std::cerr << "DEBUG: Failed to create D3D11 texture with data. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_DEBUG("Failed to create D3D11 texture with data. HRESULT: 0x", std::hex, hr);
         av_frame_free(&rgbFrame);
         return false;
     }
     
-    std::cout << "DEBUG: D3D11 texture created successfully with actual frame data!\n";
+    LOG_DEBUG("D3D11 texture created successfully with actual frame data!");
     
     av_frame_free(&rgbFrame);
     return true;

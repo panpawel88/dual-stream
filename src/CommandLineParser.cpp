@@ -6,13 +6,24 @@
 VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
-    if (argc != 3) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4>";
+    if (argc < 3 || argc > 4) {
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug]";
         return args;
     }
     
     args.video1Path = argv[1];
     args.video2Path = argv[2];
+    
+    // Check for debug flag
+    if (argc == 4) {
+        std::string debugFlag = argv[3];
+        if (debugFlag == "--debug" || debugFlag == "-d") {
+            args.debugLogging = true;
+        } else {
+            args.errorMessage = "Unknown option: " + debugFlag + ". Use --debug or -d for debug logging.";
+            return args;
+        }
+    }
     
     // Check if files exist
     if (!FileExists(args.video1Path)) {
