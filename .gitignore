@@ -1,0 +1,33 @@
+# Test videos directory
+test_videos/
+
+# Build directories
+build/
+cmake-build-*/
+
+# FFmpeg binaries and libraries
+ffmpeg/
+
+# Visual Studio / MSVC
+.vs/
+*.vcxproj.user
+*.sln.docstates
+
+# IDE files
+.vscode/
+.idea/
+
+# Compiled object files
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+
+# Temporary files
+*.tmp
+*.temp
+*~
