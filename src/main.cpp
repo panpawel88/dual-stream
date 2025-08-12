@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
         // Get current frame and render it
         DecodedFrame* currentFrame = videoManager.GetCurrentFrame();
         if (currentFrame && currentFrame->valid && currentFrame->texture) {
-            renderer.Present(currentFrame->texture.Get());
+            renderer.Present(currentFrame->texture.Get(), currentFrame->isYUV, currentFrame->format);
         } else {
             renderer.Present(nullptr); // Render black screen if no frame available
         }

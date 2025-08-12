@@ -174,21 +174,10 @@ void VideoDecoder::Flush() {
 }
 
 bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
-#if HAVE_CUDA
-    // Find appropriate NVDEC decoder
-    const char* decoderName = nullptr;
-    if (codecParams->codec_id == AV_CODEC_ID_H264) {
-        decoderName = "h264_cuvid";
-    } else if (codecParams->codec_id == AV_CODEC_ID_HEVC) {
-        decoderName = "hevc_cuvid";
-    } else {
-        std::cerr << "Unsupported codec for hardware decoding\n";
-        return false;
-    }
-    
-    m_codec = avcodec_find_decoder_by_name(decoderName);
+    // Find appropriate hardware decoder
+    m_codec = avcodec_find_decoder(codecParams->codec_id);
     if (!m_codec) {
-        std::cerr << "Hardware decoder not found: " << decoderName << "\n";
+        std::cerr << "Decoder not found for codec\n";
         return false;
     }
     
@@ -227,10 +216,6 @@ bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
     }
     
     return true;
-#else
-    std::cerr << "Hardware decoding not supported (CUDA not available)\n";
-    return false;
-#endif
 }
 
 bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
@@ -268,19 +253,34 @@ bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
 }
 
 bool VideoDecoder::CreateHardwareDeviceContext() {
-#if HAVE_CUDA
-    int ret = av_hwdevice_ctx_create(&m_hwDeviceContext, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, 0);
+    // Create D3D11VA device context using the existing D3D11 device
+    AVHWDeviceContext* deviceContext;
+    AVD3D11VADeviceContext* d3d11vaContext;
+    
+    m_hwDeviceContext = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
+    if (!m_hwDeviceContext) {
+        std::cerr << "Failed to allocate D3D11VA device context\n";
+        return false;
+    }
+    
+    deviceContext = reinterpret_cast<AVHWDeviceContext*>(m_hwDeviceContext->data);
+    d3d11vaContext = reinterpret_cast<AVD3D11VADeviceContext*>(deviceContext->hwctx);
+    
+    // Use our existing D3D11 device
+    d3d11vaContext->device = m_d3dDevice.Get();
+    d3d11vaContext->device->AddRef(); // AddRef since FFmpeg will release it
+    d3d11vaContext->device_context = m_d3dContext.Get();
+    d3d11vaContext->device_context->AddRef();
+    
+    int ret = av_hwdevice_ctx_init(m_hwDeviceContext);
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to create CUDA device context: " << errorBuf << "\n";
+        std::cerr << "Failed to initialize D3D11VA device context: " << errorBuf << "\n";
         return false;
     }
     
     return true;
-#else
-    return false;
-#endif
 }
 
 bool VideoDecoder::SetupHardwareDecoding() {
@@ -298,17 +298,44 @@ bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
         return false;
     }
     
-    // Transfer frame from GPU to CPU memory
-    if (!TransferHardwareFrame()) {
+    // Extract D3D11 texture directly from hardware frame
+    if (!ExtractD3D11Texture(m_frame, outFrame.texture)) {
         return false;
     }
     
-    // Create D3D11 texture from the transferred frame
-    return CreateTextureFromFrame(m_hwFrame, outFrame.texture);
+    // Get actual format from the extracted texture
+    if (outFrame.texture) {
+        D3D11_TEXTURE2D_DESC desc;
+        outFrame.texture->GetDesc(&desc);
+        outFrame.format = desc.Format;
+        LOG_DEBUG("Hardware frame format: ", desc.Format);
+        
+        // Set YUV flag based on actual format
+        if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM || desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM || desc.Format == DXGI_FORMAT_B8G8R8X8_UNORM) {
+            // RGB format
+            outFrame.isYUV = false;
+            LOG_DEBUG("Hardware texture is RGB format: ", desc.Format);
+        } else {
+            // YUV format (NV12, P010, 420_OPAQUE, etc.)
+            outFrame.isYUV = true;
+            LOG_DEBUG("Hardware texture is YUV format: ", desc.Format, ", enabling YUV processing");
+        }
+    } else {
+        // Fallback
+        outFrame.isYUV = false;
+        outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+    
+    return true;
 }
 
 bool VideoDecoder::ProcessSoftwareFrame(DecodedFrame& outFrame) {
-    return CreateTextureFromFrame(m_frame, outFrame.texture);
+    bool success = CreateTextureFromFrame(m_frame, outFrame.texture);
+    if (success) {
+        outFrame.isYUV = false; // Software frame is converted to RGB
+        outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+    return success;
 }
 
 bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
@@ -403,26 +430,83 @@ bool VideoDecoder::IsHardwareFrame(AVFrame* frame) const {
     }
     
     // Check if the frame format is a hardware pixel format
-    return frame->format == AV_PIX_FMT_CUDA || 
-           frame->format == AV_PIX_FMT_D3D11 ||
+    return frame->format == AV_PIX_FMT_D3D11 ||
            frame->format == AV_PIX_FMT_DXVA2_VLD ||
            frame->hw_frames_ctx != nullptr;
 }
 
-bool VideoDecoder::TransferHardwareFrame() {
-    if (!m_frame || !m_hwFrame) {
+bool VideoDecoder::ExtractD3D11Texture(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
+    if (!frame || frame->format != AV_PIX_FMT_D3D11) {
+        LOG_DEBUG("Frame is not D3D11 format or is null");
         return false;
     }
     
-    // Transfer hardware frame to system memory
-    int ret = av_hwframe_transfer_data(m_hwFrame, m_frame, 0);
-    if (ret < 0) {
-        char errorBuf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to transfer hardware frame: " << errorBuf << "\n";
+    // Extract D3D11 texture directly from the hardware frame
+    // For D3D11 frames, data[0] contains the ID3D11Texture2D pointer
+    // and data[1] contains the texture array index
+    ID3D11Texture2D* hwTexture = reinterpret_cast<ID3D11Texture2D*>(frame->data[0]);
+    if (!hwTexture) {
+        LOG_DEBUG("No D3D11 texture found in hardware frame");
         return false;
     }
     
+    // Get texture description to understand format and properties
+    D3D11_TEXTURE2D_DESC desc;
+    hwTexture->GetDesc(&desc);
+    
+    LOG_DEBUG("Hardware texture extracted - Size: ", desc.Width, "x", desc.Height, 
+              ", Format: ", desc.Format, ", ArraySize: ", desc.ArraySize);
+    
+    // Update outFrame format information based on actual hardware texture format
+    switch (desc.Format) {
+        case DXGI_FORMAT_NV12:
+            LOG_DEBUG("Hardware texture is NV12 format (87)");
+            break;
+        case DXGI_FORMAT_P010:
+            LOG_DEBUG("Hardware texture is P010 format (104)");
+            break;
+        case DXGI_FORMAT_420_OPAQUE:
+            LOG_DEBUG("Hardware texture is 420_OPAQUE format (189)");
+            break;
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+            LOG_DEBUG("Hardware texture is B8G8R8A8_UNORM format (87)");
+            break;
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+            LOG_DEBUG("Hardware texture is R8G8B8A8_UNORM format (28)");
+            break;
+        default:
+            LOG_DEBUG("Hardware texture format: ", desc.Format, " (unknown)");
+            break;
+    }
+    
+    // If this is a texture array (common with hardware decode), we need to create a view of the specific slice
+    int arrayIndex = reinterpret_cast<intptr_t>(frame->data[1]);
+    if (desc.ArraySize > 1) {
+        // Create a new texture as a copy of the specific array slice
+        D3D11_TEXTURE2D_DESC newDesc = desc;
+        newDesc.ArraySize = 1;
+        newDesc.Usage = D3D11_USAGE_DEFAULT;
+        newDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        newDesc.CPUAccessFlags = 0;
+        newDesc.MiscFlags = 0;
+        
+        HRESULT hr = m_d3dDevice->CreateTexture2D(&newDesc, nullptr, &texture);
+        if (FAILED(hr)) {
+            LOG_DEBUG("Failed to create texture copy. HRESULT: 0x", std::hex, hr);
+            return false;
+        }
+        
+        // Copy the specific array slice to our new texture
+        m_d3dContext->CopySubresourceRegion(
+            texture.Get(), 0, 0, 0, 0,
+            hwTexture, arrayIndex, nullptr
+        );
+    } else {
+        // Single texture, use directly
+        texture = hwTexture;
+    }
+    
+    LOG_DEBUG("D3D11 texture extracted successfully from hardware frame");
     return true;
 }
 

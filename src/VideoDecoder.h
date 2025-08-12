@@ -19,8 +19,10 @@ struct DecodedFrame {
     ComPtr<ID3D11Texture2D> texture;
     double presentationTime;
     bool valid;
+    bool isYUV;  // True for hardware frames that need YUV->RGB conversion in shader
+    DXGI_FORMAT format;
     
-    DecodedFrame() : presentationTime(0.0), valid(false) {}
+    DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
 };
 
 class VideoDecoder {
@@ -70,7 +72,7 @@ private:
     
     // Hardware-specific helpers
     bool IsHardwareFrame(AVFrame* frame) const;
-    bool TransferHardwareFrame();
+    bool ExtractD3D11Texture(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture);
     
     void Reset();
 };

@@ -23,8 +23,8 @@ VS_OUTPUT main(VS_INPUT input) {
 }
 )";
 
-// Simple pixel shader source
-const char* g_pixelShaderSource = R"(
+// RGB pixel shader source
+const char* g_pixelShaderRGBSource = R"(
 Texture2D videoTexture : register(t0);
 SamplerState videoSampler : register(s0);
 
@@ -35,6 +35,39 @@ struct PS_INPUT {
 
 float4 main(PS_INPUT input) : SV_TARGET {
     return videoTexture.Sample(videoSampler, input.tex);
+}
+)";
+
+// NV12 YUV to RGB conversion with separate Y and UV textures
+const char* g_pixelShaderYUVSource = R"(
+Texture2D yTexture : register(t0);   // Y plane
+Texture2D uvTexture : register(t1);  // UV plane
+SamplerState videoSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float2 tex : TEXCOORD0;
+};
+
+float4 main(PS_INPUT input) : SV_TARGET {
+    // Sample Y (luminance)
+    float y = yTexture.Sample(videoSampler, input.tex).r;
+    
+    // Sample UV (chrominance) - for NV12, UV is at half resolution
+    float2 uvCoord = input.tex;
+    uvCoord.y *= 0.5; // UV plane is half height in NV12
+    uvCoord.y += 0.5;  // UV data starts after Y plane
+    
+    float2 chroma = uvTexture.Sample(videoSampler, uvCoord).rg;
+    float u = chroma.r - 0.5;
+    float v = chroma.g - 0.5;
+    
+    // BT.709 YUV to RGB conversion
+    float r = y + 1.5748 * v;
+    float g = y - 0.1873 * u - 0.4681 * v;
+    float b = y + 1.8556 * u;
+    
+    return float4(saturate(r), saturate(g), saturate(b), 1.0);
 }
 )";
 
@@ -114,14 +147,14 @@ void D3D11Renderer::Cleanup() {
     Reset();
 }
 
-bool D3D11Renderer::Present(ID3D11Texture2D* videoTexture) {
+bool D3D11Renderer::Present(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format) {
     if (!m_initialized) {
         return false;
     }
     
     // Update frame texture if provided
     if (videoTexture) {
-        if (!UpdateFrameTexture(videoTexture)) {
+        if (!UpdateFrameTexture(videoTexture, isYUV, format)) {
             return false;
         }
     }
@@ -133,7 +166,7 @@ bool D3D11Renderer::Present(ID3D11Texture2D* videoTexture) {
     // Only draw if we have a texture to render
     if (m_currentFrameSRV) {
         // Setup render state
-        SetupRenderState();
+        SetupRenderState(isYUV);
         
         // Draw fullscreen quad
         DrawQuad();
@@ -294,22 +327,41 @@ bool D3D11Renderer::CreateShaders() {
         return false;
     }
     
-    // Compile pixel shader
-    ComPtr<ID3DBlob> psBlob;
-    hr = D3DCompile(g_pixelShaderSource, strlen(g_pixelShaderSource), nullptr, nullptr, nullptr,
-                   "main", "ps_4_0", 0, 0, &psBlob, &errorBlob);
+    // Compile RGB pixel shader
+    ComPtr<ID3DBlob> psRGBBlob;
+    hr = D3DCompile(g_pixelShaderRGBSource, strlen(g_pixelShaderRGBSource), nullptr, nullptr, nullptr,
+                   "main", "ps_4_0", 0, 0, &psRGBBlob, &errorBlob);
     
     if (FAILED(hr)) {
         if (errorBlob) {
-            std::cerr << "Pixel shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
+            std::cerr << "RGB pixel shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
         }
         return false;
     }
     
-    // Create pixel shader
-    hr = m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
+    // Create RGB pixel shader
+    hr = m_device->CreatePixelShader(psRGBBlob->GetBufferPointer(), psRGBBlob->GetBufferSize(), nullptr, &m_pixelShaderRGB);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create pixel shader. HRESULT: 0x" << std::hex << hr << "\n";
+        std::cerr << "Failed to create RGB pixel shader. HRESULT: 0x" << std::hex << hr << "\n";
+        return false;
+    }
+    
+    // Compile YUV pixel shader
+    ComPtr<ID3DBlob> psYUVBlob;
+    hr = D3DCompile(g_pixelShaderYUVSource, strlen(g_pixelShaderYUVSource), nullptr, nullptr, nullptr,
+                   "main", "ps_4_0", 0, 0, &psYUVBlob, &errorBlob);
+    
+    if (FAILED(hr)) {
+        if (errorBlob) {
+            std::cerr << "YUV pixel shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
+        }
+        return false;
+    }
+    
+    // Create YUV pixel shader
+    hr = m_device->CreatePixelShader(psYUVBlob->GetBufferPointer(), psYUVBlob->GetBufferSize(), nullptr, &m_pixelShaderYUV);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to create YUV pixel shader. HRESULT: 0x" << std::hex << hr << "\n";
         return false;
     }
     
@@ -406,29 +458,95 @@ bool D3D11Renderer::CreateStates() {
     return true;
 }
 
-bool D3D11Renderer::UpdateFrameTexture(ID3D11Texture2D* videoTexture) {
+bool D3D11Renderer::UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format) {
     if (!videoTexture) {
         return false;
     }
     
+    // Get the actual texture format
+    D3D11_TEXTURE2D_DESC textureDesc;
+    videoTexture->GetDesc(&textureDesc);
+    
+    LOG_DEBUG("UpdateFrameTexture - Texture format: ", textureDesc.Format, ", isYUV: ", isYUV);
+    
     // Create shader resource view for the video texture
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // Match texture format
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
     
+    // Handle different texture formats appropriately
+    switch (textureDesc.Format) {
+        case DXGI_FORMAT_NV12: {
+            // For NV12, create Y plane view first
+            srvDesc.Format = DXGI_FORMAT_R8_UNORM; // Y plane
+            LOG_DEBUG("Creating Y plane SRV for NV12");
+            
+            HRESULT hr = m_device->CreateShaderResourceView(videoTexture, &srvDesc, &m_currentFrameSRV);
+            if (FAILED(hr)) {
+                LOG_DEBUG("Failed to create Y plane SRV. HRESULT: 0x", std::hex, hr);
+                return false;
+            }
+            
+            // Create UV plane view - for NV12, UV is at half resolution and different offset
+            D3D11_SHADER_RESOURCE_VIEW_DESC uvDesc = {};
+            uvDesc.Format = DXGI_FORMAT_R8G8_UNORM; // UV interleaved
+            uvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            uvDesc.Texture2D.MipLevels = 1;
+            uvDesc.Texture2D.MostDetailedMip = 0;
+            
+            // Try to create a view for the UV data
+            hr = m_device->CreateShaderResourceView(videoTexture, &uvDesc, &m_currentFrameUVSRV);
+            if (FAILED(hr)) {
+                LOG_DEBUG("Failed to create UV plane SRV, will use Y-only. HRESULT: 0x", std::hex, hr);
+                m_currentFrameUVSRV.Reset();
+            } else {
+                LOG_DEBUG("UV plane SRV created successfully");
+            }
+            
+            return true;
+        }
+        case DXGI_FORMAT_420_OPAQUE:
+            // 420_OPAQUE can't be used directly as SRV, need to convert
+            LOG_DEBUG("420_OPAQUE format not supported for direct SRV creation");
+            return false;
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8X8_UNORM:
+            // RGB formats - use as-is
+            srvDesc.Format = textureDesc.Format;
+            LOG_DEBUG("Creating SRV for RGB texture with original format");
+            break;
+        default:
+            // Try using the original format
+            srvDesc.Format = textureDesc.Format;
+            LOG_DEBUG("Creating SRV with original format: ", textureDesc.Format);
+            break;
+    }
+    
+    // For non-NV12 formats, create single SRV
     m_currentFrameSRV.Reset(); // Release previous SRV
+    m_currentFrameUVSRV.Reset(); // Release UV SRV
     
     HRESULT hr = m_device->CreateShaderResourceView(videoTexture, &srvDesc, &m_currentFrameSRV);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create shader resource view for video texture. HRESULT: 0x" << std::hex << hr << "\n";
-        return false;
+        LOG_DEBUG("Failed to create SRV with format ", srvDesc.Format, ", trying nullptr descriptor");
+        // Try with nullptr descriptor to let D3D11 auto-determine
+        hr = m_device->CreateShaderResourceView(videoTexture, nullptr, &m_currentFrameSRV);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to create shader resource view for video texture. HRESULT: 0x" << std::hex << hr << "\n";
+            std::cerr << "Texture format: " << textureDesc.Format << ", SRV format: " << srvDesc.Format << "\n";
+            return false;
+        }
+        LOG_DEBUG("SRV created successfully with nullptr descriptor");
+    } else {
+        LOG_DEBUG("SRV created successfully with explicit format");
     }
     
     return true;
 }
 
-void D3D11Renderer::SetupRenderState() {
+void D3D11Renderer::SetupRenderState(bool isYUV) {
     // Set vertex buffer
     UINT stride = sizeof(QuadVertex);
     UINT offset = 0;
@@ -445,11 +563,26 @@ void D3D11Renderer::SetupRenderState() {
     
     // Set shaders
     m_context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-    m_context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+    
+    if (isYUV) {
+        m_context->PSSetShader(m_pixelShaderYUV.Get(), nullptr, 0);
+        LOG_DEBUG("Using YUV pixel shader for YUV texture");
+    } else {
+        m_context->PSSetShader(m_pixelShaderRGB.Get(), nullptr, 0);
+        LOG_DEBUG("Using RGB pixel shader for RGB texture");
+    }
     
     // Set texture and sampler
     if (m_currentFrameSRV) {
         m_context->PSSetShaderResources(0, 1, m_currentFrameSRV.GetAddressOf());
+        
+        // Bind UV texture if available (for NV12)
+        if (m_currentFrameUVSRV) {
+            m_context->PSSetShaderResources(1, 1, m_currentFrameUVSRV.GetAddressOf());
+            LOG_DEBUG("Bound both Y and UV textures for NV12 rendering");
+        } else {
+            LOG_DEBUG("Only Y texture bound, UV not available");
+        }
     }
     m_context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
     
@@ -469,6 +602,7 @@ void D3D11Renderer::Reset() {
     m_initialized = false;
     
     // Reset all COM objects
+    m_currentFrameUVSRV.Reset();
     m_currentFrameSRV.Reset();
     m_rasterizerState.Reset();
     m_blendState.Reset();
@@ -476,7 +610,8 @@ void D3D11Renderer::Reset() {
     m_indexBuffer.Reset();
     m_vertexBuffer.Reset();
     m_inputLayout.Reset();
-    m_pixelShader.Reset();
+    m_pixelShaderYUV.Reset();
+    m_pixelShaderRGB.Reset();
     m_vertexShader.Reset();
     m_renderTargetView.Reset();
     m_backBuffer.Reset();

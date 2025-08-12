@@ -14,7 +14,7 @@ public:
     bool Initialize(HWND hwnd, int width, int height);
     void Cleanup();
     
-    bool Present(ID3D11Texture2D* videoTexture);
+    bool Present(ID3D11Texture2D* videoTexture, bool isYUV = false, DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM);
     bool Resize(int width, int height);
     
     // Getters
@@ -37,7 +37,8 @@ private:
     
     // Rendering pipeline
     ComPtr<ID3D11VertexShader> m_vertexShader;
-    ComPtr<ID3D11PixelShader> m_pixelShader;
+    ComPtr<ID3D11PixelShader> m_pixelShaderRGB;
+    ComPtr<ID3D11PixelShader> m_pixelShaderYUV;
     ComPtr<ID3D11InputLayout> m_inputLayout;
     ComPtr<ID3D11Buffer> m_vertexBuffer;
     ComPtr<ID3D11Buffer> m_indexBuffer;
@@ -47,6 +48,7 @@ private:
     
     // Current frame resources
     ComPtr<ID3D11ShaderResourceView> m_currentFrameSRV;
+    ComPtr<ID3D11ShaderResourceView> m_currentFrameUVSRV; // For UV plane in NV12
     
     // Initialization helpers
     bool CreateDeviceAndSwapChain();
@@ -56,8 +58,8 @@ private:
     bool CreateStates();
     
     // Rendering helpers
-    bool UpdateFrameTexture(ID3D11Texture2D* videoTexture);
-    void SetupRenderState();
+    bool UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format);
+    void SetupRenderState(bool isYUV);
     void DrawQuad();
     
     void Reset();
