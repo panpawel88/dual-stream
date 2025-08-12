@@ -131,6 +131,7 @@ add_executable(ffmpeg_player
     src/D3D11Renderer.cpp
     src/VideoManager.cpp
     src/Logger.cpp
+    src/FFmpegInitializer.cpp
 )
 
 target_link_libraries(ffmpeg_player PRIVATE FFmpeg)

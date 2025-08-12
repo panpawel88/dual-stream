@@ -9,6 +9,7 @@
 #include "D3D11Renderer.h"
 #include "VideoManager.h"
 #include "Logger.h"
+#include "FFmpegInitializer.h"
 
 int main(int argc, char* argv[]) {
     // Parse command line arguments first to get debug flag
@@ -23,16 +24,10 @@ int main(int argc, char* argv[]) {
     
     LOG_INFO("FFmpeg Video Player v1.0.0");
     
-    // Initialize FFmpeg
-    if (!VideoValidator::Initialize()) {
+    // Initialize FFmpeg with RAII cleanup
+    FFmpegInitializer ffmpegInit;
+    if (!ffmpegInit.Initialize()) {
         LOG_ERROR("Failed to initialize FFmpeg");
-        return 1;
-    }
-    
-    // Initialize hardware decoder detection
-    if (!HardwareDecoder::Initialize()) {
-        LOG_ERROR("Failed to initialize hardware decoder detection");
-        VideoValidator::Cleanup();
         return 1;
     }
     
@@ -46,8 +41,6 @@ int main(int argc, char* argv[]) {
     std::string compatibilityError;
     if (!VideoValidator::ValidateCompatibility(video1Info, video2Info, compatibilityError)) {
         LOG_ERROR("Error: ", compatibilityError);
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
         return 1;
     }
     
@@ -55,8 +48,6 @@ int main(int argc, char* argv[]) {
     Window window;
     if (!window.Create("FFmpeg Video Player", video1Info.width, video1Info.height)) {
         LOG_ERROR("Failed to create window");
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
         return 1;
     }
     
@@ -67,8 +58,6 @@ int main(int argc, char* argv[]) {
     D3D11Renderer renderer;
     if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
         LOG_ERROR("Failed to initialize D3D11 renderer");
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
         return 1;
     }
     
@@ -76,16 +65,12 @@ int main(int argc, char* argv[]) {
     VideoManager videoManager;
     if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.GetDevice())) {
         LOG_ERROR("Failed to initialize video manager");
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
         return 1;
     }
     
     // Start playback
     if (!videoManager.Play()) {
         LOG_ERROR("Failed to start video playback");
-        HardwareDecoder::Cleanup();
-        VideoValidator::Cleanup();
         return 1;
     }
     
@@ -127,7 +112,5 @@ int main(int argc, char* argv[]) {
     }
     
     LOG_INFO("Application exiting...");
-    HardwareDecoder::Cleanup();
-    VideoValidator::Cleanup();
     return 0;
 }
