@@ -2,15 +2,17 @@
 
 #include <string>
 #include <vector>
+#include "VideoSwitchingStrategy.h"
 
 struct VideoPlayerArgs {
     std::string video1Path;
     std::string video2Path;
+    SwitchingAlgorithm switchingAlgorithm;
     bool valid;
     bool debugLogging;
     std::string errorMessage;
     
-    VideoPlayerArgs() : valid(false), debugLogging(false) {}
+    VideoPlayerArgs() : switchingAlgorithm(SwitchingAlgorithm::IMMEDIATE), valid(false), debugLogging(false) {}
 };
 
 class CommandLineParser {

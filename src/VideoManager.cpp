@@ -18,7 +18,7 @@ VideoManager::~VideoManager() {
     Cleanup();
 }
 
-bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice) {
+bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm) {
     if (m_initialized) {
         Cleanup();
     }
@@ -55,10 +55,25 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         frameRate = 30.0;
     }
     
+    // Create and initialize switching strategy
+    m_switchingStrategy = VideoSwitchingStrategyFactory::Create(switchingAlgorithm);
+    if (!m_switchingStrategy) {
+        LOG_ERROR("Failed to create switching strategy");
+        Cleanup();
+        return false;
+    }
+    
+    if (!m_switchingStrategy->Initialize(m_videos, this)) {
+        LOG_ERROR("Failed to initialize switching strategy");
+        Cleanup();
+        return false;
+    }
+    
     LOG_INFO("VideoManager initialized successfully");
     LOG_INFO("Video 1 duration: ", m_videos[0].duration, " seconds");
     LOG_INFO("Video 2 duration: ", m_videos[1].duration, " seconds");
     LOG_INFO("Frame rate: ", frameRate, " FPS");
+    LOG_INFO("Using switching strategy: ", m_switchingStrategy->GetName());
     
     m_initialized = true;
     return true;
@@ -67,6 +82,12 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
 void VideoManager::Cleanup() {
     if (m_initialized) {
         Stop();
+        
+        // Cleanup switching strategy
+        if (m_switchingStrategy) {
+            m_switchingStrategy->Cleanup();
+            m_switchingStrategy.reset();
+        }
         
         for (int i = 0; i < 2; i++) {
             m_videos[i].decoder.Cleanup();
@@ -132,49 +153,23 @@ bool VideoManager::Stop() {
 }
 
 bool VideoManager::SwitchToVideo(ActiveVideo video) {
-    if (!m_initialized || video == m_activeVideo) {
-        return true;
+    if (!m_initialized || !m_switchingStrategy) {
+        return false;
     }
     
-    ActiveVideo previousVideo = m_activeVideo;
     double currentTime = GetCurrentTime();
     
-    LOG_INFO("Switching to video ", (video == ActiveVideo::VIDEO_1 ? "1" : "2"), " at time ", currentTime);
-    
-    // Switch active video first
-    m_activeVideo = video;
-    
-    // If playing, synchronize the new active video to current playback time
-    if (m_state == VideoState::PLAYING) {
-        VideoStream& newActiveStream = m_videos[static_cast<int>(m_activeVideo)];
-        
-        // Handle looping if current time exceeds new video's duration
-        double targetTime = currentTime;
-        if (targetTime >= newActiveStream.duration && newActiveStream.duration > 0.0) {
-            // Loop to the appropriate position within the video
-            targetTime = fmod(targetTime, newActiveStream.duration);
-            LOG_INFO("Seeking to looped position: ", targetTime);
-        }
-        
-        // Seek the new active video to the synchronized time
-        if (!SeekVideoStream(newActiveStream, targetTime)) {
-            LOG_ERROR("Failed to synchronize new active stream to time ", targetTime);
-            m_activeVideo = previousVideo; // Revert
-            return false;
-        }
-        
-        // Update the stream's current time
-        newActiveStream.currentTime = targetTime;
-        newActiveStream.state = VideoState::PLAYING;
-        
-        LOG_INFO("Successfully synchronized video ", (video == ActiveVideo::VIDEO_1 ? "1" : "2"), " to time ", targetTime);
+    // Delegate switching to the strategy
+    bool result = m_switchingStrategy->SwitchToVideo(video, currentTime);
+    if (result) {
+        m_activeVideo = video;
     }
     
-    return true;
+    return result;
 }
 
 bool VideoManager::UpdateFrame() {
-    if (!m_initialized || m_state != VideoState::PLAYING) {
+    if (!m_initialized || m_state != VideoState::PLAYING || !m_switchingStrategy) {
         if (!m_initialized) {
             LOG_DEBUG("UpdateFrame skipped - not initialized");
         } else if (m_state != VideoState::PLAYING) {
@@ -206,20 +201,10 @@ bool VideoManager::UpdateFrame() {
     // Update playback time
     UpdatePlaybackTime();
     
-    // Process frame for active video
-    VideoStream& activeStream = m_videos[static_cast<int>(m_activeVideo)];
-    
-    if (!ProcessVideoFrame(activeStream)) {
-        // Check if we reached end of stream
-        if (activeStream.state == VideoState::END_OF_STREAM) {
-            LOG_DEBUG("End of stream reached, handling...");
-            if (!HandleEndOfStream(activeStream)) {
-                return false;
-            }
-        } else {
-            LOG_ERROR("Failed to process video frame");
-            return false;
-        }
+    // Delegate frame updating to the strategy
+    if (!m_switchingStrategy->UpdateFrame()) {
+        LOG_ERROR("Strategy failed to update frame");
+        return false;
     }
     
     m_lastFrameTime = std::chrono::steady_clock::now();
@@ -228,16 +213,12 @@ bool VideoManager::UpdateFrame() {
 }
 
 DecodedFrame* VideoManager::GetCurrentFrame() {
-    if (!m_initialized) {
+    if (!m_initialized || !m_switchingStrategy) {
         return nullptr;
     }
     
-    VideoStream& activeStream = m_videos[static_cast<int>(m_activeVideo)];
-    if (activeStream.currentFrame.valid) {
-        return &activeStream.currentFrame;
-    }
-    
-    return nullptr;
+    // Delegate to the strategy
+    return m_switchingStrategy->GetCurrentFrame();
 }
 
 double VideoManager::GetCurrentTime() const {
@@ -267,7 +248,7 @@ double VideoManager::GetDuration() const {
 }
 
 bool VideoManager::SeekToTime(double timeInSeconds) {
-    if (!m_initialized) {
+    if (!m_initialized || !m_switchingStrategy) {
         return false;
     }
     
@@ -277,7 +258,8 @@ bool VideoManager::SeekToTime(double timeInSeconds) {
     
     LOG_INFO("Seeking to ", timeInSeconds, " seconds");
     
-    // Seek both streams to maintain synchronization
+    // For immediate strategy compatibility, still seek both streams
+    // Other strategies may handle this differently
     for (int i = 0; i < 2; i++) {
         if (!SeekVideoStream(m_videos[i], timeInSeconds)) {
             LOG_ERROR("Failed to seek video stream ", (i + 1));

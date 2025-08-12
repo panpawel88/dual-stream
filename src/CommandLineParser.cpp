@@ -7,21 +7,40 @@
 VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
-    if (argc < 3 || argc > 4) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug]";
+    if (argc < 3) {
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>]";
+        args.errorMessage += "\nSwitching algorithms: immediate (default), predecoded, keyframe-sync";
         return args;
     }
     
     args.video1Path = argv[1];
     args.video2Path = argv[2];
     
-    // Check for debug flag
-    if (argc == 4) {
-        std::string debugFlag = argv[3];
-        if (debugFlag == "--debug" || debugFlag == "-d") {
+    // Parse optional arguments
+    for (int i = 3; i < argc; i++) {
+        std::string arg = argv[i];
+        
+        if (arg == "--debug" || arg == "-d") {
             args.debugLogging = true;
+        } else if (arg.find("--switching-algorithm=") == 0) {
+            std::string algorithmName = arg.substr(22); // Skip "--switching-algorithm="
+            args.switchingAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
+            if (args.switchingAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
+                args.errorMessage = "Unknown switching algorithm: " + algorithmName;
+                args.errorMessage += "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+                return args;
+            }
+        } else if (arg.find("-s=") == 0) {
+            std::string algorithmName = arg.substr(3); // Skip "-s="
+            args.switchingAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
+            if (args.switchingAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
+                args.errorMessage = "Unknown switching algorithm: " + algorithmName;
+                args.errorMessage += "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+                return args;
+            }
         } else {
-            args.errorMessage = "Unknown option: " + debugFlag + ". Use --debug or -d for debug logging.";
+            args.errorMessage = "Unknown option: " + arg;
+            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>";
             return args;
         }
     }

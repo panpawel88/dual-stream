@@ -6,6 +6,7 @@
 #include "VideoDemuxer.h"
 #include "VideoDecoder.h"
 #include "HardwareDecoder.h"
+#include "VideoSwitchingStrategy.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -42,7 +43,7 @@ public:
     VideoManager();
     ~VideoManager();
     
-    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice);
+    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE);
     void Cleanup();
     
     // Playback control
@@ -75,6 +76,9 @@ private:
     ActiveVideo m_activeVideo;
     
     VideoStream m_videos[2];
+    
+    // Switching strategy
+    std::unique_ptr<VideoSwitchingStrategy> m_switchingStrategy;
     
     // Timing management
     std::chrono::steady_clock::time_point m_playbackStartTime;

@@ -132,6 +132,10 @@ add_executable(ffmpeg_player
     src/VideoManager.cpp
     src/Logger.cpp
     src/FFmpegInitializer.cpp
+    src/VideoSwitchingStrategy.cpp
+    src/ImmediateSwitchStrategy.cpp
+    src/PredecodedSwitchStrategy.cpp
+    src/KeyframeSwitchStrategy.cpp
 )
 
 target_link_libraries(ffmpeg_player PRIVATE FFmpeg)
