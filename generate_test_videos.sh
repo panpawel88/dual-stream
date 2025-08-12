@@ -15,17 +15,19 @@ fi
 # Create test_videos directory if it doesn't exist
 mkdir -p test_videos
 
-echo "Creating Test Video 1 - Moving Red Square with Frame Numbers (H264, 1280x720, 30fps, 10 seconds)..."
-ffmpeg -f lavfi -i "color=red:size=1280x720:duration=10:rate=30" \
-       -vf "drawbox=x=50+50*sin(2*PI*t):y=100+50*sin(2*PI*t):w=100:h=100:color=white:t=5,drawtext=text='Video 1 - Frame %{frame_num}':fontsize=24:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.8" \
+echo "Creating Test Video 1 - Moving White Square with Frame Numbers (H264, 1280x720, 30fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=1280x720:duration=10:rate=30" -f lavfi -i "color=white:size=100x100:duration=10:rate=30" \
+       -filter_complex "[0:v][1:v]overlay=x='50+200*sin(2*PI*t)':y='100+100*sin(2*PI*t)'[v];[v]drawtext=text='Video 1 - Frame %{frame_num}':fontsize=24:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
        -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p \
        -movflags +faststart \
        test_videos/video1_red_square.mp4 -y
 
 echo
-echo "Creating Test Video 2 - Moving Blue Circle with Frame Numbers (H264, 1280x720, 30fps, 10 seconds)..."
-ffmpeg -f lavfi -i "color=blue:size=1280x720:duration=10:rate=30" \
-       -vf "drawbox=x=100+100*cos(2*PI*t):y=150+100*sin(2*PI*t):w=80:h=80:color=yellow:t=5,drawtext=text='Video 2 - Frame %{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8" \
+echo "Creating Test Video 2 - Moving Yellow Circle with Frame Numbers (H264, 1280x720, 30fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=1280x720:duration=10:rate=30" -f lavfi -i "color=yellow:size=80x80:duration=10:rate=30" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-40)*(X-40)+(Y-40)*(Y-40)),40),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='100+200*cos(2*PI*t)':y='150+150*sin(2*PI*t)'[v];[v]drawtext=text='Video 2 - Frame %{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
        -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p \
        -movflags +faststart \
        test_videos/video2_blue_circle.mp4 -y
