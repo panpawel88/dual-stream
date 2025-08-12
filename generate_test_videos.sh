@@ -34,8 +34,8 @@ ffmpeg -f lavfi -i "color=blue:size=1280x720:duration=10:rate=30" -f lavfi -i "c
 
 echo
 echo "Creating Test Video 3 - Color Gradient Animation with Frame Numbers (H265, 1280x720, 30fps, 8 seconds)..."
-ffmpeg -f lavfi -i "color=black:size=1280x720:duration=8:rate=30" \
-       -vf "geq=r='255*sin(2*PI*(X/W+t))':g='255*sin(2*PI*(Y/H+t))':b='255*sin(2*PI*((X+Y)/(W+H)+t))',drawtext=text='Video 3 H265 - Frame %{frame_num} - Time: %{pts\\:hms}':fontsize=20:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.9" \
+ffmpeg -f lavfi -i "color=red:size=1280x720:duration=8:rate=30" \
+       -vf "hue=h='360*t/8':s=1,drawtext=text='Video 3 H265 - Frame %{frame_num}':fontsize=24:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.9" \
        -c:v libx265 -preset medium -crf 28 -pix_fmt yuv420p \
        -movflags +faststart \
        test_videos/video3_gradient.mp4 -y
