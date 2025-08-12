@@ -158,6 +158,13 @@ bool VideoDecoder::ReceiveFrame(DecodedFrame& frame) {
         } else {
             LOG_DEBUG("Frame has no PTS (AV_NOPTS_VALUE)");
         }
+        
+        // Set keyframe flag based on FFmpeg's frame information
+        frame.keyframe = (m_frame->flags & AV_FRAME_FLAG_KEY) || (m_frame->pict_type == AV_PICTURE_TYPE_I);
+        if (frame.keyframe) {
+            LOG_DEBUG("Frame is a keyframe (I-frame) at time: ", frame.presentationTime);
+        }
+        
         frame.valid = true;
         LOG_DEBUG("Frame processed successfully");
     } else {

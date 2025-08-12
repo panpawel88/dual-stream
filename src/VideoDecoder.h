@@ -20,9 +20,10 @@ struct DecodedFrame {
     double presentationTime;
     bool valid;
     bool isYUV;  // True for hardware frames that need YUV->RGB conversion in shader
+    bool keyframe;  // True if this frame is a keyframe (I-frame)
     DXGI_FORMAT format;
     
-    DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
+    DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), keyframe(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
 };
 
 class VideoDecoder {

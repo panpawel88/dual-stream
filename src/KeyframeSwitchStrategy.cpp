@@ -172,25 +172,15 @@ bool KeyframeSwitchStrategy::DecodeNextFrame(VideoStream& stream) {
 }
 
 bool KeyframeSwitchStrategy::IsKeyframe(const DecodedFrame& frame) {
-    // In this simplified implementation, we'll consider every frame that's
-    // reasonably close to a regular keyframe interval (e.g., every 2 seconds)
-    // to be a potential switch point. In a more sophisticated implementation,
-    // you would check the actual frame flags or packet flags for keyframes.
-    
     if (!frame.valid) {
         return false;
     }
     
-    // Assume keyframes occur every 2 seconds for H264/H265 content
-    const double KEYFRAME_INTERVAL = 2.0;
-    double frameTime = frame.presentationTime;
-    double modTime = fmod(frameTime, KEYFRAME_INTERVAL);
-    
-    // Consider frames within 100ms of the expected keyframe time as keyframes
-    bool isKeyframe = (modTime < 0.1) || (modTime > KEYFRAME_INTERVAL - 0.1);
+    // Use FFmpeg's keyframe flag - this is accurate and reliable
+    bool isKeyframe = frame.keyframe;
     
     if (isKeyframe) {
-        LOG_DEBUG("Detected keyframe at time: ", frameTime);
+        LOG_DEBUG("Detected keyframe at time: ", frame.presentationTime);
     }
     
     return isKeyframe;
