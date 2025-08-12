@@ -27,20 +27,20 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     
     // Initialize both video streams
     if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice)) {
-        std::cerr << "Failed to initialize video stream 1\n";
+        LOG_ERROR("Failed to initialize video stream 1");
         Cleanup();
         return false;
     }
     
     if (!InitializeVideoStream(m_videos[1], video2Path, d3dDevice)) {
-        std::cerr << "Failed to initialize video stream 2\n";
+        LOG_ERROR("Failed to initialize video stream 2");
         Cleanup();
         return false;
     }
     
     // Validate stream compatibility
     if (!ValidateStreams()) {
-        std::cerr << "Video streams are not compatible\n";
+        LOG_ERROR("Video streams are not compatible");
         Cleanup();
         return false;
     }
@@ -158,7 +158,7 @@ bool VideoManager::SwitchToVideo(ActiveVideo video) {
         
         // Seek the new active video to the synchronized time
         if (!SeekVideoStream(newActiveStream, targetTime)) {
-            std::cerr << "Failed to synchronize new active stream to time " <<  targetTime << "\n";
+            LOG_ERROR("Failed to synchronize new active stream to time ", targetTime);
             m_activeVideo = previousVideo; // Revert
             return false;
         }
@@ -189,7 +189,7 @@ bool VideoManager::UpdateFrame() {
     if (m_needsSeek) {
         LOG_DEBUG("Handling seek to time: ", m_targetSeekTime);
         if (!SeekToTime(m_targetSeekTime)) {
-            std::cerr << "Failed to seek to time: " << m_targetSeekTime << "\n";
+            LOG_ERROR("Failed to seek to time: ", m_targetSeekTime);
             return false;
         }
         m_needsSeek = false;
@@ -217,7 +217,7 @@ bool VideoManager::UpdateFrame() {
                 return false;
             }
         } else {
-            std::cerr << "Failed to process video frame\n";
+            LOG_ERROR("Failed to process video frame");
             return false;
         }
     }
@@ -280,7 +280,7 @@ bool VideoManager::SeekToTime(double timeInSeconds) {
     // Seek both streams to maintain synchronization
     for (int i = 0; i < 2; i++) {
         if (!SeekVideoStream(m_videos[i], timeInSeconds)) {
-            std::cerr << "Failed to seek video stream " << (i + 1) << "\n";
+            LOG_ERROR("Failed to seek video stream ", (i + 1));
             return false;
         }
     }
@@ -294,7 +294,7 @@ bool VideoManager::SeekToTime(double timeInSeconds) {
 bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice) {
     // Open demuxer
     if (!stream.demuxer.Open(filePath)) {
-        std::cerr << "Failed to open video file: " << filePath << "\n";
+        LOG_ERROR("Failed to open video file: ", filePath);
         return false;
     }
     
@@ -303,7 +303,7 @@ bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string&
     
     // Initialize decoder
     if (!stream.decoder.Initialize(stream.demuxer.GetCodecParameters(), decoderInfo, d3dDevice, stream.demuxer.GetTimeBase())) {
-        std::cerr << "Failed to initialize decoder for: " << filePath << "\n";
+        LOG_ERROR("Failed to initialize decoder for: ", filePath);
         return false;
     }
     
@@ -331,8 +331,7 @@ bool VideoManager::ValidateStreams() {
     int height2 = m_videos[1].demuxer.GetHeight();
     
     if (width1 != width2 || height1 != height2) {
-        std::cerr << "Video resolution mismatch: " << width1 << "x" << height1 
-                  << " vs " << width2 << "x" << height2 << "\n";
+        LOG_ERROR("Video resolution mismatch: ", width1, "x", height1, " vs ", width2, "x", height2);
         return false;
     }
     
@@ -532,7 +531,7 @@ bool VideoManager::HandleEndOfStream(VideoStream& stream) {
     if (overshoot > 0.0 && overshoot < stream.duration) {
         LOG_INFO("Seeking to overshoot position: ", overshoot);
         if (!SeekVideoStream(stream, overshoot)) {
-            std::cerr << "Failed to seek to overshoot position\n";
+            LOG_ERROR("Failed to seek to overshoot position");
             // Continue anyway - not critical
         } else {
             stream.currentTime = overshoot;
@@ -547,7 +546,7 @@ bool VideoManager::RestartVideo(VideoStream& stream) {
     
     // Seek back to beginning
     if (!SeekVideoStream(stream, 0.0)) {
-        std::cerr << "Failed to restart video\n";
+        LOG_ERROR("Failed to restart video");
         return false;
     }
     

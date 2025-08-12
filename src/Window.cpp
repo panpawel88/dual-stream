@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "Logger.h"
 #include <iostream>
 #include <string>
 #include <windows.h>
@@ -51,7 +52,7 @@ bool Window::Create(const std::string& title, int width, int height) {
         
         if (!RegisterClassEx(&wc)) {
             DWORD error = GetLastError();
-            std::cerr << "Failed to register window class, error code: " << error << "\n";
+            LOG_ERROR("Failed to register window class, error code: ", error);
             return false;
         }
         s_classRegistered = true;
@@ -90,7 +91,7 @@ bool Window::Create(const std::string& title, int width, int height) {
     
     if (!m_hwnd) {
         DWORD error = GetLastError();
-        std::cerr << "Failed to create window, error code: " << error << "\n";
+        LOG_ERROR("Failed to create window, error code: ", error);
         return false;
     }
     

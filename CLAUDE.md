@@ -103,6 +103,16 @@ Additional Files:
 └── test_videos/            - Sample MP4 videos for testing
 ```
 
+## Git Commit Guidelines
+
+All changes to this project must be committed with the author set to:
+- Author: Claude <noreply@anthropic.com>
+
+Use the following git command format for commits:
+```bash
+git commit --author="Claude <noreply@anthropic.com>" -m "commit message"
+```
+
 ## Implementation Notes
 
 The application will:

@@ -95,35 +95,35 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     
     // Create device and swap chain
     if (!CreateDeviceAndSwapChain()) {
-        std::cerr << "Failed to create D3D11 device and swap chain\n";
+        LOG_ERROR("Failed to create D3D11 device and swap chain");
         Cleanup();
         return false;
     }
     
     // Create render target
     if (!CreateRenderTarget()) {
-        std::cerr << "Failed to create render target\n";
+        LOG_ERROR("Failed to create render target");
         Cleanup();
         return false;
     }
     
     // Create shaders
     if (!CreateShaders()) {
-        std::cerr << "Failed to create shaders\n";
+        LOG_ERROR("Failed to create shaders");
         Cleanup();
         return false;
     }
     
     // Create geometry
     if (!CreateGeometry()) {
-        std::cerr << "Failed to create geometry\n";
+        LOG_ERROR("Failed to create geometry");
         Cleanup();
         return false;
     }
     
     // Create states
     if (!CreateStates()) {
-        std::cerr << "Failed to create render states\n";
+        LOG_ERROR("Failed to create render states");
         Cleanup();
         return false;
     }
@@ -175,7 +175,7 @@ bool D3D11Renderer::Present(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORM
     // Present
     HRESULT hr = m_swapChain->Present(1, 0); // VSync enabled
     if (FAILED(hr)) {
-        std::cerr << "Failed to present frame. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to present frame. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -197,13 +197,13 @@ bool D3D11Renderer::Resize(int width, int height) {
     // Resize swap chain
     HRESULT hr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     if (FAILED(hr)) {
-        std::cerr << "Failed to resize swap chain buffers. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to resize swap chain buffers. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
     // Recreate render target
     if (!CreateRenderTarget()) {
-        std::cerr << "Failed to recreate render target after resize\n";
+        LOG_ERROR("Failed to recreate render target after resize");
         return false;
     }
     
@@ -261,7 +261,7 @@ bool D3D11Renderer::CreateDeviceAndSwapChain() {
     );
     
     if (FAILED(hr)) {
-        std::cerr << "Failed to create D3D11 device and swap chain. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create D3D11 device and swap chain. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -273,14 +273,14 @@ bool D3D11Renderer::CreateRenderTarget() {
     // Get back buffer
     HRESULT hr = m_swapChain->GetBuffer(0, IID_PPV_ARGS(&m_backBuffer));
     if (FAILED(hr)) {
-        std::cerr << "Failed to get back buffer. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to get back buffer. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
     // Create render target view
     hr = m_device->CreateRenderTargetView(m_backBuffer.Get(), nullptr, &m_renderTargetView);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create render target view. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create render target view. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -302,7 +302,7 @@ bool D3D11Renderer::CreateShaders() {
     
     if (FAILED(hr)) {
         if (errorBlob) {
-            std::cerr << "Vertex shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
+            LOG_ERROR("Vertex shader compilation failed: ", (char*)errorBlob->GetBufferPointer());
         }
         return false;
     }
@@ -310,7 +310,7 @@ bool D3D11Renderer::CreateShaders() {
     // Create vertex shader
     hr = m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_vertexShader);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create vertex shader. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create vertex shader. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -323,7 +323,7 @@ bool D3D11Renderer::CreateShaders() {
     hr = m_device->CreateInputLayout(inputDesc, ARRAYSIZE(inputDesc),
                                     vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &m_inputLayout);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create input layout. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create input layout. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -334,7 +334,7 @@ bool D3D11Renderer::CreateShaders() {
     
     if (FAILED(hr)) {
         if (errorBlob) {
-            std::cerr << "RGB pixel shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
+            LOG_ERROR("RGB pixel shader compilation failed: ", (char*)errorBlob->GetBufferPointer());
         }
         return false;
     }
@@ -342,7 +342,7 @@ bool D3D11Renderer::CreateShaders() {
     // Create RGB pixel shader
     hr = m_device->CreatePixelShader(psRGBBlob->GetBufferPointer(), psRGBBlob->GetBufferSize(), nullptr, &m_pixelShaderRGB);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create RGB pixel shader. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create RGB pixel shader. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -353,7 +353,7 @@ bool D3D11Renderer::CreateShaders() {
     
     if (FAILED(hr)) {
         if (errorBlob) {
-            std::cerr << "YUV pixel shader compilation failed: " << (char*)errorBlob->GetBufferPointer() << "\n";
+            LOG_ERROR("YUV pixel shader compilation failed: ", (char*)errorBlob->GetBufferPointer());
         }
         return false;
     }
@@ -361,7 +361,7 @@ bool D3D11Renderer::CreateShaders() {
     // Create YUV pixel shader
     hr = m_device->CreatePixelShader(psYUVBlob->GetBufferPointer(), psYUVBlob->GetBufferSize(), nullptr, &m_pixelShaderYUV);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create YUV pixel shader. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create YUV pixel shader. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -389,7 +389,7 @@ bool D3D11Renderer::CreateGeometry() {
     
     HRESULT hr = m_device->CreateBuffer(&bufferDesc, &initData, &m_vertexBuffer);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create vertex buffer. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create vertex buffer. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -405,7 +405,7 @@ bool D3D11Renderer::CreateGeometry() {
     
     hr = m_device->CreateBuffer(&bufferDesc, &initData, &m_indexBuffer);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create index buffer. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create index buffer. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -427,7 +427,7 @@ bool D3D11Renderer::CreateStates() {
     
     hr = m_device->CreateSamplerState(&samplerDesc, &m_samplerState);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create sampler state. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create sampler state. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -438,7 +438,7 @@ bool D3D11Renderer::CreateStates() {
     
     hr = m_device->CreateBlendState(&blendDesc, &m_blendState);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create blend state. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create blend state. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -451,7 +451,7 @@ bool D3D11Renderer::CreateStates() {
     
     hr = m_device->CreateRasterizerState(&rasterizerDesc, &m_rasterizerState);
     if (FAILED(hr)) {
-        std::cerr << "Failed to create rasterizer state. HRESULT: 0x" << std::hex << hr << "\n";
+        LOG_ERROR("Failed to create rasterizer state. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
@@ -534,8 +534,8 @@ bool D3D11Renderer::UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV
         // Try with nullptr descriptor to let D3D11 auto-determine
         hr = m_device->CreateShaderResourceView(videoTexture, nullptr, &m_currentFrameSRV);
         if (FAILED(hr)) {
-            std::cerr << "Failed to create shader resource view for video texture. HRESULT: 0x" << std::hex << hr << "\n";
-            std::cerr << "Texture format: " << textureDesc.Format << ", SRV format: " << srvDesc.Format << "\n";
+            LOG_ERROR("Failed to create shader resource view for video texture. HRESULT: 0x", std::hex, hr);
+            LOG_ERROR("Texture format: ", textureDesc.Format, ", SRV format: ", srvDesc.Format);
             return false;
         }
         LOG_DEBUG("SRV created successfully with nullptr descriptor");

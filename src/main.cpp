@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     // Parse command line arguments first to get debug flag
     VideoPlayerArgs args = CommandLineParser::Parse(argc, argv);
     if (!args.valid) {
-        std::cerr << "Error: " << args.errorMessage << "\n";
+        LOG_ERROR("Error: ", args.errorMessage);
         return 1;
     }
     
@@ -25,13 +25,13 @@ int main(int argc, char* argv[]) {
     
     // Initialize FFmpeg
     if (!VideoValidator::Initialize()) {
-        std::cerr << "Failed to initialize FFmpeg\n";
+        LOG_ERROR("Failed to initialize FFmpeg");
         return 1;
     }
     
     // Initialize hardware decoder detection
     if (!HardwareDecoder::Initialize()) {
-        std::cerr << "Failed to initialize hardware decoder detection\n";
+        LOG_ERROR("Failed to initialize hardware decoder detection");
         VideoValidator::Cleanup();
         return 1;
     }
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
     
     std::string compatibilityError;
     if (!VideoValidator::ValidateCompatibility(video1Info, video2Info, compatibilityError)) {
-        std::cerr << "Error: " << compatibilityError << "\n";
+        LOG_ERROR("Error: ", compatibilityError);
         HardwareDecoder::Cleanup();
         VideoValidator::Cleanup();
         return 1;
@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     // Create window with video resolution
     Window window;
     if (!window.Create("FFmpeg Video Player", video1Info.width, video1Info.height)) {
-        std::cerr << "Failed to create window\n";
+        LOG_ERROR("Failed to create window");
         HardwareDecoder::Cleanup();
         VideoValidator::Cleanup();
         return 1;
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
     // Initialize D3D11 renderer
     D3D11Renderer renderer;
     if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
-        std::cerr << "Failed to initialize D3D11 renderer\n";
+        LOG_ERROR("Failed to initialize D3D11 renderer");
         HardwareDecoder::Cleanup();
         VideoValidator::Cleanup();
         return 1;
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     // Initialize video manager
     VideoManager videoManager;
     if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.GetDevice())) {
-        std::cerr << "Failed to initialize video manager\n";
+        LOG_ERROR("Failed to initialize video manager");
         HardwareDecoder::Cleanup();
         VideoValidator::Cleanup();
         return 1;
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     
     // Start playback
     if (!videoManager.Play()) {
-        std::cerr << "Failed to start video playback\n";
+        LOG_ERROR("Failed to start video playback");
         HardwareDecoder::Cleanup();
         VideoValidator::Cleanup();
         return 1;
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
         // Update video frames only when needed (based on video frame rate)
         if (videoManager.ShouldUpdateFrame()) {
             if (!videoManager.UpdateFrame()) {
-                std::cerr << "Failed to update video frame\n";
+                LOG_ERROR("Failed to update video frame");
                 break;
             }
         }

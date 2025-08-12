@@ -1,4 +1,5 @@
 #include "CommandLineParser.h"
+#include "Logger.h"
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
@@ -55,7 +56,7 @@ bool CommandLineParser::FileExists(const std::string& path) {
     try {
         return std::filesystem::exists(path) && std::filesystem::is_regular_file(path);
     } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error checking file " << path << ": " << e.what() << "\n";
+        LOG_ERROR("Filesystem error checking file ", path, ": ", e.what());
         return false;
     }
 }
@@ -70,7 +71,7 @@ bool CommandLineParser::HasValidExtension(const std::string& path) {
         
         return extension == ".mp4";
     } catch (const std::exception& e) {
-        std::cerr << "Error checking file extension for " << path << ": " << e.what() << "\n";
+        LOG_ERROR("Error checking file extension for ", path, ": ", e.what());
         return false;
     }
 }

@@ -20,7 +20,7 @@ bool VideoDemuxer::Open(const std::string& filePath) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Cannot open file " << filePath << ": " << errorBuf << "\n";
+        LOG_ERROR("Cannot open file ", filePath, ": ", errorBuf);
         return false;
     }
     
@@ -29,14 +29,14 @@ bool VideoDemuxer::Open(const std::string& filePath) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Cannot find stream info for " << filePath << ": " << errorBuf << "\n";
+        LOG_ERROR("Cannot find stream info for ", filePath, ": ", errorBuf);
         Close();
         return false;
     }
     
     // Find video stream
     if (!FindVideoStream()) {
-        std::cerr << "No video stream found in " << filePath << "\n";
+        LOG_ERROR("No video stream found in ", filePath);
         Close();
         return false;
     }
@@ -104,7 +104,7 @@ bool VideoDemuxer::SeekToTime(double timeInSeconds) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Seek failed: " << errorBuf << "\n";
+        LOG_ERROR("Seek failed: ", errorBuf);
         return false;
     }
     
@@ -217,7 +217,7 @@ bool VideoDemuxer::FindVideoStream() {
             // Validate codec support (H264/H265 only)
             AVCodecID codecId = m_videoStream->codecpar->codec_id;
             if (codecId != AV_CODEC_ID_H264 && codecId != AV_CODEC_ID_HEVC) {
-                std::cerr << "Unsupported video codec found. Only H264 and H265 are supported.\n";
+                LOG_ERROR("Unsupported video codec found. Only H264 and H265 are supported.");
                 return false;
             }
             

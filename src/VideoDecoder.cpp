@@ -28,7 +28,7 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     }
     
     if (!codecParams || !d3dDevice) {
-        std::cerr << "Invalid parameters for VideoDecoder initialization\n";
+        LOG_ERROR("Invalid parameters for VideoDecoder initialization");
         return false;
     }
     
@@ -43,7 +43,7 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     m_frame = av_frame_alloc();
     m_hwFrame = av_frame_alloc();
     if (!m_frame || !m_hwFrame) {
-        std::cerr << "Failed to allocate AVFrame structures\n";
+        LOG_ERROR("Failed to allocate AVFrame structures");
         Cleanup();
         return false;
     }
@@ -67,7 +67,7 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     }
     
     if (!success) {
-        std::cerr << "Failed to initialize video decoder\n";
+        LOG_ERROR("Failed to initialize video decoder");
         Cleanup();
         return false;
     }
@@ -177,13 +177,13 @@ bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
     // Find appropriate hardware decoder
     m_codec = avcodec_find_decoder(codecParams->codec_id);
     if (!m_codec) {
-        std::cerr << "Decoder not found for codec\n";
+        LOG_ERROR("Decoder not found for codec");
         return false;
     }
     
     m_codecContext = avcodec_alloc_context3(m_codec);
     if (!m_codecContext) {
-        std::cerr << "Failed to allocate codec context\n";
+        LOG_ERROR("Failed to allocate codec context");
         return false;
     }
     
@@ -192,7 +192,7 @@ bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to copy codec parameters: " << errorBuf << "\n";
+        LOG_ERROR("Failed to copy codec parameters: ", errorBuf);
         return false;
     }
     
@@ -211,7 +211,7 @@ bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to open hardware codec: " << errorBuf << "\n";
+        LOG_ERROR("Failed to open hardware codec: ", errorBuf);
         return false;
     }
     
@@ -221,13 +221,13 @@ bool VideoDecoder::InitializeHardwareDecoder(AVCodecParameters* codecParams) {
 bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
     m_codec = avcodec_find_decoder(codecParams->codec_id);
     if (!m_codec) {
-        std::cerr << "Software decoder not found for codec\n";
+        LOG_ERROR("Software decoder not found for codec");
         return false;
     }
     
     m_codecContext = avcodec_alloc_context3(m_codec);
     if (!m_codecContext) {
-        std::cerr << "Failed to allocate codec context\n";
+        LOG_ERROR("Failed to allocate codec context");
         return false;
     }
     
@@ -236,7 +236,7 @@ bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to copy codec parameters: " << errorBuf << "\n";
+        LOG_ERROR("Failed to copy codec parameters: ", errorBuf);
         return false;
     }
     
@@ -245,7 +245,7 @@ bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to open software codec: " << errorBuf << "\n";
+        LOG_ERROR("Failed to open software codec: ", errorBuf);
         return false;
     }
     
@@ -259,7 +259,7 @@ bool VideoDecoder::CreateHardwareDeviceContext() {
     
     m_hwDeviceContext = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
     if (!m_hwDeviceContext) {
-        std::cerr << "Failed to allocate D3D11VA device context\n";
+        LOG_ERROR("Failed to allocate D3D11VA device context");
         return false;
     }
     
@@ -276,7 +276,7 @@ bool VideoDecoder::CreateHardwareDeviceContext() {
     if (ret < 0) {
         char errorBuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errorBuf, sizeof(errorBuf));
-        std::cerr << "Failed to initialize D3D11VA device context: " << errorBuf << "\n";
+        LOG_ERROR("Failed to initialize D3D11VA device context: ", errorBuf);
         return false;
     }
     
@@ -294,7 +294,7 @@ bool VideoDecoder::SetupHardwareDecoding() {
 
 bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
     if (!IsHardwareFrame(m_frame)) {
-        std::cerr << "Expected hardware frame but got software frame\n";
+        LOG_ERROR("Expected hardware frame but got software frame");
         return false;
     }
     
