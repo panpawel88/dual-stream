@@ -6,8 +6,9 @@
 
 enum class LogLevel {
     Error = 0,
-    Info = 1,
-    Debug = 2
+    Warning = 1,
+    Info = 2,
+    Debug = 3
 };
 
 class Logger {
@@ -18,6 +19,7 @@ public:
     LogLevel GetLogLevel() const;
     
     void Error(const std::string& message);
+    void Warning(const std::string& message);
     void Info(const std::string& message);
     void Debug(const std::string& message);
     
@@ -25,6 +27,13 @@ public:
     void Error(Args&&... args) {
         if (m_logLevel >= LogLevel::Error) {
             LogMessage("[ERROR] ", args...);
+        }
+    }
+    
+    template<typename... Args>
+    void Warning(Args&&... args) {
+        if (m_logLevel >= LogLevel::Warning) {
+            LogMessage("[WARNING] ", args...);
         }
     }
     
@@ -61,5 +70,6 @@ private:
 };
 
 #define LOG_ERROR(...) Logger::GetInstance().Error(__VA_ARGS__)
+#define LOG_WARNING(...) Logger::GetInstance().Warning(__VA_ARGS__)
 #define LOG_INFO(...) Logger::GetInstance().Info(__VA_ARGS__)
 #define LOG_DEBUG(...) Logger::GetInstance().Debug(__VA_ARGS__)

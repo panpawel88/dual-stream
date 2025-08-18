@@ -25,7 +25,8 @@ bool KeyframeSwitchStrategy::Initialize(VideoStream* streams, VideoManager* mana
     m_lastKeyframeTime = 0.0;
     m_keyframeDetected = false;
     
-    LOG_INFO("KeyframeSwitchStrategy initialized - switches will occur at synchronized keyframes");
+    
+    LOG_INFO("KeyframeSwitchStrategy initialized - switches will occur at next keyframe for seamless transitions");
     return true;
 }
 
@@ -48,6 +49,9 @@ bool KeyframeSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double curre
 bool KeyframeSwitchStrategy::UpdateFrame() {
     VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
     
+    // Reset keyframe detection at the beginning of each frame update
+    m_keyframeDetected = false;
+    
     if (!ProcessVideoFrame(activeStream)) {
         // Check if we reached end of stream
         if (activeStream.state == VideoState::END_OF_STREAM) {
@@ -62,6 +66,7 @@ bool KeyframeSwitchStrategy::UpdateFrame() {
     }
     
     // Check if we can execute pending switch at this frame
+    // This will only execute if ProcessVideoFrame detected a keyframe in the current frame
     if (m_pendingSwitch.pending) {
         if (!CheckAndExecutePendingSwitch(activeStream)) {
             LOG_DEBUG("Pending switch not executed yet, waiting for keyframe");
@@ -219,29 +224,30 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(ActiveVideo targetVideo, double curre
     
     VideoStream& newActiveStream = m_streams[static_cast<int>(m_activeVideo)];
     
-    // Handle looping if current time exceeds new video's duration
+    // Handle looping if current time exceeds video duration
     double targetTime = currentTime;
-    if (targetTime >= newActiveStream.duration && newActiveStream.duration > 0.0) {
+    if (newActiveStream.duration > 0.0 && targetTime >= newActiveStream.duration) {
         // Loop to the appropriate position within the video
         targetTime = fmod(targetTime, newActiveStream.duration);
-        LOG_INFO("Seeking to looped position: ", targetTime);
+        LOG_INFO("Looping target time to: ", targetTime, " (from: ", currentTime, ", duration: ", newActiveStream.duration, ")");
     }
     
-    // Seek the new active video to the synchronized time
+    // Seek the new active video to the synchronized keyframe time
+    // Since we're switching at a keyframe, the target video should have a keyframe at the same timestamp
     if (!SeekVideoStream(newActiveStream, targetTime)) {
-        LOG_ERROR("Failed to synchronize new active stream to time ", targetTime);
+        LOG_ERROR("Failed to synchronize new active stream to keyframe time ", targetTime);
         m_activeVideo = previousVideo; // Revert
         return false;
     }
     
-    // Update the stream's current time
-    newActiveStream.currentTime = targetTime;
+    // Update the stream's state
     newActiveStream.state = VideoState::PLAYING;
     
-    LOG_INFO("Successfully synchronized video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " to keyframe time ", targetTime);
+    LOG_INFO("Successfully synchronized video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " to keyframe time ", newActiveStream.currentTime);
     
     return true;
 }
+
 
 bool KeyframeSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
     LOG_INFO("End of stream reached for ", (&stream == &m_streams[0] ? "video 1" : "video 2"));
@@ -296,58 +302,11 @@ bool KeyframeSwitchStrategy::SeekVideoStream(VideoStream& stream, double timeInS
     stream.decoder.Flush();
     stream.currentFrame.valid = false;
     
-    // Decode frames until we reach the target time or get close to it
-    const double SEEK_TOLERANCE = 0.5; // 500ms tolerance for better seeking
-    bool foundFrame = false;
-    int attempts = 0;
-    const int MAX_SEEK_ATTEMPTS = 300; // Increased for longer GOP sizes
+    // For keyframe switching, we assume both videos have keyframes at the same timestamps
+    // So we can rely on the demuxer seek to position us at the right keyframe
+    // The next DecodeNextFrame call should give us the frame at the target time
+    stream.currentTime = timeInSeconds;
     
-    LOG_DEBUG("Looking for frame at target time ", timeInSeconds);
-    
-    while (!foundFrame && attempts < MAX_SEEK_ATTEMPTS) {
-        attempts++;
-        
-        AVPacket packet;
-        av_init_packet(&packet);
-        
-        // Read packet from demuxer
-        if (!stream.demuxer.ReadFrame(&packet)) {
-            LOG_DEBUG("No more packets during seek");
-            av_packet_unref(&packet);
-            break;
-        }
-        
-        // Send packet to decoder
-        if (!stream.decoder.SendPacket(&packet)) {
-            LOG_DEBUG("Failed to send packet during seek");
-            av_packet_unref(&packet);
-            continue;
-        }
-        
-        // Try to receive decoded frame
-        DecodedFrame tempFrame;
-        if (stream.decoder.ReceiveFrame(tempFrame)) {
-            if (tempFrame.valid) {
-                LOG_DEBUG("Decoded frame at time ", tempFrame.presentationTime, " (target: ", timeInSeconds, ")");
-                
-                // Check if this frame is close enough to our target time
-                if (tempFrame.presentationTime >= timeInSeconds - SEEK_TOLERANCE) {
-                    stream.currentFrame = tempFrame;
-                    stream.currentTime = tempFrame.presentationTime;
-                    foundFrame = true;
-                    LOG_DEBUG("Found suitable frame at ", tempFrame.presentationTime, " seconds");
-                }
-            }
-        }
-        
-        av_packet_unref(&packet);
-    }
-    
-    if (!foundFrame) {
-        LOG_DEBUG("Could not find frame near target time after ", attempts, " attempts");
-        // Set current time anyway - we'll get the next available frame
-        stream.currentTime = timeInSeconds;
-    }
-    
+    LOG_DEBUG("Stream positioned at time: ", timeInSeconds, " seconds");
     return true;
 }

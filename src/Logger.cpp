@@ -19,6 +19,12 @@ void Logger::Error(const std::string& message) {
     }
 }
 
+void Logger::Warning(const std::string& message) {
+    if (m_logLevel >= LogLevel::Warning) {
+        std::cout << "[WARNING] " << message << "\n";
+    }
+}
+
 void Logger::Info(const std::string& message) {
     if (m_logLevel >= LogLevel::Info) {
         std::cout << "[INFO] " << message << "\n";
