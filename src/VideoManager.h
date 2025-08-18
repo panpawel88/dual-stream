@@ -43,7 +43,7 @@ public:
     VideoManager();
     ~VideoManager();
     
-    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE);
+    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
     void Cleanup();
     
     // Playback control
@@ -89,6 +89,7 @@ private:
     // Frame timing
     std::chrono::steady_clock::time_point m_lastFrameTime;
     double m_frameInterval;
+    double m_playbackSpeed;
     
     // Initialization helpers
     bool InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice);

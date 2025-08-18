@@ -8,11 +8,12 @@ struct VideoPlayerArgs {
     std::string video1Path;
     std::string video2Path;
     SwitchingAlgorithm switchingAlgorithm;
+    double playbackSpeed;
     bool valid;
     bool debugLogging;
     std::string errorMessage;
     
-    VideoPlayerArgs() : switchingAlgorithm(SwitchingAlgorithm::IMMEDIATE), valid(false), debugLogging(false) {}
+    VideoPlayerArgs() : switchingAlgorithm(SwitchingAlgorithm::IMMEDIATE), playbackSpeed(1.0), valid(false), debugLogging(false) {}
 };
 
 class CommandLineParser {

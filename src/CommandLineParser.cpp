@@ -8,8 +8,9 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
     if (argc < 3) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>]";
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>] [--speed=<speed>]";
         args.errorMessage += "\nSwitching algorithms: immediate (default), predecoded, keyframe-sync";
+        args.errorMessage += "\nPlayback speeds: 0.05, 0.1, 0.2, 0.5, 1.0 (default)";
         return args;
     }
     
@@ -38,9 +39,25 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
                 args.errorMessage += "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
                 return args;
             }
+        } else if (arg.find("--speed=") == 0) {
+            std::string speedStr = arg.substr(8); // Skip "--speed="
+            try {
+                double speed = std::stod(speedStr);
+                if (speed == 0.05 || speed == 0.1 || speed == 0.2 || speed == 0.5 || speed == 1.0) {
+                    args.playbackSpeed = speed;
+                } else {
+                    args.errorMessage = "Invalid playback speed: " + speedStr;
+                    args.errorMessage += "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
+                    return args;
+                }
+            } catch (const std::exception& e) {
+                args.errorMessage = "Invalid playback speed format: " + speedStr;
+                args.errorMessage += "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
+                return args;
+            }
         } else {
             args.errorMessage = "Unknown option: " + arg;
-            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>";
+            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>, --speed=<speed>";
             return args;
         }
     }

@@ -34,6 +34,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Video 1: ", args.video1Path);
     LOG_INFO("Video 2: ", args.video2Path);
     LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm));
+    LOG_INFO("Playback Speed: ", args.playbackSpeed, "x");
     
     // Validate video files and get their properties
     VideoInfo video1Info = VideoValidator::GetVideoInfo(args.video1Path);
@@ -62,9 +63,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Initialize video manager with switching strategy
+    // Initialize video manager with switching strategy and playback speed
     VideoManager videoManager;
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.GetDevice(), args.switchingAlgorithm)) {
+    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.GetDevice(), args.switchingAlgorithm, args.playbackSpeed)) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }

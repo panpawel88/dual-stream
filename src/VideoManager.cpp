@@ -11,19 +11,24 @@ VideoManager::VideoManager()
     , m_pausedTime(0.0)
     , m_needsSeek(false)
     , m_targetSeekTime(0.0)
-    , m_frameInterval(1.0 / 60.0) { // Default to 60 FPS
+    , m_frameInterval(1.0 / 60.0) // Default to 60 FPS
+    , m_playbackSpeed(1.0) { // Default to normal speed
 }
 
 VideoManager::~VideoManager() {
     Cleanup();
 }
 
-bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm) {
+bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed) {
     if (m_initialized) {
         Cleanup();
     }
     
     LOG_INFO("Initializing VideoManager...");
+    
+    // Set playback speed
+    m_playbackSpeed = playbackSpeed;
+    LOG_INFO("Playback speed set to: ", m_playbackSpeed, "x");
     
     // Initialize both video streams
     if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice)) {
@@ -233,7 +238,7 @@ double VideoManager::GetCurrentTime() const {
     if (m_state == VideoState::PLAYING) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - m_playbackStartTime);
-        return m_pausedTime + (elapsed.count() / 1000000.0);
+        return m_pausedTime + (elapsed.count() / 1000000.0) * m_playbackSpeed;
     }
     
     return 0.0;
@@ -400,7 +405,11 @@ bool VideoManager::ShouldPresentFrame() const {
     auto timeSinceLastFrame = std::chrono::duration_cast<std::chrono::microseconds>(now - m_lastFrameTime);
     double elapsedSeconds = timeSinceLastFrame.count() / 1000000.0;
     
-    return elapsedSeconds >= m_frameInterval;
+    // Adjust frame interval based on playback speed
+    // Lower speed means longer interval between frames
+    double adjustedFrameInterval = m_frameInterval / m_playbackSpeed;
+    
+    return elapsedSeconds >= adjustedFrameInterval;
 }
 
 bool VideoManager::ShouldUpdateFrame() const {
