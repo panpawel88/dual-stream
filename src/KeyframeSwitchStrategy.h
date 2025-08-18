@@ -42,4 +42,7 @@ private:
     // Keyframe synchronization
     double m_lastKeyframeTime;
     bool m_keyframeDetected;
+    
+    // Switch state tracking to prevent stale frame rendering
+    bool m_switchInProgress;
 };
