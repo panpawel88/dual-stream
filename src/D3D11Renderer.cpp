@@ -54,18 +54,14 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float y = yTexture.Sample(videoSampler, input.tex).r;
     
     // Sample UV (chrominance) - for NV12, UV is at half resolution
-    float2 uvCoord = input.tex;
-    uvCoord.y *= 0.5; // UV plane is half height in NV12
-    uvCoord.y += 0.5;  // UV data starts after Y plane
-    
-    float2 chroma = uvTexture.Sample(videoSampler, uvCoord).rg;
+    float2 chroma = uvTexture.Sample(videoSampler, input.tex).rg;
     float u = chroma.r - 0.5;
     float v = chroma.g - 0.5;
     
-    // BT.709 YUV to RGB conversion
-    float r = y + 1.5748 * v;
-    float g = y - 0.1873 * u - 0.4681 * v;
-    float b = y + 1.8556 * u;
+    // BT.709 YUV to RGB conversion (full range)
+    float r = y + 1.402 * v;
+    float g = y - 0.344 * u - 0.714 * v;
+    float b = y + 1.772 * u;
     
     return float4(saturate(r), saturate(g), saturate(b), 1.0);
 }
@@ -226,7 +222,7 @@ bool D3D11Renderer::CreateDeviceAndSwapChain() {
     swapChainDesc.BufferCount = 1;
     swapChainDesc.BufferDesc.Width = m_width;
     swapChainDesc.BufferDesc.Height = m_height;
-    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
     swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
