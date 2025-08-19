@@ -3,12 +3,24 @@
 #include <iostream>
 #include <vector>
 
-// Simple vertex shader source (compatible with OpenGL 2.0)
-const char* g_glVertexShaderSource = R"(
-attribute vec3 position;
-attribute vec2 texCoord;
+// WGL constants for modern context creation
+#ifndef WGL_CONTEXT_MAJOR_VERSION_ARB
+#define WGL_CONTEXT_MAJOR_VERSION_ARB     0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB     0x2092
+#define WGL_CONTEXT_FLAGS_ARB             0x2094
+#define WGL_CONTEXT_PROFILE_MASK_ARB      0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
+#define WGL_CONTEXT_DEBUG_BIT_ARB         0x00000001
+#endif
 
-varying vec2 TexCoord;
+// Modern vertex shader source (OpenGL 4.6 Core Profile)
+const char* g_glVertexShaderSource460 = R"(
+#version 460 core
+
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 texCoord;
+
+out vec2 TexCoord;
 
 void main()
 {
@@ -17,15 +29,49 @@ void main()
 }
 )";
 
-// Fragment shader source (compatible with OpenGL 2.0)
-const char* g_glFragmentShaderSource = R"(
-varying vec2 TexCoord;
+// Modern fragment shader source (OpenGL 4.6 Core Profile)
+const char* g_glFragmentShaderSource460 = R"(
+#version 460 core
+
+in vec2 TexCoord;
+out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 
 void main()
 {
-    gl_FragColor = texture2D(videoTexture, TexCoord);
+    FragColor = texture(videoTexture, TexCoord);
+}
+)";
+
+// Fallback vertex shader source (OpenGL 3.3 Core Profile)
+const char* g_glVertexShaderSource330 = R"(
+#version 330 core
+
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 texCoord;
+
+out vec2 TexCoord;
+
+void main()
+{
+    gl_Position = vec4(position, 1.0);
+    TexCoord = texCoord;
+}
+)";
+
+// Fallback fragment shader source (OpenGL 3.3 Core Profile)
+const char* g_glFragmentShaderSource330 = R"(
+#version 330 core
+
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform sampler2D videoTexture;
+
+void main()
+{
+    FragColor = texture(videoTexture, TexCoord);
 }
 )";
 
@@ -43,34 +89,12 @@ OpenGLRenderer::OpenGLRenderer()
     , m_vao(0)
     , m_vbo(0)
     , m_ebo(0)
-    , m_textureUniform(-1) {
-    
-    // Initialize function pointers to nullptr
-    glGenBuffers = nullptr;
-    glBindBuffer = nullptr;
-    glBufferData = nullptr;
-    glDeleteBuffers = nullptr;
-    glGenVertexArrays = nullptr;
-    glBindVertexArray = nullptr;
-    glDeleteVertexArrays = nullptr;
-    glEnableVertexAttribArray = nullptr;
-    glVertexAttribPointer = nullptr;
-    glCreateShader = nullptr;
-    glShaderSource = nullptr;
-    glCompileShader = nullptr;
-    glGetShaderiv = nullptr;
-    glGetShaderInfoLog = nullptr;
-    glDeleteShader = nullptr;
-    glCreateProgram = nullptr;
-    glAttachShader = nullptr;
-    glLinkProgram = nullptr;
-    glGetProgramiv = nullptr;
-    glGetProgramInfoLog = nullptr;
-    glDeleteProgram = nullptr;
-    glUseProgram = nullptr;
-    glGetUniformLocation = nullptr;
-    glUniform1i = nullptr;
-    glActiveTexture = nullptr;
+    , m_textureUniform(-1)
+    , m_glMajorVersion(0)
+    , m_glMinorVersion(0)
+    , m_coreProfile(false)
+    , m_debugContext(false)
+    , wglCreateContextAttribsARB(nullptr) {
 }
 
 OpenGLRenderer::~OpenGLRenderer() {
@@ -88,18 +112,55 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     
     LOG_INFO("Initializing OpenGL renderer (", width, "x", height, ")");
     
-    // Setup OpenGL context
+    // Setup OpenGL context (this also initializes GLAD)
     if (!SetupOpenGL()) {
         LOG_ERROR("Failed to setup OpenGL context");
         Cleanup();
         return false;
     }
     
-    // Load OpenGL extensions
-    if (!LoadOpenGLExtensions()) {
-        LOG_ERROR("Failed to load OpenGL extensions");
-        Cleanup();
-        return false;
+    // Get OpenGL version info (GLAD is now initialized)
+    // Try to get version info - may fail on very old contexts
+    glGetIntegerv(GL_MAJOR_VERSION, &m_glMajorVersion);
+    glGetIntegerv(GL_MINOR_VERSION, &m_glMinorVersion);
+    
+    // Check if we got valid version info
+    if (m_glMajorVersion == 0) {
+        // Fallback: parse version string for older contexts
+        const char* version = (const char*)glGetString(GL_VERSION);
+        if (version) {
+            if (sscanf(version, "%d.%d", &m_glMajorVersion, &m_glMinorVersion) != 2) {
+                m_glMajorVersion = 0;
+                m_glMinorVersion = 0;
+            }
+        }
+        if (m_glMajorVersion == 0) {
+            // Ultimate fallback - assume OpenGL 2.1
+            m_glMajorVersion = 2;
+            m_glMinorVersion = 1;
+        }
+    }
+    
+    // Try to get context info - these may not be available in legacy contexts
+    GLint contextFlags = 0;
+    if (m_glMajorVersion >= 3) {
+        glGetIntegerv(GL_CONTEXT_FLAGS, &contextFlags);
+        m_debugContext = (contextFlags & GL_CONTEXT_FLAG_DEBUG_BIT) != 0;
+        
+        GLint profileMask = 0;
+        glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profileMask);
+        m_coreProfile = (profileMask & GL_CONTEXT_CORE_PROFILE_BIT) != 0;
+    } else {
+        m_debugContext = false;
+        m_coreProfile = false;
+    }
+    
+    LOG_INFO("OpenGL ", m_glMajorVersion, ".", m_glMinorVersion, " ", 
+             m_coreProfile ? "Core" : "Compatibility", " Profile loaded");
+    
+    // Enable debug output if available
+    if (m_debugContext) {
+        EnableDebugOutput();
     }
     
     // Create shaders
@@ -126,11 +187,13 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     // Set viewport
     glViewport(0, 0, width, height);
     
-    // Enable texture
-    glEnable(GL_TEXTURE_2D);
-    
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    
+    // Enable depth testing and blending if needed for future features
+    // glEnable(GL_DEPTH_TEST);
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     m_initialized = true;
     LOG_INFO("OpenGL renderer initialized successfully");
@@ -199,6 +262,37 @@ bool OpenGLRenderer::SetupOpenGL() {
         return false;
     }
     
+    // First create a legacy context to get WGL extensions
+    if (!CreateLegacyContext()) {
+        LOG_ERROR("Failed to create legacy context");
+        return false;
+    }
+    
+    // Try to upgrade to modern context
+    if (!UpgradeToModernContext()) {
+        LOG_WARNING("Failed to create modern OpenGL context, using legacy context");
+    }
+    
+    // Initialize GLAD immediately after context creation
+    if (!gladLoadGL()) {
+        LOG_WARNING("Failed to initialize GLAD - using basic OpenGL functions");
+        // Continue with basic OpenGL functions - don't fail here
+    }
+    
+    // Now we can safely call OpenGL functions
+    // Get OpenGL version info
+    const char* version = (const char*)glGetString(GL_VERSION);
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    
+    LOG_INFO("OpenGL Version: ", version ? version : "Unknown");
+    LOG_INFO("OpenGL Vendor: ", vendor ? vendor : "Unknown");
+    LOG_INFO("OpenGL Renderer: ", renderer ? renderer : "Unknown");
+    
+    return true;
+}
+
+bool OpenGLRenderer::CreateLegacyContext() {
     // Set pixel format
     PIXELFORMATDESCRIPTOR pfd = {};
     pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
@@ -221,117 +315,153 @@ bool OpenGLRenderer::SetupOpenGL() {
         return false;
     }
     
-    // Create OpenGL context
-    m_hrc = wglCreateContext(m_hdc);
-    if (!m_hrc) {
-        LOG_ERROR("Failed to create OpenGL context");
+    // Create legacy OpenGL context
+    HGLRC tempContext = wglCreateContext(m_hdc);
+    if (!tempContext) {
+        LOG_ERROR("Failed to create temporary OpenGL context");
         return false;
     }
     
     // Make context current
-    if (!wglMakeCurrent(m_hdc, m_hrc)) {
-        LOG_ERROR("Failed to make OpenGL context current");
+    if (!wglMakeCurrent(m_hdc, tempContext)) {
+        LOG_ERROR("Failed to make temporary OpenGL context current");
+        wglDeleteContext(tempContext);
         return false;
     }
     
-    // Get OpenGL version info
-    const char* version = (const char*)glGetString(GL_VERSION);
-    const char* vendor = (const char*)glGetString(GL_VENDOR);
-    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    // Load WGL extensions
+    wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
     
-    LOG_INFO("OpenGL Version: ", version ? version : "Unknown");
-    LOG_INFO("OpenGL Vendor: ", vendor ? vendor : "Unknown");
-    LOG_INFO("OpenGL Renderer: ", renderer ? renderer : "Unknown");
-    
+    m_hrc = tempContext;
     return true;
 }
 
-bool OpenGLRenderer::LoadOpenGLExtensions() {
-    // Load required OpenGL extensions
-    glGenBuffers = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
-    glBindBuffer = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
-    glBufferData = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
-    glDeleteBuffers = (PFNGLDELETEBUFFERSPROC)wglGetProcAddress("glDeleteBuffers");
-    glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
-    glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
-    glDeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)wglGetProcAddress("glDeleteVertexArrays");
-    glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
-    glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
-    glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
-    glShaderSource = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
-    glCompileShader = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
-    glGetShaderiv = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
-    glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
-    glDeleteShader = (PFNGLDELETESHADERPROC)wglGetProcAddress("glDeleteShader");
-    glCreateProgram = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
-    glAttachShader = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
-    glLinkProgram = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
-    glGetProgramiv = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
-    glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
-    glDeleteProgram = (PFNGLDELETEPROGRAMPROC)wglGetProcAddress("glDeleteProgram");
-    glUseProgram = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
-    glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
-    glUniform1i = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
-    glActiveTexture = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
-    
-    // Check if all required functions were loaded
-    if (!glGenBuffers || !glBindBuffer || !glBufferData || !glDeleteBuffers ||
-        !glGenVertexArrays || !glBindVertexArray || !glDeleteVertexArrays ||
-        !glEnableVertexAttribArray || !glVertexAttribPointer ||
-        !glCreateShader || !glShaderSource || !glCompileShader ||
-        !glGetShaderiv || !glGetShaderInfoLog || !glDeleteShader ||
-        !glCreateProgram || !glAttachShader || !glLinkProgram ||
-        !glGetProgramiv || !glGetProgramInfoLog || !glDeleteProgram ||
-        !glUseProgram || !glGetUniformLocation || !glUniform1i ||
-        !glActiveTexture) {
-        
-        LOG_ERROR("Failed to load required OpenGL extensions");
+bool OpenGLRenderer::UpgradeToModernContext() {
+    if (!wglCreateContextAttribsARB) {
+        LOG_INFO("wglCreateContextAttribsARB not available, using legacy context");
         return false;
     }
     
-    return true;
+    // Try different OpenGL versions in descending order
+    const int versions[][2] = {
+        {4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0},
+        {3, 3}, {3, 2}, {3, 1}, {3, 0}
+    };
+    
+    for (const auto& version : versions) {
+        // Context attributes for core profile with debug
+        const int contextAttribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, version[0],
+            WGL_CONTEXT_MINOR_VERSION_ARB, version[1],
+            WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
+            WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            0
+        };
+        
+        HGLRC newContext = wglCreateContextAttribsARB(m_hdc, nullptr, contextAttribs);
+        if (newContext) {
+            // Switch to new context
+            wglMakeCurrent(nullptr, nullptr);
+            wglDeleteContext(m_hrc);
+            m_hrc = newContext;
+            
+            if (wglMakeCurrent(m_hdc, m_hrc)) {
+                LOG_INFO("Created OpenGL ", version[0], ".", version[1], " Core Profile context with debug");
+                return true;
+            } else {
+                wglDeleteContext(newContext);
+            }
+        }
+        
+        // Try without debug if debug failed
+        const int contextAttribsNoDebug[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, version[0],
+            WGL_CONTEXT_MINOR_VERSION_ARB, version[1],
+            WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            0
+        };
+        
+        newContext = wglCreateContextAttribsARB(m_hdc, nullptr, contextAttribsNoDebug);
+        if (newContext) {
+            // Switch to new context
+            wglMakeCurrent(nullptr, nullptr);
+            wglDeleteContext(m_hrc);
+            m_hrc = newContext;
+            
+            if (wglMakeCurrent(m_hdc, m_hrc)) {
+                LOG_INFO("Created OpenGL ", version[0], ".", version[1], " Core Profile context");
+                return true;
+            } else {
+                wglDeleteContext(newContext);
+            }
+        }
+    }
+    
+    LOG_WARNING("Failed to create any modern OpenGL context, using legacy context");
+    return false;
 }
 
 bool OpenGLRenderer::CreateShaders() {
     // Check if shader functions are available
     if (!glCreateShader || !glShaderSource || !glCompileShader || 
-        !glGetShaderiv || !glGetShaderInfoLog || !glCreateProgram ||
-        !glAttachShader || !glLinkProgram || !glGetProgramiv ||
-        !glGetProgramInfoLog || !glGetUniformLocation) {
-        
-        LOG_INFO("Shader functions not available, using fixed function pipeline");
+        !glGetShaderiv || !glCreateProgram || !glAttachShader || 
+        !glLinkProgram || !glGetProgramiv) {
+        LOG_INFO("Shader functions not available - using fixed function pipeline");
         m_program = 0;
         m_vertexShader = 0;
         m_fragmentShader = 0;
         m_textureUniform = -1;
-        return true; // Not an error, just use fixed function
+        return true; // Not an error for legacy contexts
     }
     
     GLint success;
     char infoLog[512];
     
-    // Create vertex shader
-    m_vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(m_vertexShader, 1, &g_glVertexShaderSource, nullptr);
-    glCompileShader(m_vertexShader);
+    // Try to compile shaders with different GLSL versions
+    const char* vertexSources[] = { g_glVertexShaderSource460, g_glVertexShaderSource330 };
+    const char* fragmentSources[] = { g_glFragmentShaderSource460, g_glFragmentShaderSource330 };
+    const char* versionNames[] = { "GLSL 4.60", "GLSL 3.30" };
     
-    glGetShaderiv(m_vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(m_vertexShader, 512, nullptr, infoLog);
-        LOG_ERROR("Vertex shader compilation failed: ", infoLog);
-        return false;
+    bool shadersCompiled = false;
+    for (int i = 0; i < 2 && !shadersCompiled; i++) {
+        // Create vertex shader
+        m_vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(m_vertexShader, 1, &vertexSources[i], nullptr);
+        glCompileShader(m_vertexShader);
+        
+        glGetShaderiv(m_vertexShader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(m_vertexShader, 512, nullptr, infoLog);
+            LOG_INFO("Vertex shader compilation failed for ", versionNames[i], ": ", infoLog);
+            glDeleteShader(m_vertexShader);
+            m_vertexShader = 0;
+            continue;
+        }
+        
+        // Create fragment shader
+        m_fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(m_fragmentShader, 1, &fragmentSources[i], nullptr);
+        glCompileShader(m_fragmentShader);
+        
+        glGetShaderiv(m_fragmentShader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(m_fragmentShader, 512, nullptr, infoLog);
+            LOG_INFO("Fragment shader compilation failed for ", versionNames[i], ": ", infoLog);
+            glDeleteShader(m_vertexShader);
+            glDeleteShader(m_fragmentShader);
+            m_vertexShader = 0;
+            m_fragmentShader = 0;
+            continue;
+        }
+        
+        LOG_INFO("Successfully compiled shaders using ", versionNames[i]);
+        shadersCompiled = true;
     }
     
-    // Create fragment shader
-    m_fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(m_fragmentShader, 1, &g_glFragmentShaderSource, nullptr);
-    glCompileShader(m_fragmentShader);
-    
-    glGetShaderiv(m_fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(m_fragmentShader, 512, nullptr, infoLog);
-        LOG_ERROR("Fragment shader compilation failed: ", infoLog);
-        return false;
+    if (!shadersCompiled) {
+        LOG_WARNING("All shader versions failed to compile - falling back to fixed function pipeline");
+        m_program = 0;
+        return true; // Continue without shaders
     }
     
     // Create shader program
@@ -343,8 +473,10 @@ bool OpenGLRenderer::CreateShaders() {
     glGetProgramiv(m_program, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(m_program, 512, nullptr, infoLog);
-        LOG_ERROR("Shader program linking failed: ", infoLog);
-        return false;
+        LOG_WARNING("Shader program linking failed: ", infoLog);
+        LOG_INFO("Falling back to fixed function pipeline");
+        m_program = 0;
+        return true; // Continue without shaders
     }
     
     // Get uniform locations
@@ -352,6 +484,58 @@ bool OpenGLRenderer::CreateShaders() {
     
     LOG_INFO("Shaders compiled and linked successfully");
     return true;
+}
+
+bool OpenGLRenderer::EnableDebugOutput() {
+    if (!GLAD_GL_VERSION_4_3 && !GLAD_GL_KHR_debug) {
+        LOG_INFO("OpenGL debug output not available");
+        return false;
+    }
+    
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(DebugCallback, nullptr);
+    
+    // Filter out notification messages
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+    
+    LOG_INFO("OpenGL debug output enabled");
+    return true;
+}
+
+void GLAPIENTRY OpenGLRenderer::DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
+    // Ignore certain verbose info messages
+    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) {
+        return;
+    }
+    
+    std::string severityStr;
+    switch (severity) {
+        case GL_DEBUG_SEVERITY_HIGH:         severityStr = "HIGH"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       severityStr = "MEDIUM"; break;
+        case GL_DEBUG_SEVERITY_LOW:          severityStr = "LOW"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: severityStr = "NOTIFICATION"; break;
+        default:                             severityStr = "UNKNOWN"; break;
+    }
+    
+    std::string typeStr;
+    switch (type) {
+        case GL_DEBUG_TYPE_ERROR:               typeStr = "ERROR"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeStr = "DEPRECATED_BEHAVIOR"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typeStr = "UNDEFINED_BEHAVIOR"; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         typeStr = "PORTABILITY"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         typeStr = "PERFORMANCE"; break;
+        case GL_DEBUG_TYPE_OTHER:               typeStr = "OTHER"; break;
+        default:                                typeStr = "UNKNOWN"; break;
+    }
+    
+    if (severity == GL_DEBUG_SEVERITY_HIGH) {
+        LOG_ERROR("OpenGL ", severityStr, " ", typeStr, ": ", message);
+    } else if (severity == GL_DEBUG_SEVERITY_MEDIUM) {
+        LOG_WARNING("OpenGL ", severityStr, " ", typeStr, ": ", message);
+    } else {
+        LOG_INFO("OpenGL ", severityStr, " ", typeStr, ": ", message);
+    }
 }
 
 bool OpenGLRenderer::CreateGeometry() {
@@ -367,9 +551,9 @@ bool OpenGLRenderer::CreateGeometry() {
     // Create indices
     GLuint indices[] = { 0, 1, 2, 0, 2, 3 };
     
-    // Try to use VBO if available, otherwise fall back to immediate mode
+    // Always try to create VBO (required for modern rendering)
     if (glGenBuffers && glBindBuffer && glBufferData) {
-        // Generate VAO if available (OpenGL 3.0+)
+        // Generate VAO if available (OpenGL 3.0+ or ARB_vertex_array_object)
         if (glGenVertexArrays && glBindVertexArray) {
             glGenVertexArrays(1, &m_vao);
             glBindVertexArray(m_vao);
@@ -385,26 +569,27 @@ bool OpenGLRenderer::CreateGeometry() {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         
-        // Set vertex attributes if VAO is available
-        if (m_vao && glVertexAttribPointer && glEnableVertexAttribArray) {
-            // Position attribute
+        // Set vertex attributes if available (modern path)
+        if (glVertexAttribPointer && glEnableVertexAttribArray) {
+            // Position attribute (location = 0)
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GLQuadVertex), (void*)0);
             glEnableVertexAttribArray(0);
             
-            // Texture coordinate attribute
+            // Texture coordinate attribute (location = 1)
             glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GLQuadVertex), (void*)(3 * sizeof(float)));
             glEnableVertexAttribArray(1);
         }
         
         // Unbind
-        if (glBindBuffer) {
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-        }
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
         if (m_vao && glBindVertexArray) {
             glBindVertexArray(0);
         }
+        
+        LOG_INFO("Created VBO/VAO geometry buffers");
     } else {
-        LOG_INFO("VBO not available, will use immediate mode rendering");
+        LOG_ERROR("OpenGL buffer functions not available - cannot create geometry");
+        return false;
     }
     
     return true;
@@ -430,18 +615,18 @@ bool OpenGLRenderer::CreateTexture() {
 }
 
 void OpenGLRenderer::SetupRenderState() {
-    // Use shader program if available
-    if (glUseProgram && m_program) {
+    // Use shader program if available (modern path)
+    if (m_program && glUseProgram) {
         glUseProgram(m_program);
         
-        // Bind texture
+        // Bind texture to unit 0
         if (glActiveTexture) {
             glActiveTexture(GL_TEXTURE0);
         }
         glBindTexture(GL_TEXTURE_2D, m_texture);
         
         // Set texture uniform
-        if (glUniform1i && m_textureUniform >= 0) {
+        if (m_textureUniform >= 0 && glUniform1i) {
             glUniform1i(m_textureUniform, 0);
         }
         
@@ -450,31 +635,46 @@ void OpenGLRenderer::SetupRenderState() {
             glBindVertexArray(m_vao);
         }
     } else {
-        // Fallback to fixed function pipeline
-        glBindTexture(GL_TEXTURE_2D, m_texture);
+        // Legacy fixed-function pipeline
         glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, m_texture);
     }
 }
 
 void OpenGLRenderer::DrawQuad() {
     if (m_vao && m_ebo) {
-        // Use VBO/VAO rendering
+        // Use modern VAO/VBO rendering (preferred)
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    } else if (m_vbo && m_ebo) {
+        // Use VBO without VAO - need to manually set up vertex attributes each frame
+        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+        
+        // Set vertex attributes manually (since no VAO)
+        if (glVertexAttribPointer && glEnableVertexAttribArray) {
+            // Position attribute (location = 0)
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GLQuadVertex), (void*)0);
+            glEnableVertexAttribArray(0);
+            
+            // Texture coordinate attribute (location = 1)
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GLQuadVertex), (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(1);
+            
+            // Draw
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            
+            // Disable vertex attributes
+            glDisableVertexAttribArray(0);
+            glDisableVertexAttribArray(1);
+        } else {
+            LOG_ERROR("Vertex attribute functions not available");
+        }
+        
+        // Unbind buffers
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     } else {
-        // Use immediate mode rendering
-        glBegin(GL_TRIANGLES);
-        
-        // First triangle
-        glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, 0.0f); // Top-left
-        glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f,  1.0f, 0.0f); // Top-right
-        glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f, 0.0f); // Bottom-right
-        
-        // Second triangle
-        glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, 0.0f); // Top-left
-        glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f, 0.0f); // Bottom-right
-        glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, -1.0f, 0.0f); // Bottom-left
-        
-        glEnd();
+        LOG_ERROR("No VBO/EBO available for rendering");
     }
 }
 
@@ -533,4 +733,9 @@ void OpenGLRenderer::Reset() {
     m_width = 0;
     m_height = 0;
     m_textureUniform = -1;
+    m_glMajorVersion = 0;
+    m_glMinorVersion = 0;
+    m_coreProfile = false;
+    m_debugContext = false;
+    wglCreateContextAttribsARB = nullptr;
 }
