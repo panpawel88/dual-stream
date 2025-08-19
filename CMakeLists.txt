@@ -9,6 +9,16 @@ if(WIN32)
     add_definitions(-DUNICODE -D_UNICODE)
 endif()
 
+# Renderer selection
+option(USE_OPENGL_RENDERER "Use OpenGL renderer instead of DirectX 11" OFF)
+if(USE_OPENGL_RENDERER)
+    message(STATUS "Using OpenGL renderer")
+    add_definitions(-DUSE_OPENGL_RENDERER=1)
+else()
+    message(STATUS "Using DirectX 11 renderer")
+    add_definitions(-DUSE_OPENGL_RENDERER=0)
+endif()
+
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -100,26 +110,51 @@ endif()
 
 # Windows specific libraries
 if(WIN32)
-    target_link_libraries(FFmpeg INTERFACE
-        d3d11
-        dxgi
-        d3dcompiler
-        user32
-        kernel32
-        gdi32
-        winspool
-        comdlg32
-        advapi32
-        shell32
-        ole32
-        oleaut32
-        uuid
-        odbc32
-        odbccp32
-    )
+    if(USE_OPENGL_RENDERER)
+        target_link_libraries(FFmpeg INTERFACE
+            opengl32
+            gdi32
+            user32
+            kernel32
+            winspool
+            comdlg32
+            advapi32
+            shell32
+            ole32
+            oleaut32
+            uuid
+            odbc32
+            odbccp32
+        )
+    else()
+        target_link_libraries(FFmpeg INTERFACE
+            d3d11
+            dxgi
+            d3dcompiler
+            user32
+            kernel32
+            gdi32
+            winspool
+            comdlg32
+            advapi32
+            shell32
+            ole32
+            oleaut32
+            uuid
+            odbc32
+            odbccp32
+        )
+    endif()
 endif()
 
-# Main executable
+# Main executable - conditional renderer selection
+set(RENDERER_SOURCES)
+if(USE_OPENGL_RENDERER)
+    set(RENDERER_SOURCES src/OpenGLRenderer.cpp)
+else()
+    set(RENDERER_SOURCES src/D3D11Renderer.cpp)
+endif()
+
 add_executable(ffmpeg_player
     src/main.cpp
     src/Window.cpp
@@ -128,7 +163,7 @@ add_executable(ffmpeg_player
     src/HardwareDecoder.cpp
     src/VideoDemuxer.cpp
     src/VideoDecoder.cpp
-    src/D3D11Renderer.cpp
+    ${RENDERER_SOURCES}
     src/VideoManager.cpp
     src/Logger.cpp
     src/FFmpegInitializer.cpp

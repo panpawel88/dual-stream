@@ -6,7 +6,11 @@
 #include "VideoValidator.h"
 #include "HardwareDecoder.h"
 #include "VideoDemuxer.h"
+#if USE_OPENGL_RENDERER
+#include "OpenGLRenderer.h"
+#else
 #include "D3D11Renderer.h"
+#endif
 #include "VideoManager.h"
 #include "Logger.h"
 #include "FFmpegInitializer.h"
@@ -56,6 +60,21 @@ int main(int argc, char* argv[]) {
     window.Show();
     LOG_INFO("Window created. Press 1/2 to switch videos, ESC to exit");
     
+#if USE_OPENGL_RENDERER
+    // Initialize OpenGL renderer
+    OpenGLRenderer renderer;
+    if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
+        LOG_ERROR("Failed to initialize OpenGL renderer");
+        return 1;
+    }
+    
+    // Initialize video manager with switching strategy and playback speed (no D3D device for OpenGL)
+    VideoManager videoManager;
+    if (!videoManager.Initialize(args.video1Path, args.video2Path, nullptr, args.switchingAlgorithm, args.playbackSpeed)) {
+        LOG_ERROR("Failed to initialize video manager");
+        return 1;
+    }
+#else
     // Initialize D3D11 renderer
     D3D11Renderer renderer;
     if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
@@ -69,6 +88,7 @@ int main(int argc, char* argv[]) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }
+#endif
     
     // Start playback
     if (!videoManager.Play()) {
@@ -103,10 +123,28 @@ int main(int argc, char* argv[]) {
         
         // Get current frame and render it
         DecodedFrame* currentFrame = videoManager.GetCurrentFrame();
-        if (currentFrame && currentFrame->valid && currentFrame->texture) {
-            renderer.Present(currentFrame->texture.Get(), currentFrame->isYUV, currentFrame->format);
+        if (currentFrame && currentFrame->valid) {
+#if USE_OPENGL_RENDERER
+            // OpenGL renderer uses software frame data
+            if (currentFrame->data) {
+                renderer.Present(currentFrame->data, currentFrame->width, currentFrame->height, currentFrame->pitch);
+            } else {
+                renderer.Present(nullptr, 0, 0, 0); // Render black screen if no frame data available
+            }
+#else
+            // D3D11 renderer uses texture
+            if (currentFrame->texture) {
+                renderer.Present(currentFrame->texture.Get(), currentFrame->isYUV, currentFrame->format);
+            } else {
+                renderer.Present(nullptr); // Render black screen if no frame available
+            }
+#endif
         } else {
+#if USE_OPENGL_RENDERER
+            renderer.Present(nullptr, 0, 0, 0); // Render black screen
+#else
             renderer.Present(nullptr); // Render black screen if no frame available
+#endif
         }
         
         // Sleep for a short time to prevent busy waiting, but much shorter than frame interval

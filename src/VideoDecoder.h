@@ -16,7 +16,15 @@ extern "C" {
 using Microsoft::WRL::ComPtr;
 
 struct DecodedFrame {
+    // DirectX 11 texture (for D3D11 renderer)
     ComPtr<ID3D11Texture2D> texture;
+    
+    // Software frame data (for OpenGL renderer)
+    uint8_t* data = nullptr;
+    int width = 0;
+    int height = 0;
+    int pitch = 0;  // bytes per row
+    
     double presentationTime;
     bool valid;
     bool isYUV;  // True for hardware frames that need YUV->RGB conversion in shader
@@ -24,6 +32,58 @@ struct DecodedFrame {
     DXGI_FORMAT format;
     
     DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), keyframe(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
+    
+    // Destructor to clean up software data
+    ~DecodedFrame() {
+        if (data) {
+            delete[] data;
+            data = nullptr;
+        }
+    }
+    
+    // Copy constructor
+    DecodedFrame(const DecodedFrame& other) 
+        : texture(other.texture), presentationTime(other.presentationTime), valid(other.valid)
+        , isYUV(other.isYUV), keyframe(other.keyframe), format(other.format)
+        , width(other.width), height(other.height), pitch(other.pitch) {
+        if (other.data && width > 0 && height > 0 && pitch > 0) {
+            size_t dataSize = pitch * height;
+            data = new uint8_t[dataSize];
+            memcpy(data, other.data, dataSize);
+        } else {
+            data = nullptr;
+        }
+    }
+    
+    // Assignment operator
+    DecodedFrame& operator=(const DecodedFrame& other) {
+        if (this != &other) {
+            // Clean up existing data
+            if (data) {
+                delete[] data;
+                data = nullptr;
+            }
+            
+            // Copy members
+            texture = other.texture;
+            presentationTime = other.presentationTime;
+            valid = other.valid;
+            isYUV = other.isYUV;
+            keyframe = other.keyframe;
+            format = other.format;
+            width = other.width;
+            height = other.height;
+            pitch = other.pitch;
+            
+            // Copy data if present
+            if (other.data && width > 0 && height > 0 && pitch > 0) {
+                size_t dataSize = pitch * height;
+                data = new uint8_t[dataSize];
+                memcpy(data, other.data, dataSize);
+            }
+        }
+        return *this;
+    }
 };
 
 class VideoDecoder {
@@ -31,7 +91,7 @@ public:
     VideoDecoder();
     ~VideoDecoder();
     
-    bool Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice, AVRational streamTimebase = {0, 1});
+    bool Initialize(AVCodecParameters* codecParams, const DecoderInfo& decoderInfo, ID3D11Device* d3dDevice = nullptr, AVRational streamTimebase = {0, 1});
     void Cleanup();
     
     bool SendPacket(AVPacket* packet);
@@ -70,6 +130,7 @@ private:
     bool ProcessHardwareFrame(DecodedFrame& outFrame);
     bool ProcessSoftwareFrame(DecodedFrame& outFrame);
     bool CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture);
+    bool CreateSoftwareFrameData(AVFrame* frame, DecodedFrame& outFrame);
     
     // Hardware-specific helpers
     bool IsHardwareFrame(AVFrame* frame) const;

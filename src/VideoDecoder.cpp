@@ -27,13 +27,16 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
         Cleanup();
     }
     
-    if (!codecParams || !d3dDevice) {
-        LOG_ERROR("Invalid parameters for VideoDecoder initialization");
+    if (!codecParams) {
+        LOG_ERROR("Invalid codec parameters for VideoDecoder initialization");
         return false;
     }
     
-    m_d3dDevice = d3dDevice;
-    m_d3dDevice->GetImmediateContext(&m_d3dContext);
+    // D3D device is optional now (required only for hardware decoding)
+    if (d3dDevice) {
+        m_d3dDevice = d3dDevice;
+        m_d3dDevice->GetImmediateContext(&m_d3dContext);
+    }
     m_decoderInfo = decoderInfo;
     m_streamTimebase = streamTimebase;
     
@@ -48,9 +51,9 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
         return false;
     }
     
-    // Initialize decoder based on type
+    // Initialize decoder based on type and availability of D3D device
     bool success = false;
-    if (decoderInfo.type == DecoderType::NVDEC && decoderInfo.available) {
+    if (decoderInfo.type == DecoderType::NVDEC && decoderInfo.available && d3dDevice) {
         success = InitializeHardwareDecoder(codecParams);
         if (success) {
             m_useHardwareDecoding = true;
@@ -63,7 +66,11 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     } else {
         success = InitializeSoftwareDecoder(codecParams);
         m_useHardwareDecoding = false;
-        LOG_INFO("Software decoding enabled");
+        if (!d3dDevice) {
+            LOG_INFO("Software decoding enabled (no D3D device provided)");
+        } else {
+            LOG_INFO("Software decoding enabled");
+        }
     }
     
     if (!success) {
@@ -337,12 +344,23 @@ bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
 }
 
 bool VideoDecoder::ProcessSoftwareFrame(DecodedFrame& outFrame) {
+#if USE_OPENGL_RENDERER
+    // For OpenGL renderer, create software frame data
+    bool success = CreateSoftwareFrameData(m_frame, outFrame);
+    if (success) {
+        outFrame.isYUV = false; // Software frame is converted to RGB
+        outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+    return success;
+#else
+    // For D3D11 renderer, create texture
     bool success = CreateTextureFromFrame(m_frame, outFrame.texture);
     if (success) {
         outFrame.isYUV = false; // Software frame is converted to RGB
         outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
     }
     return success;
+#endif
 }
 
 bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
@@ -426,6 +444,82 @@ bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D
     }
     
     LOG_DEBUG("D3D11 texture created successfully with actual frame data!");
+    
+    av_frame_free(&rgbFrame);
+    return true;
+}
+
+bool VideoDecoder::CreateSoftwareFrameData(AVFrame* frame, DecodedFrame& outFrame) {
+    if (!frame) {
+        LOG_DEBUG("CreateSoftwareFrameData failed - no frame");
+        return false;
+    }
+    
+    LOG_DEBUG("Creating software frame data - Size: ", frame->width, "x", frame->height, 
+              ", Format: ", frame->format);
+    
+    // Convert YUV frame to RGB using libswscale
+    AVFrame* rgbFrame = av_frame_alloc();
+    if (!rgbFrame) {
+        LOG_DEBUG("Failed to allocate RGB frame");
+        return false;
+    }
+    
+    // Set up RGB frame properties
+    rgbFrame->format = AV_PIX_FMT_BGRA;
+    rgbFrame->width = frame->width;
+    rgbFrame->height = frame->height;
+    
+    int ret = av_frame_get_buffer(rgbFrame, 32);
+    if (ret < 0) {
+        LOG_DEBUG("Failed to allocate RGB frame buffer");
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    // Create conversion context
+    SwsContext* swsContext = sws_getContext(
+        frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+        frame->width, frame->height, AV_PIX_FMT_BGRA,
+        SWS_BILINEAR, nullptr, nullptr, nullptr
+    );
+    
+    if (!swsContext) {
+        LOG_DEBUG("Failed to create SWS context for format conversion");
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    // Convert YUV to RGB
+    ret = sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
+                    rgbFrame->data, rgbFrame->linesize);
+    
+    sws_freeContext(swsContext);
+    
+    if (ret < 0) {
+        LOG_DEBUG("Failed to convert YUV to RGB");
+        av_frame_free(&rgbFrame);
+        return false;
+    }
+    
+    LOG_DEBUG("Successfully converted YUV to RGB");
+    
+    // Clean up existing data if any
+    if (outFrame.data) {
+        delete[] outFrame.data;
+        outFrame.data = nullptr;
+    }
+    
+    // Copy frame data
+    outFrame.width = frame->width;
+    outFrame.height = frame->height;
+    outFrame.pitch = rgbFrame->linesize[0];
+    
+    size_t dataSize = outFrame.pitch * outFrame.height;
+    outFrame.data = new uint8_t[dataSize];
+    memcpy(outFrame.data, rgbFrame->data[0], dataSize);
+    
+    LOG_DEBUG("Software frame data created successfully - Size: ", dataSize, " bytes");
     
     av_frame_free(&rgbFrame);
     return true;
