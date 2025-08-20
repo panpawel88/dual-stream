@@ -3,6 +3,11 @@
 #include <iostream>
 #include <vector>
 
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+#include "CudaOpenGLInterop.h"
+#include "VideoDecoder.h" // For DecodedFrame
+#endif
+
 // WGL constants for modern context creation
 #ifndef WGL_CONTEXT_MAJOR_VERSION_ARB
 #define WGL_CONTEXT_MAJOR_VERSION_ARB     0x2091
@@ -37,10 +42,22 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D videoTexture;
+uniform bool isYUV;
 
 void main()
 {
-    FragColor = texture(videoTexture, TexCoord);
+    if (isYUV) {
+        // For YUV frames, we're only getting Y plane as luminance
+        // This is a simplified version - ideally we'd have separate Y and UV textures
+        float y = texture(videoTexture, TexCoord).r;
+        
+        // Convert normalized Y to proper luminance range
+        // For now, output as grayscale - this at least shows the content correctly
+        FragColor = vec4(y, y, y, 1.0);
+    } else {
+        // Regular RGBA texture
+        FragColor = texture(videoTexture, TexCoord);
+    }
 }
 )";
 
@@ -68,10 +85,22 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D videoTexture;
+uniform bool isYUV;
 
 void main()
 {
-    FragColor = texture(videoTexture, TexCoord);
+    if (isYUV) {
+        // For YUV frames, we're only getting Y plane as luminance
+        // This is a simplified version - ideally we'd have separate Y and UV textures
+        float y = texture(videoTexture, TexCoord).r;
+        
+        // Convert normalized Y to proper luminance range
+        // For now, output as grayscale - this at least shows the content correctly
+        FragColor = vec4(y, y, y, 1.0);
+    } else {
+        // Regular RGBA texture
+        FragColor = texture(videoTexture, TexCoord);
+    }
 }
 )";
 
@@ -90,11 +119,15 @@ OpenGLRenderer::OpenGLRenderer()
     , m_vbo(0)
     , m_ebo(0)
     , m_textureUniform(-1)
+    , m_isYUVUniform(-1)
     , m_glMajorVersion(0)
     , m_glMinorVersion(0)
     , m_coreProfile(false)
     , m_debugContext(false)
     , wglCreateContextAttribsARB(nullptr) {
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    m_cudaInterop = nullptr; // Will be initialized in Initialize()
+#endif
 }
 
 OpenGLRenderer::~OpenGLRenderer() {
@@ -183,6 +216,18 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
         Cleanup();
         return false;
     }
+    
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    // Initialize CUDA interop for hardware decoding
+    if (!InitializeCudaInterop()) {
+        LOG_WARNING("CUDA interop initialization failed - hardware decoding will fall back to software");
+    } else if (!TestCudaInterop()) {
+        LOG_WARNING("CUDA interop test failed - disabling CUDA interop, will use software decoding");
+        CleanupCudaInterop(); // Disable CUDA interop
+    } else {
+        LOG_INFO("CUDA interop initialized and tested successfully - hardware CUDA frames supported");
+    }
+#endif
     
     // Set viewport
     glViewport(0, 0, width, height);
@@ -411,6 +456,7 @@ bool OpenGLRenderer::CreateShaders() {
         m_vertexShader = 0;
         m_fragmentShader = 0;
         m_textureUniform = -1;
+        m_isYUVUniform = -1;
         return true; // Not an error for legacy contexts
     }
     
@@ -481,6 +527,7 @@ bool OpenGLRenderer::CreateShaders() {
     
     // Get uniform locations
     m_textureUniform = glGetUniformLocation(m_program, "videoTexture");
+    m_isYUVUniform = glGetUniformLocation(m_program, "isYUV");
     
     LOG_INFO("Shaders compiled and linked successfully");
     return true;
@@ -607,6 +654,7 @@ bool OpenGLRenderer::CreateTexture() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
     // Create initial texture with placeholder data (will be updated during Present)
+    // Always create RGBA texture - CUDA conversion will handle YUV to RGBA
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, nullptr);
     
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -614,7 +662,7 @@ bool OpenGLRenderer::CreateTexture() {
     return true;
 }
 
-void OpenGLRenderer::SetupRenderState() {
+void OpenGLRenderer::SetupRenderState(bool isYUV) {
     // Use shader program if available (modern path)
     if (m_program && glUseProgram) {
         glUseProgram(m_program);
@@ -628,6 +676,11 @@ void OpenGLRenderer::SetupRenderState() {
         // Set texture uniform
         if (m_textureUniform >= 0 && glUniform1i) {
             glUniform1i(m_textureUniform, 0);
+        }
+        
+        // Set YUV flag uniform
+        if (m_isYUVUniform >= 0 && glUniform1i) {
+            glUniform1i(m_isYUVUniform, isYUV ? 1 : 0);
         }
         
         // Bind VAO if available
@@ -681,6 +734,11 @@ void OpenGLRenderer::DrawQuad() {
 void OpenGLRenderer::Reset() {
     m_initialized = false;
     
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    // Clean up CUDA interop
+    CleanupCudaInterop();
+#endif
+    
     // Delete OpenGL resources
     if (m_texture) {
         glDeleteTextures(1, &m_texture);
@@ -733,9 +791,108 @@ void OpenGLRenderer::Reset() {
     m_width = 0;
     m_height = 0;
     m_textureUniform = -1;
+    m_isYUVUniform = -1;
     m_glMajorVersion = 0;
     m_glMinorVersion = 0;
     m_coreProfile = false;
     m_debugContext = false;
     wglCreateContextAttribsARB = nullptr;
 }
+
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+
+bool OpenGLRenderer::InitializeCudaInterop() {
+    try {
+        m_cudaInterop = std::make_unique<CudaOpenGLInterop>();
+        if (!m_cudaInterop->Initialize()) {
+            LOG_ERROR("Failed to initialize CUDA/OpenGL interop");
+            m_cudaInterop.reset();
+            return false;
+        }
+        
+        LOG_INFO("CUDA/OpenGL interop initialized successfully");
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception initializing CUDA interop: ", e.what());
+        m_cudaInterop.reset();
+        return false;
+    }
+}
+
+void OpenGLRenderer::CleanupCudaInterop() {
+    if (m_cudaInterop) {
+        m_cudaInterop->Cleanup();
+        m_cudaInterop.reset();
+    }
+}
+
+bool OpenGLRenderer::TestCudaInterop() {
+    if (!m_cudaInterop || !m_cudaInterop->IsInitialized()) {
+        return false;
+    }
+    
+    // Since CopyDeviceToTexture always returns false (not implemented),
+    // we know CUDA interop is not functional
+    LOG_WARNING("CUDA texture copying not implemented - CUDA interop unavailable");
+    return false;
+}
+
+bool OpenGLRenderer::IsCudaInteropAvailable() const {
+    return m_cudaInterop && m_cudaInterop->IsInitialized();
+}
+
+bool OpenGLRenderer::PresentHardware(const DecodedFrame& frame) {
+    if (!m_initialized) {
+        LOG_ERROR("OpenGLRenderer not initialized");
+        return false;
+    }
+    
+    if (!frame.valid || !frame.isHardwareCuda) {
+        LOG_ERROR("Invalid CUDA hardware frame");
+        return false;
+    }
+    
+    if (!m_cudaInterop || !m_cudaInterop->IsInitialized()) {
+        LOG_ERROR("CUDA interop not available");
+        return false;
+    }
+    
+    // Clear screen
+    glClear(GL_COLOR_BUFFER_BIT);
+    
+    // Register OpenGL texture with CUDA if not already registered
+    void* cudaResource = nullptr;
+    if (!m_cudaInterop->RegisterTexture(m_texture, &cudaResource)) {
+        LOG_ERROR("Failed to register OpenGL texture with CUDA");
+        return false;
+    }
+    
+    // Copy CUDA device memory to OpenGL texture
+    if (!m_cudaInterop->CopyDeviceToTexture(
+            frame.cudaPtr, 
+            frame.cudaPitch, 
+            cudaResource, 
+            frame.width, 
+            frame.height)) {
+        LOG_ERROR("Failed to copy CUDA device memory to OpenGL texture");
+        m_cudaInterop->UnregisterTexture(cudaResource);
+        return false;
+    }
+    
+    // Unregister the texture (could be optimized by keeping it registered)
+    m_cudaInterop->UnregisterTexture(cudaResource);
+    
+    // Setup render state for converted RGBA frame
+    SetupRenderState(false);
+    
+    // Draw fullscreen quad
+    DrawQuad();
+    
+    // Swap buffers
+    SwapBuffers(m_hdc);
+    
+    LOG_DEBUG("Hardware frame presented successfully (", frame.width, "x", frame.height, ")");
+    return true;
+}
+
+#endif // USE_OPENGL_RENDERER && HAVE_CUDA

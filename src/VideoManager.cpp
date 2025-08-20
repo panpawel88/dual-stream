@@ -19,7 +19,7 @@ VideoManager::~VideoManager() {
     Cleanup();
 }
 
-bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed) {
+bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed, bool cudaInteropAvailable) {
     if (m_initialized) {
         Cleanup();
     }
@@ -31,13 +31,13 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     LOG_INFO("Playback speed set to: ", m_playbackSpeed, "x");
     
     // Initialize both video streams
-    if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice)) {
+    if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice, cudaInteropAvailable)) {
         LOG_ERROR("Failed to initialize video stream 1");
         Cleanup();
         return false;
     }
     
-    if (!InitializeVideoStream(m_videos[1], video2Path, d3dDevice)) {
+    if (!InitializeVideoStream(m_videos[1], video2Path, d3dDevice, cudaInteropAvailable)) {
         LOG_ERROR("Failed to initialize video stream 2");
         Cleanup();
         return false;
@@ -278,7 +278,7 @@ bool VideoManager::SeekToTime(double timeInSeconds) {
     return true;
 }
 
-bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice) {
+bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice, bool cudaInteropAvailable) {
     // Open demuxer
     if (!stream.demuxer.Open(filePath)) {
         LOG_ERROR("Failed to open video file: ", filePath);
@@ -289,7 +289,7 @@ bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string&
     DecoderInfo decoderInfo = HardwareDecoder::GetBestDecoder(stream.demuxer.GetCodecID());
     
     // Initialize decoder
-    if (!stream.decoder.Initialize(stream.demuxer.GetCodecParameters(), decoderInfo, d3dDevice, stream.demuxer.GetTimeBase())) {
+    if (!stream.decoder.Initialize(stream.demuxer.GetCodecParameters(), decoderInfo, d3dDevice, stream.demuxer.GetTimeBase(), cudaInteropAvailable)) {
         LOG_ERROR("Failed to initialize decoder for: ", filePath);
         return false;
     }

@@ -103,10 +103,19 @@ target_link_libraries(FFmpeg INTERFACE
 find_package(CUDAToolkit QUIET)
 if(CUDAToolkit_FOUND)
     message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
+    set(HAVE_CUDA TRUE)
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=1)
-    target_link_libraries(FFmpeg INTERFACE CUDA::cuda_driver)
+    target_link_libraries(FFmpeg INTERFACE 
+        CUDA::cuda_driver
+        CUDA::cudart
+    )
+    # Add OpenGL interop support when using OpenGL renderer
+    if(USE_OPENGL_RENDERER)
+        target_link_libraries(FFmpeg INTERFACE CUDA::cudart)
+    endif()
 else()
     message(STATUS "CUDA not found - hardware decoding will use software fallback")
+    set(HAVE_CUDA FALSE)
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
 endif()
 
@@ -291,6 +300,11 @@ endif()
 set(RENDERER_SOURCES)
 if(USE_OPENGL_RENDERER)
     set(RENDERER_SOURCES src/OpenGLRenderer.cpp)
+    if(HAVE_CUDA)
+        list(APPEND RENDERER_SOURCES src/CudaOpenGLInterop.cpp)
+        # Note: CudaYuvConversion.cu temporarily disabled until CUDA compiler is set up
+        # list(APPEND RENDERER_SOURCES src/CudaYuvConversion.cu)
+    endif()
 else()
     set(RENDERER_SOURCES src/D3D11Renderer.cpp)
 endif()

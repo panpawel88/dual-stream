@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git filter-branch:*)",
+      "Bash(git add:*)",
+      "WebFetch(domain:video.stackexchange.com)",
+      "WebSearch",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:forums.developer.nvidia.com)"
+    ],
+    "deny": []
+  }
+}

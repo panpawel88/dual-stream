@@ -4,6 +4,13 @@
 #include <glad/glad.h>
 #include <string>
 
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+#include <memory>
+// Forward declarations
+class CudaOpenGLInterop;
+struct DecodedFrame;
+#endif
+
 class OpenGLRenderer {
 public:
     OpenGLRenderer();
@@ -15,8 +22,16 @@ public:
     bool Present(const uint8_t* data, int width, int height, int pitch);
     bool Resize(int width, int height);
     
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    // Hardware texture presentation (for CUDA decoded frames)
+    bool PresentHardware(const DecodedFrame& frame);
+#endif
+    
     // Getters
     bool IsInitialized() const { return m_initialized; }
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    bool IsCudaInteropAvailable() const; // Defined in .cpp file
+#endif
     
 private:
     bool m_initialized;
@@ -37,6 +52,12 @@ private:
     
     // Shader uniforms
     GLint m_textureUniform;
+    GLint m_isYUVUniform;
+    
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    // CUDA interop resources
+    std::unique_ptr<CudaOpenGLInterop> m_cudaInterop;
+#endif
     
     // Initialization helpers
     bool SetupOpenGL();
@@ -64,8 +85,15 @@ private:
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
     
     // Rendering helpers
-    void SetupRenderState();
+    void SetupRenderState(bool isYUV = false);
     void DrawQuad();
+    
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    // CUDA interop helpers
+    bool InitializeCudaInterop();
+    void CleanupCudaInterop();
+    bool TestCudaInterop(); // Test if CUDA interop actually works
+#endif
     
     void Reset();
 };

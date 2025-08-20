@@ -70,7 +70,11 @@ int main(int argc, char* argv[]) {
     
     // Initialize video manager with switching strategy and playback speed (no D3D device for OpenGL)
     VideoManager videoManager;
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, nullptr, args.switchingAlgorithm, args.playbackSpeed)) {
+    bool cudaInteropAvailable = false;
+#if USE_OPENGL_RENDERER && HAVE_CUDA
+    cudaInteropAvailable = renderer.IsCudaInteropAvailable();
+#endif
+    if (!videoManager.Initialize(args.video1Path, args.video2Path, nullptr, args.switchingAlgorithm, args.playbackSpeed, cudaInteropAvailable)) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }
@@ -125,8 +129,15 @@ int main(int argc, char* argv[]) {
         DecodedFrame* currentFrame = videoManager.GetCurrentFrame();
         if (currentFrame && currentFrame->valid) {
 #if USE_OPENGL_RENDERER
-            // OpenGL renderer uses software frame data
+            // OpenGL renderer can use both hardware CUDA frames and software frame data
+#if HAVE_CUDA
+            if (currentFrame->isHardwareCuda) {
+                // Use hardware presentation for CUDA frames (only when CUDA interop is available)
+                renderer.PresentHardware(*currentFrame);
+            } else
+#endif
             if (currentFrame->data) {
+                // Use software presentation for CPU frames
                 renderer.Present(currentFrame->data, currentFrame->width, currentFrame->height, currentFrame->pitch);
             } else {
                 renderer.Present(nullptr, 0, 0, 0); // Render black screen if no frame data available

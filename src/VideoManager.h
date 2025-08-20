@@ -43,7 +43,7 @@ public:
     VideoManager();
     ~VideoManager();
     
-    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
+    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0, bool cudaInteropAvailable = false);
     void Cleanup();
     
     // Playback control
@@ -92,7 +92,7 @@ private:
     double m_playbackSpeed;
     
     // Initialization helpers
-    bool InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice);
+    bool InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice, bool cudaInteropAvailable = false);
     bool ValidateStreams();
     
     // Playback helpers
