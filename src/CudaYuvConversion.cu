@@ -39,11 +39,11 @@ __global__ void nv12ToRgbaKernel(
     g = fmaxf(0.0f, fminf(1.0f, g));
     b = fmaxf(0.0f, fminf(1.0f, b));
     
-    // Convert to 8-bit and write RGBA (note: OpenGL expects BGRA order)
+    // Convert to 8-bit and write RGBA (OpenGL expects RGBA order)
     int rgbaIndex = y * rgbaPitch + x * 4;
-    rgbaOut[rgbaIndex + 0] = static_cast<uint8_t>(b * 255.0f); // B
+    rgbaOut[rgbaIndex + 0] = static_cast<uint8_t>(r * 255.0f); // R
     rgbaOut[rgbaIndex + 1] = static_cast<uint8_t>(g * 255.0f); // G
-    rgbaOut[rgbaIndex + 2] = static_cast<uint8_t>(r * 255.0f); // R
+    rgbaOut[rgbaIndex + 2] = static_cast<uint8_t>(b * 255.0f); // B
     rgbaOut[rgbaIndex + 3] = 255;                               // A
 }
 

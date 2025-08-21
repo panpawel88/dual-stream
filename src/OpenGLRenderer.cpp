@@ -242,9 +242,9 @@ bool OpenGLRenderer::Present(const uint8_t* data, int width, int height, int pit
         glBindTexture(GL_TEXTURE_2D, m_texture);
         
         // Set pixel store parameters for proper pitch handling
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch / 4); // Assuming BGRA format (4 bytes per pixel)
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch / 4); // Assuming RGBA format (4 bytes per pixel)
         
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
         
         // Reset pixel store
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
