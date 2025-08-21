@@ -3,6 +3,7 @@
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 
 #include "Logger.h"
+#include "CudaYuvConversion.h"
 #include <iostream>
 
 // Include CUDA headers and redefine types
@@ -130,6 +131,12 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
                                           int width, int height, 
                                           void* stream) {
     if (!m_initialized) {
+        LOG_ERROR("CudaOpenGLInterop not initialized");
+        return false;
+    }
+    
+    if (!srcPtr || !dstResource) {
+        LOG_ERROR("Invalid source pointer or destination resource");
         return false;
     }
     
@@ -139,27 +146,156 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     
     // Map the resource
     void* resourcePtr = dstResource;
-    if (!MapResources(&resourcePtr, 1, stream)) {
+    if (!MapResources(&dstResource, 1, stream)) {
+        LOG_ERROR("Failed to map CUDA graphics resource");
         return false;
     }
     
     // Get the CUDA array from the mapped resource
     void* arrayPtr;
     if (!GetMappedArray(dstResource, &arrayPtr)) {
+        LOG_ERROR("Failed to get mapped CUDA array");
         UnmapResources(&resourcePtr, 1, stream);
         return false;
     }
     
     cudaArray_t dstArray = static_cast<cudaArray_t>(arrayPtr);
     
-    // CUDA texture copying is not properly implemented yet
-    // Return false to indicate CUDA interop is not functional
-    LOG_DEBUG("CUDA texture copying not implemented - CUDA interop unavailable");
+    // Copy from CUDA device memory to CUDA array (which is bound to OpenGL texture)
+    cudaMemcpy3DParms copyParams = {0};
+    copyParams.srcPtr = make_cudaPitchedPtr(cudaSrcPtr, srcPitch, width, height);
+    copyParams.dstArray = dstArray;
+    copyParams.extent = make_cudaExtent(width, height, 1);
+    copyParams.kind = cudaMemcpyDeviceToDevice;
+    
+    cudaError_t result;
+    if (cudaStream) {
+        result = cudaMemcpy3DAsync(&copyParams, cudaStream);
+    } else {
+        result = cudaMemcpy3D(&copyParams);
+    }
+    
+    if (result != cudaSuccess) {
+        LOG_ERROR("CUDA error in cudaMemcpy3D: ", cudaGetErrorString(result));
+        UnmapResources(&resourcePtr, 1, stream);
+        return false;
+    }
+    
+    // Synchronize if using a stream to ensure copy is complete
+    if (cudaStream) {
+        result = cudaStreamSynchronize(cudaStream);
+        if (result != cudaSuccess) {
+            LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
+            UnmapResources(&resourcePtr, 1, stream);
+            return false;
+        }
+    }
     
     // Unmap the resource
-    UnmapResources(&resourcePtr, 1, stream);
+    if (!UnmapResources(&resourcePtr, 1, stream)) {
+        LOG_ERROR("Failed to unmap CUDA graphics resource");
+        return false;
+    }
     
-    return false; // Indicate CUDA interop is not working
+    LOG_DEBUG("CUDA texture copy successful - Size: ", width, "x", height, ", pitch: ", srcPitch);
+    return true;
+}
+
+bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch, 
+                                        void* dstResource, 
+                                        int width, int height, 
+                                        void* stream) {
+    if (!m_initialized) {
+        LOG_ERROR("CudaOpenGLInterop not initialized");
+        return false;
+    }
+    
+    if (!yuvPtr || !dstResource) {
+        LOG_ERROR("Invalid source pointer or destination resource");
+        return false;
+    }
+    
+    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
+    
+    // Map the resource
+    void* resourcePtr = dstResource;
+    if (!MapResources(&resourcePtr, 1, stream)) {
+        LOG_ERROR("Failed to map CUDA graphics resource");
+        return false;
+    }
+    
+    // Get the CUDA array from the mapped resource
+    void* arrayPtr;
+    if (!GetMappedArray(dstResource, &arrayPtr)) {
+        LOG_ERROR("Failed to get mapped CUDA array");
+        UnmapResources(&resourcePtr, 1, stream);
+        return false;
+    }
+    
+    cudaArray_t dstArray = static_cast<cudaArray_t>(arrayPtr);
+    
+    // Allocate temporary RGBA buffer for conversion
+    size_t rgbaSize = width * height * 4; // RGBA = 4 bytes per pixel
+    void* tempRgbaBuffer;
+    cudaError_t result = cudaMalloc(&tempRgbaBuffer, rgbaSize);
+    if (result != cudaSuccess) {
+        LOG_ERROR("CUDA error allocating temporary RGBA buffer: ", cudaGetErrorString(result));
+        UnmapResources(&resourcePtr, 1, stream);
+        return false;
+    }
+    
+    // Convert NV12 YUV to RGBA using CUDA kernel
+    size_t rgbaPitch = width * 4; // 4 bytes per pixel (RGBA)
+    result = convertNv12ToRgba(yuvPtr, yuvPitch, tempRgbaBuffer, rgbaPitch, width, height, cudaStream);
+    if (result != cudaSuccess) {
+        LOG_ERROR("CUDA error in YUV to RGBA conversion: ", cudaGetErrorString(result));
+        cudaFree(tempRgbaBuffer);
+        UnmapResources(&resourcePtr, 1, stream);
+        return false;
+    }
+    
+    // Copy converted RGBA data to OpenGL texture array
+    cudaMemcpy3DParms copyParams = {0};
+    copyParams.srcPtr = make_cudaPitchedPtr(tempRgbaBuffer, rgbaPitch, width, height);
+    copyParams.dstArray = dstArray;
+    copyParams.extent = make_cudaExtent(width, height, 1);
+    copyParams.kind = cudaMemcpyDeviceToDevice;
+    
+    if (cudaStream) {
+        result = cudaMemcpy3DAsync(&copyParams, cudaStream);
+    } else {
+        result = cudaMemcpy3D(&copyParams);
+    }
+    
+    if (result != cudaSuccess) {
+        LOG_ERROR("CUDA error in cudaMemcpy3D (RGBA to texture): ", cudaGetErrorString(result));
+        cudaFree(tempRgbaBuffer);
+        UnmapResources(&resourcePtr, 1, stream);
+        return false;
+    }
+    
+    // Synchronize if using a stream to ensure copy is complete
+    if (cudaStream) {
+        result = cudaStreamSynchronize(cudaStream);
+        if (result != cudaSuccess) {
+            LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
+            cudaFree(tempRgbaBuffer);
+            UnmapResources(&resourcePtr, 1, stream);
+            return false;
+        }
+    }
+    
+    // Clean up temporary buffer
+    cudaFree(tempRgbaBuffer);
+    
+    // Unmap the resource
+    if (!UnmapResources(&resourcePtr, 1, stream)) {
+        LOG_ERROR("Failed to unmap CUDA graphics resource");
+        return false;
+    }
+    
+    LOG_DEBUG("CUDA YUV to RGBA texture copy successful - Size: ", width, "x", height, ", pitch: ", yuvPitch);
+    return true;
 }
 
 

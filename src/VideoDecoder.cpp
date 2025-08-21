@@ -694,9 +694,7 @@ void VideoDecoder::Reset() {
     m_d3dContext.Reset();
     
 #if USE_OPENGL_RENDERER && HAVE_CUDA
-    if (m_cudaContext && m_cudaContextOwned) {
-        cuCtxDestroy(static_cast<CUcontext>(m_cudaContext));
-    }
+    // No manual CUDA context cleanup needed - Runtime API handles it
     m_cudaContext = nullptr;
     m_cudaContextOwned = false;
 #endif
@@ -705,30 +703,31 @@ void VideoDecoder::Reset() {
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 
 bool VideoDecoder::CreateCudaDeviceContext() {
-    // Initialize CUDA driver API
+    // Initialize CUDA Runtime API first (for OpenGL interop compatibility)
+    cudaError_t cudaResult = cudaSetDevice(0);
+    if (cudaResult != cudaSuccess) {
+        LOG_ERROR("Failed to set CUDA device: ", cudaGetErrorString(cudaResult));
+        return false;
+    }
+    
+    // Initialize CUDA Driver API
     CUresult result = cuInit(0);
     if (result != CUDA_SUCCESS) {
         LOG_ERROR("Failed to initialize CUDA driver API");
         return false;
     }
     
-    // Get CUDA device (use device 0, which is typically the primary GPU)
-    CUdevice cudaDevice;
-    result = cuDeviceGet(&cudaDevice, 0);
-    if (result != CUDA_SUCCESS) {
-        LOG_ERROR("Failed to get CUDA device");
+    // Get the current CUDA context created by Runtime API
+    CUcontext currentContext;
+    result = cuCtxGetCurrent(&currentContext);
+    if (result != CUDA_SUCCESS || !currentContext) {
+        LOG_ERROR("Failed to get current CUDA context from Runtime API");
         return false;
     }
     
-    // Create CUDA context
-    CUcontext cudaContext;
-    result = cuCtxCreate(&cudaContext, CU_CTX_SCHED_BLOCKING_SYNC, cudaDevice);
-    if (result != CUDA_SUCCESS) {
-        LOG_ERROR("Failed to create CUDA context");
-        return false;
-    }
-    m_cudaContext = cudaContext;
-    m_cudaContextOwned = true;
+    // Use the existing Runtime context for FFmpeg (don't create a new one)
+    m_cudaContext = currentContext;
+    m_cudaContextOwned = false; // We don't own it, Runtime API does
     
     // Create CUDA hardware device context for FFmpeg
     m_hwDeviceContext = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_CUDA);
@@ -740,8 +739,8 @@ bool VideoDecoder::CreateCudaDeviceContext() {
     AVHWDeviceContext* deviceContext = reinterpret_cast<AVHWDeviceContext*>(m_hwDeviceContext->data);
     AVCUDADeviceContext* cudaDeviceContext = reinterpret_cast<AVCUDADeviceContext*>(deviceContext->hwctx);
     
-    // Use our CUDA context
-    cudaDeviceContext->cuda_ctx = static_cast<CUcontext>(m_cudaContext);
+    // Use the current Runtime API context for FFmpeg
+    cudaDeviceContext->cuda_ctx = currentContext;
     
     int ret = av_hwdevice_ctx_init(m_hwDeviceContext);
     if (ret < 0) {

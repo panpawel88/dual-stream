@@ -46,18 +46,9 @@ uniform bool isYUV;
 
 void main()
 {
-    if (isYUV) {
-        // For YUV frames, we're only getting Y plane as luminance
-        // This is a simplified version - ideally we'd have separate Y and UV textures
-        float y = texture(videoTexture, TexCoord).r;
-        
-        // Convert normalized Y to proper luminance range
-        // For now, output as grayscale - this at least shows the content correctly
-        FragColor = vec4(y, y, y, 1.0);
-    } else {
-        // Regular RGBA texture
-        FragColor = texture(videoTexture, TexCoord);
-    }
+    // CUDA hardware decoding converts YUV to RGBA, so always treat as RGBA texture
+    // The isYUV uniform is kept for compatibility but not used in CUDA path
+    FragColor = texture(videoTexture, TexCoord);
 }
 )";
 
@@ -89,18 +80,9 @@ uniform bool isYUV;
 
 void main()
 {
-    if (isYUV) {
-        // For YUV frames, we're only getting Y plane as luminance
-        // This is a simplified version - ideally we'd have separate Y and UV textures
-        float y = texture(videoTexture, TexCoord).r;
-        
-        // Convert normalized Y to proper luminance range
-        // For now, output as grayscale - this at least shows the content correctly
-        FragColor = vec4(y, y, y, 1.0);
-    } else {
-        // Regular RGBA texture
-        FragColor = texture(videoTexture, TexCoord);
-    }
+    // CUDA hardware decoding converts YUV to RGBA, so always treat as RGBA texture
+    // The isYUV uniform is kept for compatibility but not used in CUDA path
+    FragColor = texture(videoTexture, TexCoord);
 }
 )";
 
@@ -127,6 +109,7 @@ OpenGLRenderer::OpenGLRenderer()
     , wglCreateContextAttribsARB(nullptr) {
 #if USE_OPENGL_RENDERER && HAVE_CUDA
     m_cudaInterop = nullptr; // Will be initialized in Initialize()
+    m_cudaTextureResource = nullptr;
 #endif
 }
 
@@ -299,6 +282,19 @@ bool OpenGLRenderer::Resize(int width, int height) {
     return true;
 }
 
+// Hybrid OpenGL function loader for Win32/WGL contexts
+void* GetAnyGLFuncAddress(const char* name) {
+    void* p = (void*)wglGetProcAddress(name);
+    if (p == 0 || p == (void*)0x1 || p == (void*)0x2 || 
+        p == (void*)0x3 || p == (void*)-1) {
+        HMODULE module = LoadLibraryA("opengl32.dll");
+        if (module) {
+            p = (void*)GetProcAddress(module, name);
+        }
+    }
+    return p;
+}
+
 bool OpenGLRenderer::SetupOpenGL() {
     // Get device context
     m_hdc = GetDC(m_hwnd);
@@ -319,7 +315,7 @@ bool OpenGLRenderer::SetupOpenGL() {
     }
     
     // Initialize GLAD immediately after context creation
-    if (!gladLoadGL()) {
+    if (!gladLoadGL((GLADloadfunc)GetAnyGLFuncAddress)) {
         LOG_WARNING("Failed to initialize GLAD - using basic OpenGL functions");
         // Continue with basic OpenGL functions - don't fail here
     }
@@ -810,17 +806,30 @@ bool OpenGLRenderer::InitializeCudaInterop() {
             return false;
         }
         
-        LOG_INFO("CUDA/OpenGL interop initialized successfully");
+        // Register the main OpenGL texture with CUDA for interop
+        if (!m_cudaInterop->RegisterTexture(m_texture, &m_cudaTextureResource)) {
+            LOG_ERROR("Failed to register OpenGL texture with CUDA");
+            m_cudaInterop.reset();
+            m_cudaTextureResource = nullptr;
+            return false;
+        }
+        
+        LOG_INFO("CUDA/OpenGL interop initialized successfully - texture registered");
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Exception initializing CUDA interop: ", e.what());
         m_cudaInterop.reset();
+        m_cudaTextureResource = nullptr;
         return false;
     }
 }
 
 void OpenGLRenderer::CleanupCudaInterop() {
     if (m_cudaInterop) {
+        if (m_cudaTextureResource) {
+            m_cudaInterop->UnregisterTexture(m_cudaTextureResource);
+            m_cudaTextureResource = nullptr;
+        }
         m_cudaInterop->Cleanup();
         m_cudaInterop.reset();
     }
@@ -831,10 +840,26 @@ bool OpenGLRenderer::TestCudaInterop() {
         return false;
     }
     
-    // Since CopyDeviceToTexture always returns false (not implemented),
-    // we know CUDA interop is not functional
-    LOG_WARNING("CUDA texture copying not implemented - CUDA interop unavailable");
-    return false;
+    if (!m_cudaTextureResource) {
+        LOG_ERROR("OpenGL texture not registered with CUDA");
+        return false;
+    }
+    
+    // Test basic CUDA interop functionality by trying to map/unmap the texture
+    // This validates that the texture registration and interop system works
+    void* resourcePtr = m_cudaTextureResource;
+    if (!m_cudaInterop->MapResources(&resourcePtr, 1, nullptr)) {
+        LOG_ERROR("Failed to map CUDA graphics resource - interop not functional");
+        return false;
+    }
+    
+    if (!m_cudaInterop->UnmapResources(&resourcePtr, 1, nullptr)) {
+        LOG_WARNING("Failed to unmap CUDA graphics resource - potential issue");
+        return false;
+    }
+    
+    LOG_INFO("CUDA interop test successful - texture mapping/unmapping works");
+    return true;
 }
 
 bool OpenGLRenderer::IsCudaInteropAvailable() const {
@@ -852,38 +877,37 @@ bool OpenGLRenderer::PresentHardware(const DecodedFrame& frame) {
         return false;
     }
     
-    if (!m_cudaInterop || !m_cudaInterop->IsInitialized()) {
-        LOG_ERROR("CUDA interop not available");
+    if (!m_cudaInterop || !m_cudaInterop->IsInitialized() || !m_cudaTextureResource) {
+        LOG_ERROR("CUDA interop not available or texture not registered");
         return false;
     }
     
-    // Clear screen
-    glClear(GL_COLOR_BUFFER_BIT);
-    
-    // Register OpenGL texture with CUDA if not already registered
-    void* cudaResource = nullptr;
-    if (!m_cudaInterop->RegisterTexture(m_texture, &cudaResource)) {
-        LOG_ERROR("Failed to register OpenGL texture with CUDA");
-        return false;
-    }
-    
-    // Copy CUDA device memory to OpenGL texture
-    if (!m_cudaInterop->CopyDeviceToTexture(
+    // Copy CUDA device memory to the pre-registered OpenGL texture
+    // Use YUV conversion if the frame is in YUV format, otherwise direct copy
+    bool copySuccess = false;
+    if (frame.isYUV) {
+        copySuccess = m_cudaInterop->CopyYuvToTexture(
             frame.cudaPtr, 
             frame.cudaPitch, 
-            cudaResource, 
+            m_cudaTextureResource, 
             frame.width, 
-            frame.height)) {
+            frame.height);
+    } else {
+        copySuccess = m_cudaInterop->CopyDeviceToTexture(
+            frame.cudaPtr, 
+            frame.cudaPitch, 
+            m_cudaTextureResource, 
+            frame.width, 
+            frame.height);
+    }
+    
+    if (!copySuccess) {
         LOG_ERROR("Failed to copy CUDA device memory to OpenGL texture");
-        m_cudaInterop->UnregisterTexture(cudaResource);
         return false;
     }
     
-    // Unregister the texture (could be optimized by keeping it registered)
-    m_cudaInterop->UnregisterTexture(cudaResource);
-    
-    // Setup render state for converted RGBA frame
-    SetupRenderState(false);
+    // Setup render state - frame is now RGBA after CUDA conversion
+    SetupRenderState(false); // Always false since CUDA converted YUV to RGBA
     
     // Draw fullscreen quad
     DrawQuad();

@@ -2,7 +2,7 @@
 
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 
-#include <glad/glad.h>
+#include <glad/gl.h>
 
 // Use opaque handles for CUDA types to avoid header conflicts
 // All CUDA types are represented as void* in headers
@@ -32,6 +32,12 @@ public:
                            void* dstResource, 
                            int width, int height, 
                            void* stream = nullptr);
+    
+    // Copy CUDA device memory to OpenGL texture with YUV to RGBA conversion
+    bool CopyYuvToTexture(void* yuvPtr, size_t yuvPitch, 
+                         void* dstResource, 
+                         int width, int height, 
+                         void* stream = nullptr);
     
     // Utility functions
     bool IsInitialized() const { return m_initialized; }

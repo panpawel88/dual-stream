@@ -1,7 +1,7 @@
 #pragma once
 
 #include <windows.h>
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <string>
 
 #if USE_OPENGL_RENDERER && HAVE_CUDA
@@ -57,6 +57,7 @@ private:
 #if USE_OPENGL_RENDERER && HAVE_CUDA
     // CUDA interop resources
     std::unique_ptr<CudaOpenGLInterop> m_cudaInterop;
+    void* m_cudaTextureResource;  // CUDA graphics resource handle for the main texture
 #endif
     
     // Initialization helpers
