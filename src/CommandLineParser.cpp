@@ -19,6 +19,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     
     // Parse optional arguments
     const std::string algorithmErrorMsg = "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+    const std::string speedErrorMsg = "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
     
     for (int i = 3; i < argc; i++) {
         std::string arg = argv[i];
@@ -45,13 +46,11 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
                 if (speed == 0.05 || speed == 0.1 || speed == 0.2 || speed == 0.5 || speed == 1.0) {
                     args.playbackSpeed = speed;
                 } else {
-                    args.errorMessage = "Invalid playback speed: " + speedStr;
-                    args.errorMessage += "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
+                    args.errorMessage = "Invalid playback speed: " + speedStr + speedErrorMsg;
                     return args;
                 }
             } catch (const std::exception& e) {
-                args.errorMessage = "Invalid playback speed format: " + speedStr;
-                args.errorMessage += "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
+                args.errorMessage = "Invalid playback speed format: " + speedStr + speedErrorMsg;
                 return args;
             }
         } else {
