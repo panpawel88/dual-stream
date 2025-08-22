@@ -45,8 +45,6 @@ public:
 private:
     bool m_initialized;
     
-    // Error handling
-    void LogCudaError(unsigned int result, const char* operation);
     
     // Disable copy constructor and assignment
     CudaOpenGLInterop(const CudaOpenGLInterop&) = delete;

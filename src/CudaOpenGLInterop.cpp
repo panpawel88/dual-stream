@@ -12,13 +12,6 @@
 #include <cuda_gl_interop.h>
 #include <cudaGL.h>
 
-// Redefine the forward declared types to actual CUDA types
-#undef CUresult
-#undef CUstream
-#undef CUarray
-#undef CUdeviceptr
-#undef CUgraphicsResource
-// The actual CUDA types will be used from the headers
 
 CudaOpenGLInterop::CudaOpenGLInterop()
     : m_initialized(false) {
