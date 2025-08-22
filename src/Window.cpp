@@ -25,18 +25,7 @@ bool Window::Create(const std::string& title, int width, int height) {
     
     // For console applications, try different approaches to get valid HINSTANCE
     HINSTANCE hInstance = GetModuleHandle(NULL);
-    if (!hInstance) {
-        // Try getting the executable's module handle
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileName(NULL, exePath, MAX_PATH);
-        hInstance = GetModuleHandle(exePath);
-        
-        if (!hInstance) {
-            // Last resort - use a dummy value that Windows will accept
-            hInstance = reinterpret_cast<HINSTANCE>(0x400000);  // Default base address for executables
-        }
-    }
-    
+
     // Register window class if not already registered
     if (!s_classRegistered) {
         WNDCLASSEX wc = {};
