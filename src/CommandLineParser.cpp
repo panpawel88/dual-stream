@@ -18,25 +18,24 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     args.video2Path = argv[2];
     
     // Parse optional arguments
+    const std::string algorithmErrorMsg = "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+    
     for (int i = 3; i < argc; i++) {
         std::string arg = argv[i];
         
         if (arg == "--debug" || arg == "-d") {
             args.debugLogging = true;
-        } else if (arg.find("--switching-algorithm=") == 0) {
-            std::string algorithmName = arg.substr(22); // Skip "--switching-algorithm="
-            args.switchingAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
-            if (args.switchingAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
-                args.errorMessage = "Unknown switching algorithm: " + algorithmName;
-                args.errorMessage += "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
-                return args;
+        } else if (arg.find("--switching-algorithm=") == 0 || arg.find("-s=") == 0) {
+            std::string algorithmName;
+            if (arg.find("--switching-algorithm=") == 0) {
+                algorithmName = arg.substr(22); // Skip "--switching-algorithm="
+            } else {
+                algorithmName = arg.substr(3); // Skip "-s="
             }
-        } else if (arg.find("-s=") == 0) {
-            std::string algorithmName = arg.substr(3); // Skip "-s="
+            
             args.switchingAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
             if (args.switchingAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
-                args.errorMessage = "Unknown switching algorithm: " + algorithmName;
-                args.errorMessage += "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+                args.errorMessage = "Unknown switching algorithm: " + algorithmName + algorithmErrorMsg;
                 return args;
             }
         } else if (arg.find("--speed=") == 0) {
