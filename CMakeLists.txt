@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(ffmpeg_player VERSION 1.0.0 LANGUAGES C CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -16,6 +16,8 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     # Ensure CUDA uses the same runtime library
     set(CMAKE_CUDA_RUNTIME_LIBRARY "Shared")
+    # Explicitly set C++20 flag for MSVC C++ compiler only
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++20>)
 endif()
 
 # Enable Unicode support for Windows

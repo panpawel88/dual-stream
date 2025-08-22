@@ -61,8 +61,8 @@ private:
 #endif
     
     // Initialization helpers
-    bool SetupOpenGL();
-    bool CreateModernContext();
+    bool SetupOpenGLContext();
+    bool CreateOpenGLContext();
     bool CreateShaders();
     bool CreateGeometry();
     bool CreateTexture();
@@ -70,10 +70,6 @@ private:
     // Modern OpenGL helpers
     bool EnableDebugOutput();
     static void GLAPIENTRY DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
-    
-    // Context creation helpers
-    bool CreateLegacyContext();
-    bool UpgradeToModernContext();
     
     // OpenGL version info
     int m_glMajorVersion;
