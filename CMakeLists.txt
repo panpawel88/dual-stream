@@ -40,52 +40,22 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# FFmpeg download configuration
+# FFmpeg download configuration using FetchContent
+include(FetchContent)
+
 set(FFMPEG_VERSION "7.1.1")
 set(FFMPEG_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1.zip")
-set(FFMPEG_DIR "${CMAKE_BINARY_DIR}/ffmpeg")
 
-# Download and extract FFmpeg
-if(NOT EXISTS "${FFMPEG_DIR}")
-    message(STATUS "Downloading FFmpeg ${FFMPEG_VERSION}...")
-    
-    # Download FFmpeg archive
-    file(DOWNLOAD 
-        ${FFMPEG_URL}
-        "${CMAKE_BINARY_DIR}/ffmpeg-dev.zip"
-        SHOW_PROGRESS
-        TIMEOUT 300
-    )
-    
-    # Create temp directory and extract archive using CMake's tar command (works with zip files)
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/ffmpeg_temp")
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xzf "${CMAKE_BINARY_DIR}/ffmpeg-dev.zip"
-        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/ffmpeg_temp"
-        RESULT_VARIABLE EXTRACT_RESULT
-    )
-    
-    if(NOT EXTRACT_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to extract FFmpeg archive")
-    endif()
-    
-    # Find the extracted directory and rename it
-    file(GLOB FFMPEG_EXTRACTED_DIR "${CMAKE_BINARY_DIR}/ffmpeg_temp/ffmpeg-*")
-    if(FFMPEG_EXTRACTED_DIR)
-        list(GET FFMPEG_EXTRACTED_DIR 0 FFMPEG_EXTRACTED_DIR)
-        file(RENAME "${FFMPEG_EXTRACTED_DIR}" "${FFMPEG_DIR}")
-        file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/ffmpeg_temp")
-    else()
-        message(FATAL_ERROR "Could not find extracted FFmpeg directory")
-    endif()
-    
-    # Clean up archive
-    file(REMOVE "${CMAKE_BINARY_DIR}/ffmpeg-dev.zip")
-    
-    message(STATUS "FFmpeg ${FFMPEG_VERSION} downloaded and extracted successfully")
-endif()
+FetchContent_Declare(
+    FFmpeg
+    URL ${FFMPEG_URL}
+    SOURCE_DIR "${CMAKE_BINARY_DIR}/ffmpeg"
+)
+
+FetchContent_MakeAvailable(FFmpeg)
 
 # Set FFmpeg paths
+set(FFMPEG_DIR "${CMAKE_BINARY_DIR}/ffmpeg")
 set(FFMPEG_INCLUDE_DIR "${FFMPEG_DIR}/include")
 set(FFMPEG_LIB_DIR "${FFMPEG_DIR}/lib")
 set(FFMPEG_BIN_DIR "${FFMPEG_DIR}/bin")
