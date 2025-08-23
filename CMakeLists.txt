@@ -141,39 +141,30 @@ endif()
 
 # Windows specific libraries
 if(WIN32)
+    # Common Windows system libraries
+    target_link_libraries(FFmpeg INTERFACE
+        user32
+        kernel32
+        gdi32
+        winspool
+        comdlg32
+        advapi32
+        shell32
+        ole32
+        oleaut32
+        uuid
+        odbc32
+        odbccp32
+    )
+    
+    # Renderer-specific libraries
     if(USE_OPENGL_RENDERER)
-        target_link_libraries(FFmpeg INTERFACE
-            opengl32
-            gdi32
-            user32
-            kernel32
-            winspool
-            comdlg32
-            advapi32
-            shell32
-            ole32
-            oleaut32
-            uuid
-            odbc32
-            odbccp32
-        )
+        target_link_libraries(FFmpeg INTERFACE opengl32)
     else()
         target_link_libraries(FFmpeg INTERFACE
             d3d11
             dxgi
             d3dcompiler
-            user32
-            kernel32
-            gdi32
-            winspool
-            comdlg32
-            advapi32
-            shell32
-            ole32
-            oleaut32
-            uuid
-            odbc32
-            odbccp32
         )
     endif()
 endif()
