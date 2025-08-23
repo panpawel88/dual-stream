@@ -83,9 +83,7 @@ private:
     // Timing management
     std::chrono::steady_clock::time_point m_playbackStartTime;
     double m_pausedTime;
-    bool m_needsSeek;
-    double m_targetSeekTime;
-    
+
     // Frame timing
     std::chrono::steady_clock::time_point m_lastFrameTime;
     double m_frameInterval;
@@ -96,17 +94,7 @@ private:
     bool ValidateStreams();
     
     // Playback helpers
-    bool ProcessVideoFrame(VideoStream& stream);
-    bool DecodeNextFrame(VideoStream& stream);
     bool ShouldPresentFrame() const;
-    void UpdatePlaybackTime();
-    
-    // Synchronization helpers
-    bool SynchronizeStreams();
-    bool SeekVideoStream(VideoStream& stream, double timeInSeconds);
+
     void ResetPlaybackTiming();
-    
-    // Loop handling
-    bool HandleEndOfStream(VideoStream& stream);
-    bool RestartVideo(VideoStream& stream);
 };
