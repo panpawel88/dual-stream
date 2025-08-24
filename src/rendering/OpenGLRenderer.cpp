@@ -2,9 +2,8 @@
 #include "core/Logger.h"
 #include <iostream>
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 #include "CudaOpenGLInterop.h"
-#include "video/decode/VideoDecoder.h" // For DecodedFrame
 #endif
 
 // WGL constants for modern context creation
@@ -73,7 +72,7 @@ OpenGLRenderer::OpenGLRenderer()
     , m_coreProfile(false)
     , m_debugContext(false)
     , wglCreateContextAttribsARB(nullptr) {
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     m_cudaInterop = nullptr; // Will be initialized in Initialize()
     m_cudaTextureResource = nullptr;
 #endif
@@ -157,7 +156,7 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     // Create texture
     CreateTexture();
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     // Initialize CUDA interop for hardware decoding
     if (!InitializeCudaInterop()) {
         LOG_WARNING("CUDA interop initialization failed - hardware decoding will fall back to software");
@@ -184,40 +183,54 @@ void OpenGLRenderer::Cleanup() {
     Reset();
 }
 
-bool OpenGLRenderer::Present(const uint8_t* data, int width, int height, int pitch) {
+bool OpenGLRenderer::Present(const RenderTexture& texture) {
     if (!m_initialized) {
         return false;
     }
     
-    // Update texture with new frame data
-    if (data && width > 0 && height > 0 && pitch > 0) {
-        glBindTexture(GL_TEXTURE_2D, m_texture);
-        
-        // Set pixel store parameters for proper pitch handling
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch / 4); // Assuming RGBA format (4 bytes per pixel)
-        
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
-        
-        // Reset pixel store
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    }
-    
-    // Clear screen
+    // Clear screen first
     glClear(GL_COLOR_BUFFER_BIT);
     
-    // Only draw if we have valid data
-    if (data) {
-        // Setup render state
-        SetupRenderState();
-        
-        // Draw fullscreen quad
-        DrawQuad();
+    // Handle different texture types
+    if (!texture.IsValid()) {
+        // Present black screen for invalid texture
+        SwapBuffers(m_hdc);
+        return true;
     }
     
-    // Swap buffers
+    bool renderSuccess = false;
+    
+    switch (texture.type) {
+        case TextureType::Software:
+            renderSuccess = PresentSoftwareTexture(texture);
+            break;
+            
+#if HAVE_CUDA            
+        case TextureType::CUDA:
+            renderSuccess = PresentCudaTexture(texture);
+            break;
+#endif
+            
+        case TextureType::D3D11:
+            LOG_WARNING("D3D11 texture not supported in OpenGL renderer");
+            renderSuccess = false;
+            break;
+            
+        case TextureType::OpenGL:
+            LOG_WARNING("OpenGL texture ID type not yet implemented");
+            renderSuccess = false;
+            break;
+            
+        default:
+            LOG_ERROR("Unknown texture type");
+            renderSuccess = false;
+            break;
+    }
+    
+    // Always swap buffers, even for failed renders (shows black screen)
     SwapBuffers(m_hdc);
     
-    return true;
+    return renderSuccess;
 }
 
 bool OpenGLRenderer::Resize(int width, int height) {
@@ -563,10 +576,33 @@ void OpenGLRenderer::DrawQuad() {
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
+bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
+    if (texture.type != TextureType::Software || !texture.software.data) {
+        return false;
+    }
+    
+    // Update texture with new frame data
+    glBindTexture(GL_TEXTURE_2D, m_texture);
+    
+    // Set pixel store parameters for proper pitch handling
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, texture.software.pitch / 4); // Assuming RGBA format (4 bytes per pixel)
+    
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, texture.width, texture.height, GL_RGBA, GL_UNSIGNED_BYTE, texture.software.data);
+    
+    // Reset pixel store
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    
+    // Setup render state and draw
+    SetupRenderState(texture.isYUV);
+    DrawQuad();
+    
+    return true;
+}
+
 void OpenGLRenderer::Reset() {
     m_initialized = false;
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     // Clean up CUDA interop
     CleanupCudaInterop();
 #endif
@@ -631,7 +667,7 @@ void OpenGLRenderer::Reset() {
     wglCreateContextAttribsARB = nullptr;
 }
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 
 bool OpenGLRenderer::InitializeCudaInterop() {
     try {
@@ -691,14 +727,16 @@ bool OpenGLRenderer::IsCudaInteropAvailable() const {
     return m_cudaInterop && m_cudaInterop->IsInitialized();
 }
 
-bool OpenGLRenderer::PresentHardware(const DecodedFrame& frame) {
-    if (!m_initialized) {
-        LOG_ERROR("OpenGLRenderer not initialized");
-        return false;
-    }
-    
-    if (!frame.valid || !frame.isHardwareCuda) {
-        LOG_ERROR("Invalid CUDA hardware frame");
+bool OpenGLRenderer::SupportsCudaInterop() const {
+#if HAVE_CUDA
+    return true; // OpenGL renderer supports CUDA when compiled with CUDA
+#else
+    return false; // CUDA not compiled in
+#endif
+}
+
+bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
+    if (texture.type != TextureType::CUDA) {
         return false;
     }
     
@@ -708,22 +746,22 @@ bool OpenGLRenderer::PresentHardware(const DecodedFrame& frame) {
     }
     
     // Copy CUDA device memory to the pre-registered OpenGL texture
-    // Use YUV conversion if the frame is in YUV format, otherwise direct copy
+    // Use YUV conversion if the texture is in YUV format, otherwise direct copy
     bool copySuccess = false;
-    if (frame.isYUV) {
+    if (texture.isYUV) {
         copySuccess = m_cudaInterop->CopyYuvToTexture(
-            frame.cudaPtr, 
-            frame.cudaPitch, 
+            texture.cuda.devicePtr, 
+            texture.cuda.pitch, 
             m_cudaTextureResource, 
-            frame.width, 
-            frame.height);
+            texture.width, 
+            texture.height);
     } else {
         copySuccess = m_cudaInterop->CopyDeviceToTexture(
-            frame.cudaPtr, 
-            frame.cudaPitch, 
+            texture.cuda.devicePtr, 
+            texture.cuda.pitch, 
             m_cudaTextureResource, 
-            frame.width, 
-            frame.height);
+            texture.width, 
+            texture.height);
     }
     
     if (!copySuccess) {
@@ -731,17 +769,24 @@ bool OpenGLRenderer::PresentHardware(const DecodedFrame& frame) {
         return false;
     }
     
-    // Setup render state - frame is now RGBA after CUDA conversion
+    // Setup render state - texture is now RGBA after CUDA conversion
     SetupRenderState(false); // Always false since CUDA converted YUV to RGBA
     
     // Draw fullscreen quad
     DrawQuad();
     
-    // Swap buffers
-    SwapBuffers(m_hdc);
-    
-    LOG_DEBUG("Hardware frame presented successfully (", frame.width, "x", frame.height, ")");
+    LOG_DEBUG("CUDA texture presented successfully (", texture.width, "x", texture.height, ")");
     return true;
 }
 
-#endif // USE_OPENGL_RENDERER && HAVE_CUDA
+#else // HAVE_CUDA
+
+bool OpenGLRenderer::IsCudaInteropAvailable() const {
+    return false; // CUDA not available
+}
+
+bool OpenGLRenderer::SupportsCudaInterop() const {
+    return false; // CUDA not available
+}
+
+#endif // HAVE_CUDA

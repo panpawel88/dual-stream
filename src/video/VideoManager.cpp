@@ -1,5 +1,11 @@
 #include "VideoManager.h"
 #include "core/Logger.h"
+#include "rendering/IRenderer.h"
+#if USE_OPENGL_RENDERER
+#include "rendering/OpenGLRenderer.h"
+#else
+#include "rendering/D3D11Renderer.h"
+#endif
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -17,7 +23,7 @@ VideoManager::~VideoManager() {
     Cleanup();
 }
 
-bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed, bool cudaInteropAvailable) {
+bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed) {
     if (m_initialized) {
         Cleanup();
     }
@@ -27,6 +33,33 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     // Set playback speed
     m_playbackSpeed = playbackSpeed;
     LOG_INFO("Playback speed set to: ", m_playbackSpeed, "x");
+    
+    // Extract platform-specific information from renderer
+    ID3D11Device* d3dDevice = nullptr;
+    bool cudaInteropAvailable = false;
+    
+    if (renderer) {
+        switch (renderer->GetRendererType()) {
+#if USE_OPENGL_RENDERER
+            case RendererType::OpenGL: {
+                OpenGLRenderer* glRenderer = static_cast<OpenGLRenderer*>(renderer);
+                cudaInteropAvailable = glRenderer->IsCudaInteropAvailable();
+                LOG_INFO("Using OpenGL renderer", cudaInteropAvailable ? " with CUDA interop" : " with software decoding");
+                break;
+            }
+#else
+            case RendererType::DirectX11: {
+                D3D11Renderer* d3d11Renderer = static_cast<D3D11Renderer*>(renderer);
+                d3dDevice = d3d11Renderer->GetDevice();
+                LOG_INFO("Using D3D11 renderer for hardware decoding");
+                break;
+            }
+#endif
+            default:
+                LOG_WARNING("Unknown renderer type");
+                break;
+        }
+    }
     
     // Initialize both video streams
     if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice, cudaInteropAvailable)) {

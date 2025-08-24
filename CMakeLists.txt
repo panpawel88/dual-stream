@@ -190,6 +190,8 @@ add_executable(ffmpeg_player
     src/video/demux/VideoDemuxer.cpp
     src/video/decode/VideoDecoder.cpp
     ${RENDERER_SOURCES}
+    src/rendering/RendererFactory.cpp
+    src/rendering/TextureConverter.cpp
     src/video/VideoManager.cpp
     src/core/Logger.cpp
     src/core/FFmpegInitializer.cpp

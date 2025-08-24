@@ -3,24 +3,27 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <wrl/client.h>
+#include "IRenderer.h"
 
 using Microsoft::WRL::ComPtr;
 
-class D3D11Renderer {
+class D3D11Renderer : public IRenderer {
 public:
     D3D11Renderer();
     ~D3D11Renderer();
     
-    bool Initialize(HWND hwnd, int width, int height);
-    void Cleanup();
+    // IRenderer interface implementation
+    bool Initialize(HWND hwnd, int width, int height) override;
+    void Cleanup() override;
+    bool Present(const RenderTexture& texture) override;
+    bool Resize(int width, int height) override;
+    bool IsInitialized() const override { return m_initialized; }
+    RendererType GetRendererType() const override { return RendererType::DirectX11; }
+    bool SupportsCudaInterop() const override { return false; } // D3D11 doesn't support CUDA interop
     
-    bool Present(ID3D11Texture2D* videoTexture, bool isYUV = false, DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM);
-    bool Resize(int width, int height);
-    
-    // Getters
+    // D3D11-specific methods (for downcasting)
     ID3D11Device* GetDevice() const { return m_device.Get(); }
     ID3D11DeviceContext* GetContext() const { return m_context.Get(); }
-    bool IsInitialized() const { return m_initialized; }
     
 private:
     bool m_initialized;
@@ -58,6 +61,8 @@ private:
     bool CreateStates();
     
     // Rendering helpers
+    bool PresentD3D11Texture(const RenderTexture& texture);
+    bool PresentSoftwareTexture(const RenderTexture& texture);
     bool UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format);
     void SetupRenderState(bool isYUV);
     void DrawQuad();

@@ -6,11 +6,8 @@
 #include "video/VideoValidator.h"
 #include "video/decode/HardwareDecoder.h"
 #include "video/demux/VideoDemuxer.h"
-#if USE_OPENGL_RENDERER
-#include "rendering/OpenGLRenderer.h"
-#else
-#include "rendering/D3D11Renderer.h"
-#endif
+#include "rendering/RendererFactory.h"
+#include "rendering/TextureConverter.h"
 #include "video/VideoManager.h"
 #include "core/Logger.h"
 #include "core/FFmpegInitializer.h"
@@ -60,39 +57,21 @@ int main(int argc, char* argv[]) {
     window.Show();
     LOG_INFO("Window created. Press 1/2 to switch videos, ESC to exit");
     
-#if USE_OPENGL_RENDERER
-    // Initialize OpenGL renderer
-    OpenGLRenderer renderer;
-    if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
-        LOG_ERROR("Failed to initialize OpenGL renderer");
+    // Create renderer using factory
+    auto renderer = RendererFactory::CreateRenderer();
+    if (!renderer->Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
+        LOG_ERROR("Failed to initialize ", RendererFactory::GetRendererName(), " renderer");
         return 1;
     }
     
-    // Initialize video manager with switching strategy and playback speed (no D3D device for OpenGL)
-    VideoManager videoManager;
-    bool cudaInteropAvailable = false;
-#if USE_OPENGL_RENDERER && HAVE_CUDA
-    cudaInteropAvailable = renderer.IsCudaInteropAvailable();
-#endif
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, nullptr, args.switchingAlgorithm, args.playbackSpeed, cudaInteropAvailable)) {
-        LOG_ERROR("Failed to initialize video manager");
-        return 1;
-    }
-#else
-    // Initialize D3D11 renderer
-    D3D11Renderer renderer;
-    if (!renderer.Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
-        LOG_ERROR("Failed to initialize D3D11 renderer");
-        return 1;
-    }
+    LOG_INFO("Initialized ", RendererFactory::GetRendererName(), " renderer");
     
-    // Initialize video manager with switching strategy and playback speed
+    // Initialize video manager with renderer for hardware decoding support
     VideoManager videoManager;
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.GetDevice(), args.switchingAlgorithm, args.playbackSpeed)) {
+    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.get(), args.switchingAlgorithm, args.playbackSpeed)) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }
-#endif
     
     // Start playback
     if (!videoManager.Play()) {
@@ -127,36 +106,17 @@ int main(int argc, char* argv[]) {
         
         // Get current frame and render it
         DecodedFrame* currentFrame = videoManager.GetCurrentFrame();
+        
+        // Convert frame to generic render texture
+        RenderTexture renderTexture;
         if (currentFrame && currentFrame->valid) {
-#if USE_OPENGL_RENDERER
-            // OpenGL renderer can use both hardware CUDA frames and software frame data
-#if HAVE_CUDA
-            if (currentFrame->isHardwareCuda) {
-                // Use hardware presentation for CUDA frames (only when CUDA interop is available)
-                renderer.PresentHardware(*currentFrame);
-            } else
-#endif
-            if (currentFrame->data) {
-                // Use software presentation for CPU frames
-                renderer.Present(currentFrame->data, currentFrame->width, currentFrame->height, currentFrame->pitch);
-            } else {
-                renderer.Present(nullptr, 0, 0, 0); // Render black screen if no frame data available
-            }
-#else
-            // D3D11 renderer uses texture
-            if (currentFrame->texture) {
-                renderer.Present(currentFrame->texture.Get(), currentFrame->isYUV, currentFrame->format);
-            } else {
-                renderer.Present(nullptr); // Render black screen if no frame available
-            }
-#endif
+            renderTexture = TextureConverter::ConvertFrame(*currentFrame, renderer.get());
         } else {
-#if USE_OPENGL_RENDERER
-            renderer.Present(nullptr, 0, 0, 0); // Render black screen
-#else
-            renderer.Present(nullptr); // Render black screen if no frame available
-#endif
+            renderTexture = TextureConverter::CreateNullTexture();
         }
+        
+        // Present texture using unified renderer interface
+        renderer->Present(renderTexture);
         
         // Sleep for a short time to prevent busy waiting, but much shorter than frame interval
         Sleep(1); // 1ms sleep to prevent excessive CPU usage

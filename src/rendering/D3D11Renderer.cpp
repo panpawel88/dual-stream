@@ -143,39 +143,56 @@ void D3D11Renderer::Cleanup() {
     Reset();
 }
 
-bool D3D11Renderer::Present(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format) {
+bool D3D11Renderer::Present(const RenderTexture& texture) {
     if (!m_initialized) {
         return false;
-    }
-    
-    // Update frame texture if provided
-    if (videoTexture) {
-        if (!UpdateFrameTexture(videoTexture, isYUV, format)) {
-            return false;
-        }
     }
     
     // Clear render target
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
     m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
     
-    // Only draw if we have a texture to render
-    if (m_currentFrameSRV) {
-        // Setup render state
-        SetupRenderState(isYUV);
-        
-        // Draw fullscreen quad
-        DrawQuad();
+    // Handle different texture types
+    bool renderSuccess = false;
+    
+    if (!texture.IsValid()) {
+        // Present black screen for invalid texture
+        renderSuccess = true;
+    } else {
+        switch (texture.type) {
+            case TextureType::D3D11:
+                renderSuccess = PresentD3D11Texture(texture);
+                break;
+                
+            case TextureType::Software:
+                renderSuccess = PresentSoftwareTexture(texture);
+                break;
+                
+            case TextureType::CUDA:
+                LOG_WARNING("CUDA texture not supported in D3D11 renderer");
+                renderSuccess = false;
+                break;
+                
+            case TextureType::OpenGL:
+                LOG_WARNING("OpenGL texture not supported in D3D11 renderer");
+                renderSuccess = false;
+                break;
+                
+            default:
+                LOG_ERROR("Unknown texture type");
+                renderSuccess = false;
+                break;
+        }
     }
     
-    // Present
+    // Always present, even for failed renders (shows black screen)
     HRESULT hr = m_swapChain->Present(1, 0); // VSync enabled
     if (FAILED(hr)) {
         LOG_ERROR("Failed to present frame. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
-    return true;
+    return renderSuccess;
 }
 
 bool D3D11Renderer::Resize(int width, int height) {
@@ -592,6 +609,40 @@ void D3D11Renderer::SetupRenderState(bool isYUV) {
 
 void D3D11Renderer::DrawQuad() {
     m_context->DrawIndexed(6, 0, 0);
+}
+
+bool D3D11Renderer::PresentD3D11Texture(const RenderTexture& texture) {
+    if (texture.type != TextureType::D3D11 || !texture.d3d11.texture) {
+        return false;
+    }
+    
+    // Update frame texture
+    if (!UpdateFrameTexture(texture.d3d11.texture.Get(), texture.isYUV, texture.d3d11.dxgiFormat)) {
+        return false;
+    }
+    
+    // Only draw if we have a texture to render
+    if (m_currentFrameSRV) {
+        // Setup render state
+        SetupRenderState(texture.isYUV);
+        
+        // Draw fullscreen quad
+        DrawQuad();
+    }
+    
+    return true;
+}
+
+bool D3D11Renderer::PresentSoftwareTexture(const RenderTexture& texture) {
+    if (texture.type != TextureType::Software || !texture.software.data) {
+        return false;
+    }
+    
+    // TODO: Implement software texture upload to D3D11 texture
+    // This would require creating a D3D11 texture from the CPU data
+    // For now, return false to indicate unsupported
+    LOG_WARNING("Software texture presentation not yet implemented for D3D11 renderer");
+    return false;
 }
 
 void D3D11Renderer::Reset() {

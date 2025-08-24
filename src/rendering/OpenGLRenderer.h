@@ -3,35 +3,30 @@
 #include <windows.h>
 #include <glad/gl.h>
 #include <string>
+#include "IRenderer.h"
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 #include <memory>
 // Forward declarations
 class CudaOpenGLInterop;
-struct DecodedFrame;
 #endif
 
-class OpenGLRenderer {
+class OpenGLRenderer : public IRenderer {
 public:
     OpenGLRenderer();
     ~OpenGLRenderer();
     
-    bool Initialize(HWND hwnd, int width, int height);
-    void Cleanup();
+    // IRenderer interface implementation
+    bool Initialize(HWND hwnd, int width, int height) override;
+    void Cleanup() override;
+    bool Present(const RenderTexture& texture) override;
+    bool Resize(int width, int height) override;
+    bool IsInitialized() const override { return m_initialized; }
+    RendererType GetRendererType() const override { return RendererType::OpenGL; }
+    bool SupportsCudaInterop() const override;
     
-    bool Present(const uint8_t* data, int width, int height, int pitch);
-    bool Resize(int width, int height);
-    
-#if USE_OPENGL_RENDERER && HAVE_CUDA
-    // Hardware texture presentation (for CUDA decoded frames)
-    bool PresentHardware(const DecodedFrame& frame);
-#endif
-    
-    // Getters
-    bool IsInitialized() const { return m_initialized; }
-#if USE_OPENGL_RENDERER && HAVE_CUDA
-    bool IsCudaInteropAvailable() const; // Defined in .cpp file
-#endif
+    // OpenGL-specific methods (for downcasting)
+    bool IsCudaInteropAvailable() const;
     
 private:
     bool m_initialized;
@@ -54,7 +49,7 @@ private:
     GLint m_textureUniform;
     GLint m_isYUVUniform;
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     // CUDA interop resources
     std::unique_ptr<CudaOpenGLInterop> m_cudaInterop;
     void* m_cudaTextureResource;  // CUDA graphics resource handle for the main texture
@@ -84,8 +79,12 @@ private:
     // Rendering helpers
     void SetupRenderState(bool isYUV = false);
     void DrawQuad();
+    bool PresentSoftwareTexture(const RenderTexture& texture);
+#if HAVE_CUDA
+    bool PresentCudaTexture(const RenderTexture& texture);
+#endif
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     // CUDA interop helpers
     bool InitializeCudaInterop();
     void CleanupCudaInterop();

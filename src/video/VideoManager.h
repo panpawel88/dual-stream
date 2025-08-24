@@ -12,7 +12,9 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-#include <d3d11.h>
+// Forward declarations to avoid including renderer headers
+class IRenderer;
+struct ID3D11Device;
 
 enum class VideoState {
     STOPPED,
@@ -43,7 +45,7 @@ public:
     VideoManager();
     ~VideoManager();
     
-    bool Initialize(const std::string& video1Path, const std::string& video2Path, ID3D11Device* d3dDevice, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0, bool cudaInteropAvailable = false);
+    bool Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
     void Cleanup();
     
     // Playback control
