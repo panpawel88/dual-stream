@@ -33,6 +33,11 @@ bool CudaOpenGLInterop::Initialize() {
         return false;
     }
     
+    if (!ValidateDeviceCapabilities()) {
+        LOG_ERROR("CUDA device does not meet requirements for OpenGL interop");
+        return false;
+    }
+    
     LOG_INFO("CUDA/OpenGL interop initialized successfully");
     m_initialized = true;
     return true;
@@ -59,7 +64,6 @@ bool CudaOpenGLInterop::RegisterTexture(GLuint textureID, void** resource) {
         return false;
     }
     
-    LOG_DEBUG("OpenGL texture ", textureID, " registered with CUDA");
     return true;
 }
 
@@ -204,6 +208,17 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         return false;
     }
     
+    if (!ValidateTextureSize(width, height)) {
+        LOG_ERROR("Texture size validation failed for ", width, "x", height);
+        return false;
+    }
+    
+    size_t rgbaSize = static_cast<size_t>(width) * height * 4; // RGBA = 4 bytes per pixel
+    if (!CheckMemoryAvailability(rgbaSize)) {
+        LOG_ERROR("Insufficient GPU memory for RGBA buffer allocation");
+        return false;
+    }
+    
     // Use RAII wrapper to automatically map/unmap the resource
     CudaResourceMapper resourceMapper(this, &dstResource, 1, stream);
     if (!resourceMapper.IsValid()) {
@@ -220,8 +235,11 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     
     cudaArray_t dstArray = static_cast<cudaArray_t>(arrayPtr);
     
-    // Use RAII wrapper for temporary RGBA buffer allocation
-    size_t rgbaSize = width * height * 4; // RGBA = 4 bytes per pixel
+    if (!ValidateCudaArraySize(dstArray, width, height)) {
+        LOG_ERROR("CUDA array size validation failed - OpenGL texture may have wrong dimensions");
+        return false;
+    }
+    
     CudaMemoryGuard tempRgbaBuffer(rgbaSize);
     if (!tempRgbaBuffer.IsValid()) {
         LOG_ERROR("CUDA error allocating temporary RGBA buffer");
@@ -237,7 +255,11 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         return false;
     }
     
-    // Copy converted RGBA data to OpenGL texture array
+    if (!ValidateMemoryAlignment(tempRgbaBuffer.Get(), rgbaPitch, width, height)) {
+        LOG_ERROR("Memory alignment validation failed before cudaMemcpy3D");
+        return false;
+    }
+    
     cudaMemcpy3DParms copyParams = {0};
     copyParams.srcPtr = make_cudaPitchedPtr(tempRgbaBuffer.Get(), rgbaPitch, width, height);
     copyParams.dstArray = dstArray;
@@ -264,7 +286,6 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         }
     }
 
-    LOG_DEBUG("CUDA YUV to RGBA texture copy successful - Size: ", width, "x", height, ", pitch: ", yuvPitch);
     return true;
 }
 
@@ -286,7 +307,6 @@ bool CudaOpenGLInterop::TestResourceMapping(void* resource, void* stream) {
         return false;
     }
 
-    LOG_INFO("CUDA interop test successful - texture mapping/unmapping works");
     return true;
 }
 
@@ -307,6 +327,113 @@ void CudaOpenGLInterop::CudaMemoryGuard::FreeCudaMemory(void* ptr) {
             LOG_WARNING("CUDA memory deallocation failed: ", cudaGetErrorString(result));
         }
     }
+}
+
+
+bool CudaOpenGLInterop::ValidateDeviceCapabilities() {
+    cudaDeviceProp prop;
+    int currentDevice = 0;
+    cudaGetDevice(&currentDevice);
+    
+    cudaError_t result = cudaGetDeviceProperties(&prop, currentDevice);
+    if (result != cudaSuccess) {
+        LOG_ERROR("Failed to get device properties for validation: ", cudaGetErrorString(result));
+        return false;
+    }
+    
+    // Check minimum compute capability (3.0 for modern CUDA features)
+    if (prop.major < 3) {
+        LOG_ERROR("Device compute capability ", prop.major, ".", prop.minor, " is too old (minimum 3.0 required)");
+        return false;
+    }
+    
+    return true;
+}
+
+bool CudaOpenGLInterop::ValidateTextureSize(int width, int height) {
+    cudaDeviceProp prop;
+    int currentDevice = 0;
+    cudaGetDevice(&currentDevice);
+    
+    cudaError_t result = cudaGetDeviceProperties(&prop, currentDevice);
+    if (result != cudaSuccess) {
+        LOG_ERROR("Failed to get device properties for texture size validation: ", cudaGetErrorString(result));
+        return false;
+    }
+    
+    if (width > prop.maxTexture2D[0] || height > prop.maxTexture2D[1]) {
+        LOG_ERROR("Texture size ", width, "x", height, " exceeds device limits (", 
+                  prop.maxTexture2D[0], "x", prop.maxTexture2D[1], ")");
+        return false;
+    }
+    
+    return true;
+}
+
+bool CudaOpenGLInterop::CheckMemoryAvailability(size_t requiredBytes) {
+    size_t freeMem = 0, totalMem = 0;
+    cudaError_t result = cudaMemGetInfo(&freeMem, &totalMem);
+    if (result != cudaSuccess) {
+        LOG_ERROR("Failed to get memory info: ", cudaGetErrorString(result));
+        return false;
+    }
+    
+    // Add 10% safety margin for memory fragmentation
+    size_t safetyMargin = requiredBytes / 10;
+    size_t totalRequired = requiredBytes + safetyMargin;
+    
+    if (totalRequired > freeMem) {
+        LOG_ERROR("Insufficient GPU memory - Required: ", totalRequired / (1024*1024), 
+                  " MB, Available: ", freeMem / (1024*1024), " MB");
+        return false;
+    }
+    
+    return true;
+}
+
+bool CudaOpenGLInterop::ValidateMemoryAlignment(void* ptr, size_t pitch, int width, int height) {
+    if (!ptr) {
+        LOG_ERROR("Invalid pointer for alignment validation");
+        return false;
+    }
+    
+    // Validate pitch is at least as wide as the row
+    size_t minPitch = static_cast<size_t>(width) * 4; // 4 bytes per RGBA pixel
+    if (pitch < minPitch) {
+        LOG_ERROR("Pitch ", pitch, " is less than minimum required ", minPitch);
+        return false;
+    }
+    
+    return true;
+}
+
+bool CudaOpenGLInterop::ValidateCudaArraySize(void* cudaArray, int expectedWidth, int expectedHeight) {
+    if (!cudaArray) {
+        LOG_ERROR("Invalid CUDA array for size validation");
+        return false;
+    }
+    
+    cudaArray_t array = static_cast<cudaArray_t>(cudaArray);
+    
+    // Get array descriptor to check dimensions
+    cudaChannelFormatDesc desc;
+    cudaExtent extent;
+    unsigned int flags;
+    
+    cudaError_t result = cudaArrayGetInfo(&desc, &extent, &flags, array);
+    if (result != cudaSuccess) {
+        LOG_ERROR("Failed to get CUDA array info: ", cudaGetErrorString(result));
+        return false;
+    }
+    
+    if (extent.width != static_cast<size_t>(expectedWidth) || 
+        extent.height != static_cast<size_t>(expectedHeight)) {
+        LOG_ERROR("CUDA array dimension mismatch - Expected: ", expectedWidth, "x", expectedHeight, 
+                  ", Actual: ", extent.width, "x", extent.height);
+        return false;
+    }
+    
+    return true;
 }
 
 #endif // USE_OPENGL_RENDERER && HAVE_CUDA

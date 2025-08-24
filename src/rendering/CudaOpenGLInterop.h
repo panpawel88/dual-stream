@@ -46,6 +46,13 @@ public:
     // Test CUDA interop functionality with a given resource
     bool TestResourceMapping(void* resource, void* stream = nullptr);
     
+    // Device capability and validation functions
+    bool ValidateDeviceCapabilities();
+    bool ValidateTextureSize(int width, int height);
+    bool CheckMemoryAvailability(size_t requiredBytes);
+    bool ValidateMemoryAlignment(void* ptr, size_t pitch, int width, int height);
+    bool ValidateCudaArraySize(void* cudaArray, int expectedWidth, int expectedHeight);
+    
 private:
     bool m_initialized;
     

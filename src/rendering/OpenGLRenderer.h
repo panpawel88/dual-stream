@@ -77,6 +77,7 @@ private:
     void SetupRenderState(bool isYUV = false);
     void DrawQuad();
     bool PresentSoftwareTexture(const RenderTexture& texture);
+    bool ResizeTextureIfNeeded(int newWidth, int newHeight);
 #if HAVE_CUDA
     bool PresentCudaTexture(const RenderTexture& texture);
 #endif

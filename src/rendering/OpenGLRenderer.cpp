@@ -550,7 +550,59 @@ void OpenGLRenderer::CreateTexture() {
     // Always create RGBA texture - CUDA conversion will handle YUV to RGBA
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, nullptr);
     
+    // Check for OpenGL errors
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        LOG_ERROR("OpenGL error creating texture: ", error);
+        if (error == GL_OUT_OF_MEMORY) {
+            LOG_ERROR("OpenGL out of memory - texture size ", m_width, "x", m_height, " may be too large");
+        } else if (error == GL_INVALID_VALUE) {
+            LOG_ERROR("Invalid texture dimensions: ", m_width, "x", m_height);
+        }
+    }
+    
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+bool OpenGLRenderer::ResizeTextureIfNeeded(int newWidth, int newHeight) {
+    if (newWidth == m_width && newHeight == m_height) {
+        return true; // No resize needed
+    }
+    
+#if HAVE_CUDA
+    // Clean up existing CUDA interop before resizing texture
+    if (m_cudaInterop && m_cudaTextureResource) {
+        CleanupCudaInterop();
+    }
+#endif
+    
+    // Update internal dimensions
+    m_width = newWidth;
+    m_height = newHeight;
+    
+    // Recreate the OpenGL texture with new dimensions
+    if (m_texture) {
+        glDeleteTextures(1, &m_texture);
+        m_texture = 0;
+    }
+    
+    CreateTexture();
+    
+#if HAVE_CUDA
+    // Reinitialize CUDA interop with the resized texture
+    if (!InitializeCudaInterop()) {
+        LOG_ERROR("Failed to reinitialize CUDA interop after texture resize");
+        return false;
+    }
+    
+    if (!TestCudaInterop()) {
+        LOG_ERROR("CUDA interop test failed after texture resize");
+        CleanupCudaInterop();
+        return false;
+    }
+#endif
+    
+    return true;
 }
 
 void OpenGLRenderer::SetupRenderState(bool isYUV) {
@@ -745,6 +797,14 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         return false;
     }
     
+    // Check for dimension mismatch and resize texture if needed
+    if (texture.width != m_width || texture.height != m_height) {
+        if (!ResizeTextureIfNeeded(texture.width, texture.height)) {
+            LOG_ERROR("Failed to resize OpenGL texture to match video dimensions");
+            return false;
+        }
+    }
+    
     // Copy CUDA device memory to the pre-registered OpenGL texture
     // Use YUV conversion if the texture is in YUV format, otherwise direct copy
     bool copySuccess = false;
@@ -775,7 +835,6 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
     // Draw fullscreen quad
     DrawQuad();
     
-    LOG_DEBUG("CUDA texture presented successfully (", texture.width, "x", texture.height, ")");
     return true;
 }
 
