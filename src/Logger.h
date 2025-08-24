@@ -24,28 +24,28 @@ public:
     void Debug(const std::string& message);
     
     template<typename... Args>
-    void Error(Args&&... args) {
+    void Error(const Args&... args) {
         if (m_logLevel >= LogLevel::Error) {
             LogMessage("[ERROR] ", args...);
         }
     }
     
     template<typename... Args>
-    void Warning(Args&&... args) {
+    void Warning(const Args&... args) {
         if (m_logLevel >= LogLevel::Warning) {
             LogMessage("[WARNING] ", args...);
         }
     }
     
     template<typename... Args>
-    void Info(Args&&... args) {
+    void Info(const Args&... args) {
         if (m_logLevel >= LogLevel::Info) {
             LogMessage("[INFO] ", args...);
         }
     }
     
     template<typename... Args>
-    void Debug(Args&&... args) {
+    void Debug(const Args&... args) {
         if (m_logLevel >= LogLevel::Debug) {
             LogMessage("[DEBUG] ", args...);
         }
@@ -58,7 +58,7 @@ private:
     Logger& operator=(const Logger&) = delete;
     
     template<typename... Args>
-    void LogMessage(const std::string& prefix, Args&&... args) {
+    void LogMessage(const std::string& prefix, const Args&... args) {
         std::ostringstream oss;
         oss << prefix;
         (oss << ... << args);
