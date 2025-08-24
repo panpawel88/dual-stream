@@ -694,21 +694,9 @@ bool OpenGLRenderer::TestCudaInterop() {
         LOG_ERROR("OpenGL texture not registered with CUDA");
         return false;
     }
-    
-    // Test basic CUDA interop functionality by trying to map/unmap the texture
+
     // This validates that the texture registration and interop system works
-    if (!m_cudaInterop->MapResources(&m_cudaTextureResource, 1, nullptr)) {
-        LOG_ERROR("Failed to map CUDA graphics resource - interop not functional");
-        return false;
-    }
-    
-    if (!m_cudaInterop->UnmapResources(&m_cudaTextureResource, 1, nullptr)) {
-        LOG_WARNING("Failed to unmap CUDA graphics resource - potential issue");
-        return false;
-    }
-    
-    LOG_INFO("CUDA interop test successful - texture mapping/unmapping works");
-    return true;
+    return m_cudaInterop->TestResourceMapping(m_cudaTextureResource, nullptr);
 }
 
 bool OpenGLRenderer::IsCudaInteropAvailable() const {
