@@ -341,3 +341,49 @@ void VideoManager::ResetPlaybackTiming() {
     m_playbackStartTime = std::chrono::steady_clock::now();
     m_lastFrameTime = m_playbackStartTime;
 }
+
+bool VideoManager::SetSwitchingTrigger(std::unique_ptr<ISwitchingTrigger> trigger) {
+    if (!trigger) {
+        LOG_ERROR("Cannot set null switching trigger");
+        return false;
+    }
+    
+    m_switchingTrigger = std::move(trigger);
+    LOG_INFO("Switching trigger set to: ", m_switchingTrigger->GetName());
+    return true;
+}
+
+void VideoManager::UpdateSwitchingTrigger() {
+    if (m_switchingTrigger) {
+        m_switchingTrigger->Update();
+    }
+}
+
+bool VideoManager::ProcessSwitchingTriggers() {
+    if (!m_switchingTrigger) {
+        return false; // No trigger set, no switching
+    }
+    
+    bool switched = false;
+    
+    if (m_switchingTrigger->ShouldSwitchToVideo1()) {
+        LOG_INFO("Trigger initiated switch to video 1");
+        if (SwitchToVideo(ActiveVideo::VIDEO_1)) {
+            switched = true;
+        }
+    }
+    
+    if (m_switchingTrigger->ShouldSwitchToVideo2()) {
+        LOG_INFO("Trigger initiated switch to video 2");
+        if (SwitchToVideo(ActiveVideo::VIDEO_2)) {
+            switched = true;
+        }
+    }
+    
+    // Reset trigger state after processing
+    if (switched) {
+        m_switchingTrigger->Reset();
+    }
+    
+    return switched;
+}

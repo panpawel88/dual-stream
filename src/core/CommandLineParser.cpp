@@ -8,8 +8,9 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
     if (argc < 3) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>] [--speed=<speed>]";
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>] [--trigger=<trigger>] [--speed=<speed>]";
         args.errorMessage += "\nSwitching algorithms: immediate (default), predecoded, keyframe-sync";
+        args.errorMessage += "\nTrigger types: keyboard (default)";
         args.errorMessage += "\nPlayback speeds: 0.05, 0.1, 0.2, 0.5, 1.0 (default)";
         return args;
     }
@@ -19,6 +20,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     
     // Parse optional arguments
     const std::string algorithmErrorMsg = "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
+    const std::string triggerErrorMsg = "\nAvailable trigger types: keyboard";
     const std::string speedErrorMsg = "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
     
     for (int i = 3; i < argc; i++) {
@@ -39,6 +41,15 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
                 args.errorMessage = "Unknown switching algorithm: " + algorithmName + algorithmErrorMsg;
                 return args;
             }
+        } else if (arg.find("--trigger=") == 0 || arg.find("-t=") == 0) {
+            std::string triggerName;
+            if (arg.find("--trigger=") == 0) {
+                triggerName = arg.substr(10); // Skip "--trigger="
+            } else {
+                triggerName = arg.substr(3); // Skip "-t="
+            }
+            
+            args.triggerType = SwitchingTriggerFactory::ParseTriggerType(triggerName);
         } else if (arg.find("--speed=") == 0) {
             std::string speedStr = arg.substr(8); // Skip "--speed="
             try {
@@ -55,7 +66,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
             }
         } else {
             args.errorMessage = "Unknown option: " + arg;
-            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>, --speed=<speed>";
+            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>, --trigger=<trigger>, --speed=<speed>";
             return args;
         }
     }

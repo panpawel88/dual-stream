@@ -7,6 +7,7 @@
 #include "decode/VideoDecoder.h"
 #include "decode/HardwareDecoder.h"
 #include "switching/VideoSwitchingStrategy.h"
+#include "triggers/ISwitchingTrigger.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -46,6 +47,7 @@ public:
     ~VideoManager();
     
     bool Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
+    bool SetSwitchingTrigger(std::unique_ptr<ISwitchingTrigger> trigger);
     void Cleanup();
     
     // Playback control
@@ -72,6 +74,10 @@ public:
     double GetFrameInterval() const { return m_frameInterval; }
     bool ShouldUpdateFrame() const;
     
+    // Trigger management
+    void UpdateSwitchingTrigger();
+    bool ProcessSwitchingTriggers();
+    
 private:
     bool m_initialized;
     VideoState m_state;
@@ -81,6 +87,9 @@ private:
     
     // Switching strategy
     std::unique_ptr<VideoSwitchingStrategy> m_switchingStrategy;
+    
+    // Switching trigger
+    std::unique_ptr<ISwitchingTrigger> m_switchingTrigger;
     
     // Timing management
     std::chrono::steady_clock::time_point m_playbackStartTime;

@@ -199,6 +199,8 @@ add_executable(ffmpeg_player
     src/video/switching/experimental/ImmediateSwitchStrategy.cpp
     src/video/switching/experimental/PredecodedSwitchStrategy.cpp
     src/video/switching/KeyframeSwitchStrategy.cpp
+    src/video/triggers/KeyboardSwitchingTrigger.cpp
+    src/video/triggers/SwitchingTriggerFactory.cpp
 )
 
 target_link_libraries(ffmpeg_player PRIVATE FFmpeg)

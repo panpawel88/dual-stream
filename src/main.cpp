@@ -9,6 +9,7 @@
 #include "rendering/RendererFactory.h"
 #include "rendering/TextureConverter.h"
 #include "video/VideoManager.h"
+#include "video/triggers/SwitchingTriggerFactory.h"
 #include "core/Logger.h"
 #include "core/FFmpegInitializer.h"
 
@@ -35,6 +36,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Video 1: ", args.video1Path);
     LOG_INFO("Video 2: ", args.video2Path);
     LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm));
+    LOG_INFO("Switching Trigger: ", SwitchingTriggerFactory::GetTriggerTypeName(args.triggerType));
     LOG_INFO("Playback Speed: ", args.playbackSpeed, "x");
     
     // Validate video files and get their properties
@@ -73,6 +75,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    // Create and set switching trigger
+    auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, &window);
+    if (!switchingTrigger) {
+        LOG_ERROR("Failed to create switching trigger");
+        return 1;
+    }
+    
+    if (!videoManager.SetSwitchingTrigger(std::move(switchingTrigger))) {
+        LOG_ERROR("Failed to set switching trigger");
+        return 1;
+    }
+    
     // Start playback
     if (!videoManager.Play()) {
         LOG_ERROR("Failed to start video playback");
@@ -83,18 +97,9 @@ int main(int argc, char* argv[]) {
     
     // Main message loop
     while (window.ProcessMessages()) {
-        // Handle keyboard input for video switching
-        if (window.IsKeyPressed('1')) {
-            LOG_INFO("Switching to video 1");
-            videoManager.SwitchToVideo(ActiveVideo::VIDEO_1);
-            window.ClearKeyPress('1');
-        }
-        
-        if (window.IsKeyPressed('2')) {
-            LOG_INFO("Switching to video 2");
-            videoManager.SwitchToVideo(ActiveVideo::VIDEO_2);
-            window.ClearKeyPress('2');
-        }
+        // Update and process switching triggers
+        videoManager.UpdateSwitchingTrigger();
+        videoManager.ProcessSwitchingTriggers();
         
         // Update video frames only when needed (based on video frame rate)
         if (videoManager.ShouldUpdateFrame()) {
