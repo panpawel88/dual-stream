@@ -1,6 +1,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
+
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #include "ui/Window.h"
 #include "core/CommandLineParser.h"
 #include "video/VideoValidator.h"
@@ -45,8 +51,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    int windowWidth = std::max(video1Info.width, video2Info.width);
+    int windowHeight = std::max(video1Info.height, video2Info.height);
+    
     Window window;
-    if (!window.Create("FFmpeg Video Player", video1Info.width, video1Info.height)) {
+    if (!window.Create("FFmpeg Video Player", windowWidth, windowHeight)) {
         LOG_ERROR("Failed to create window");
         return 1;
     }
@@ -55,7 +64,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Window created. Press 1/2 to switch videos, F11 for fullscreen, ESC to exit");
     
     auto renderer = RendererFactory::CreateRenderer();
-    if (!renderer->Initialize(window.GetHandle(), video1Info.width, video1Info.height)) {
+    if (!renderer->Initialize(window.GetHandle(), windowWidth, windowHeight)) {
         LOG_ERROR("Failed to initialize ", RendererFactory::GetRendererName(), " renderer");
         return 1;
     }

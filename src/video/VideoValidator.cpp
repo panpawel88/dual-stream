@@ -133,16 +133,9 @@ bool VideoValidator::ValidateCompatibility(const VideoInfo& video1, const VideoI
         return false;
     }
     
-    // Check if resolutions match
-    if (video1.width != video2.width || video1.height != video2.height) {
-        errorMessage = "Video resolutions do not match. Video 1: " + 
-                      std::to_string(video1.width) + "x" + std::to_string(video1.height) +
-                      ", Video 2: " + std::to_string(video2.width) + "x" + std::to_string(video2.height);
-        return false;
-    }
-    
     LOG_INFO("Video compatibility validation passed");
-    LOG_INFO("Both videos: ", video1.width, "x", video1.height);
+    LOG_INFO("Video 1: ", video1.width, "x", video1.height);
+    LOG_INFO("Video 2: ", video2.width, "x", video2.height);
     
     return true;
 }

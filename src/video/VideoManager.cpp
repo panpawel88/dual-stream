@@ -295,16 +295,14 @@ bool VideoManager::ValidateStreams() {
         return false;
     }
     
-    // Check if resolutions match (should already be validated, but double-check)
+    // Log video resolutions for information
     int width1 = m_videos[0].demuxer.GetWidth();
     int height1 = m_videos[0].demuxer.GetHeight();
     int width2 = m_videos[1].demuxer.GetWidth();
     int height2 = m_videos[1].demuxer.GetHeight();
     
-    if (width1 != width2 || height1 != height2) {
-        LOG_ERROR("Video resolution mismatch: ", width1, "x", height1, " vs ", width2, "x", height2);
-        return false;
-    }
+    LOG_INFO("Video 1 resolution: ", width1, "x", height1);
+    LOG_INFO("Video 2 resolution: ", width2, "x", height2);
     
     return true;
 }
