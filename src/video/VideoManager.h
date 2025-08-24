@@ -100,11 +100,9 @@ private:
     double m_frameInterval;
     double m_playbackSpeed;
     
-    // Initialization helpers
     bool InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice, bool cudaInteropAvailable = false);
     bool ValidateStreams();
     
-    // Playback helpers
     bool ShouldPresentFrame() const;
 
     void ResetPlaybackTiming();

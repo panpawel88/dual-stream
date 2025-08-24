@@ -122,13 +122,11 @@ private:
         void* m_ptr;
         bool m_allocated;
         
-        // Helper functions implemented in cpp file
         static bool AllocateCudaMemory(void** ptr, size_t size);
         static void FreeCudaMemory(void* ptr);
     };
     
     
-    // Disable copy constructor and assignment
     CudaOpenGLInterop(const CudaOpenGLInterop&) = delete;
     CudaOpenGLInterop& operator=(const CudaOpenGLInterop&) = delete;
 };

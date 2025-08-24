@@ -89,42 +89,36 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     
     LOG_INFO("Initializing D3D11 renderer (", width, "x", height, ")");
     
-    // Create device and swap chain
     if (!CreateDeviceAndSwapChain()) {
         LOG_ERROR("Failed to create D3D11 device and swap chain");
         Cleanup();
         return false;
     }
     
-    // Create render target
     if (!CreateRenderTarget()) {
         LOG_ERROR("Failed to create render target");
         Cleanup();
         return false;
     }
     
-    // Create shaders
     if (!CreateShaders()) {
         LOG_ERROR("Failed to create shaders");
         Cleanup();
         return false;
     }
     
-    // Create geometry
     if (!CreateGeometry()) {
         LOG_ERROR("Failed to create geometry");
         Cleanup();
         return false;
     }
     
-    // Create states
     if (!CreateStates()) {
         LOG_ERROR("Failed to create render states");
         Cleanup();
         return false;
     }
     
-    // Set viewport
     D3D11_VIEWPORT viewport = {};
     viewport.Width = static_cast<float>(width);
     viewport.Height = static_cast<float>(height);
@@ -148,7 +142,6 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
         return false;
     }
     
-    // Clear render target
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
     m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
     
@@ -203,24 +196,20 @@ bool D3D11Renderer::Resize(int width, int height) {
     m_width = width;
     m_height = height;
     
-    // Release render target view and back buffer
     m_renderTargetView.Reset();
     m_backBuffer.Reset();
     
-    // Resize swap chain
     HRESULT hr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     if (FAILED(hr)) {
         LOG_ERROR("Failed to resize swap chain buffers. HRESULT: 0x", std::hex, hr);
         return false;
     }
     
-    // Recreate render target
     if (!CreateRenderTarget()) {
         LOG_ERROR("Failed to recreate render target after resize");
         return false;
     }
     
-    // Update viewport
     D3D11_VIEWPORT viewport = {};
     viewport.Width = static_cast<float>(width);
     viewport.Height = static_cast<float>(height);

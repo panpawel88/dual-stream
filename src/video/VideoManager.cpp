@@ -30,7 +30,6 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     
     LOG_INFO("Initializing VideoManager...");
     
-    // Set playback speed
     m_playbackSpeed = playbackSpeed;
     LOG_INFO("Playback speed set to: ", m_playbackSpeed, "x");
     
@@ -61,7 +60,6 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         }
     }
     
-    // Initialize both video streams
     if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice, cudaInteropAvailable)) {
         LOG_ERROR("Failed to initialize video stream 1");
         Cleanup();
@@ -74,7 +72,6 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         return false;
     }
     
-    // Validate stream compatibility
     if (!ValidateStreams()) {
         LOG_ERROR("Video streams are not compatible");
         Cleanup();
@@ -91,7 +88,6 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         frameRate = 30.0;
     }
     
-    // Create and initialize switching strategy
     m_switchingStrategy = VideoSwitchingStrategyFactory::Create(switchingAlgorithm);
     if (!m_switchingStrategy) {
         LOG_ERROR("Failed to create switching strategy");
@@ -119,7 +115,6 @@ void VideoManager::Cleanup() {
     if (m_initialized) {
         Stop();
         
-        // Cleanup switching strategy
         if (m_switchingStrategy) {
             m_switchingStrategy->Cleanup();
             m_switchingStrategy.reset();
@@ -145,10 +140,8 @@ bool VideoManager::Play() {
     }
     
     if (m_state == VideoState::PAUSED) {
-        // Resume from pause
         ResetPlaybackTiming();
     } else {
-        // Start from beginning or current position
         m_pausedTime = 0.0;
         ResetPlaybackTiming();
     }
@@ -177,7 +170,6 @@ bool VideoManager::Stop() {
     m_state = VideoState::STOPPED;
     m_pausedTime = 0.0;
     
-    // Reset both video streams
     for (int i = 0; i < 2; i++) {
         m_videos[i].state = VideoState::STOPPED;
         m_videos[i].currentTime = 0.0;

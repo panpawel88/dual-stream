@@ -7,9 +7,7 @@ struct DecodedFrame;
 class IRenderer;
 
 /**
- * Converts video decoder frames to generic render textures.
- * This class isolates video decoding concepts from the rendering system,
- * allowing renderers to work with generic texture abstractions.
+ * Converts decoded frames to generic render textures.
  */
 class TextureConverter {
 public:
@@ -21,7 +19,7 @@ public:
     static RenderTexture ConvertFrame(const DecodedFrame& frame, IRenderer* renderer);
     
     /**
-     * Create a null texture for black screen rendering.
+     * Create a null texture.
      */
     static RenderTexture CreateNullTexture();
     

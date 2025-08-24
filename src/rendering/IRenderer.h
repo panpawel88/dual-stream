@@ -4,7 +4,7 @@
 #include "RenderTexture.h"
 
 /**
- * Renderer type enumeration for downcasting when platform-specific access is needed
+ * Renderer type enumeration
  */
 enum class RendererType {
     OpenGL,
@@ -13,8 +13,6 @@ enum class RendererType {
 
 /**
  * Abstract renderer interface with clean separation of concerns.
- * Renderers work with generic RenderTexture objects and don't need to know
- * about video decoding specifics or different graphics API details.
  */
 class IRenderer {
 public:
@@ -47,7 +45,7 @@ public:
     virtual bool IsInitialized() const = 0;
     
     /**
-     * Get the renderer type for downcasting when platform-specific access is needed.
+     * Get the renderer type.
      */
     virtual RendererType GetRendererType() const = 0;
     

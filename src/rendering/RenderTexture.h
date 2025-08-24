@@ -29,8 +29,6 @@ enum class TextureType {
 
 /**
  * Generic texture abstraction that can represent textures from different graphics APIs.
- * This allows renderers to work with a unified interface without knowing about 
- * specific decoder implementations or video frame structures.
  */
 struct RenderTexture {
     TextureType type;
@@ -93,7 +91,7 @@ struct RenderTexture {
         return false;
     }
     
-    // Create a null/empty texture for black screen rendering
+    // Create a null/empty texture
     static RenderTexture CreateNull() {
         RenderTexture nullTexture;
         nullTexture.type = TextureType::Software;

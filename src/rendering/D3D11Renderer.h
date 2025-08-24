@@ -21,7 +21,7 @@ public:
     RendererType GetRendererType() const override { return RendererType::DirectX11; }
     bool SupportsCudaInterop() const override { return false; } // D3D11 doesn't support CUDA interop
     
-    // D3D11-specific methods (for downcasting)
+    // D3D11-specific methods
     ID3D11Device* GetDevice() const { return m_device.Get(); }
     ID3D11DeviceContext* GetContext() const { return m_context.Get(); }
     
@@ -53,17 +53,15 @@ private:
     ComPtr<ID3D11ShaderResourceView> m_currentFrameSRV;
     ComPtr<ID3D11ShaderResourceView> m_currentFrameUVSRV; // For UV plane in NV12
     
-    // Initialization helpers
     bool CreateDeviceAndSwapChain();
     bool CreateRenderTarget();
     bool CreateShaders();
     bool CreateGeometry();
     bool CreateStates();
     
-    // Rendering helpers
     bool PresentD3D11Texture(const RenderTexture& texture);
     bool PresentSoftwareTexture(const RenderTexture& texture);
-    bool UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV, DXGI_FORMAT format);
+    bool UpdateFrameTexture(ID3D11Texture2D* texture, bool isYUV, DXGI_FORMAT format);
     void SetupRenderState(bool isYUV);
     void DrawQuad();
     

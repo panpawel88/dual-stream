@@ -25,7 +25,7 @@ public:
     RendererType GetRendererType() const override { return RendererType::OpenGL; }
     bool SupportsCudaInterop() const override;
     
-    // OpenGL-specific methods (for downcasting)
+    // OpenGL-specific methods
     bool IsCudaInteropAvailable() const;
     
 private:
@@ -55,14 +55,12 @@ private:
     void* m_cudaTextureResource;  // CUDA graphics resource handle for the main texture
 #endif
     
-    // Initialization helpers
     bool SetupOpenGLContext();
     bool CreateOpenGLContext();
     bool CreateShaders();
     void CreateGeometry();
     void CreateTexture();
     
-    // Modern OpenGL helpers
     bool EnableDebugOutput();
     static void GLAPIENTRY DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
     
@@ -76,7 +74,6 @@ private:
     typedef HGLRC (WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int*);
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
     
-    // Rendering helpers
     void SetupRenderState(bool isYUV = false);
     void DrawQuad();
     bool PresentSoftwareTexture(const RenderTexture& texture);
@@ -85,7 +82,6 @@ private:
 #endif
     
 #if HAVE_CUDA
-    // CUDA interop helpers
     bool InitializeCudaInterop();
     void CleanupCudaInterop();
     bool TestCudaInterop(); // Test if CUDA interop actually works

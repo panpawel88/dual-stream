@@ -7,12 +7,10 @@
 bool Window::s_classRegistered = false;
 
 Window::Window() : m_hwnd(nullptr), m_width(0), m_height(0), m_shouldClose(false), m_isFullscreen(false) {
-    // Initialize key press array
     for (int i = 0; i < 256; i++) {
         m_keyPressed[i] = false;
     }
     
-    // Initialize fullscreen state
     m_windowedRect = {0, 0, 0, 0};
     m_windowedStyle = 0;
 }
@@ -51,7 +49,6 @@ bool Window::Create(const std::string& title, int width, int height) {
         s_classRegistered = true;
     }
     
-    // Convert title to wide string
     std::wstring wideTitle(title.begin(), title.end());
     
     // Calculate window size including borders
@@ -63,13 +60,11 @@ bool Window::Create(const std::string& title, int width, int height) {
     int windowWidth = rect.right - rect.left;
     int windowHeight = rect.bottom - rect.top;
     
-    // Center window on screen
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
     int x = (screenWidth - windowWidth) / 2;
     int y = (screenHeight - windowHeight) / 2;
     
-    // Create window
     m_hwnd = CreateWindowEx(
         0,
         L"FFmpegPlayerWindow",
@@ -165,17 +160,14 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
             return 0;
             
         case WM_KEYDOWN:
-            // Track key presses
             if (wParam < 256) {
                 m_keyPressed[wParam] = true;
             }
             
-            // Handle ESC immediately
             if (wParam == VK_ESCAPE) {
                 m_shouldClose = true;
             }
             
-            // Handle F11 for fullscreen toggle
             if (wParam == VK_F11) {
                 ToggleFullscreen();
             }
@@ -185,7 +177,6 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
             
-            // Fill with black background for now
             RECT rect;
             GetClientRect(hwnd, &rect);
             FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));

@@ -44,10 +44,8 @@ struct DecodedFrame {
     
     DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), keyframe(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
     
-    // Destructor to clean up software data and CUDA resources
     ~DecodedFrame();
     
-    // Copy constructor
     DecodedFrame(const DecodedFrame& other) 
         : texture(other.texture), presentationTime(other.presentationTime), valid(other.valid)
         , isYUV(other.isYUV), keyframe(other.keyframe), format(other.format)
@@ -68,7 +66,6 @@ struct DecodedFrame {
 #endif
     }
     
-    // Assignment operator
     DecodedFrame& operator=(const DecodedFrame& other);
 };
 
@@ -112,7 +109,6 @@ private:
     bool m_cudaContextOwned;  // True if we created the context, false if shared
 #endif
     
-    // Initialization helpers
     bool InitializeHardwareDecoder(AVCodecParameters* codecParams);
     bool InitializeSoftwareDecoder(AVCodecParameters* codecParams);
     bool CreateHardwareDeviceContext();
@@ -124,12 +120,10 @@ private:
     bool CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture);
     bool CreateSoftwareFrameData(AVFrame* frame, DecodedFrame& outFrame);
     
-    // Hardware-specific helpers
     bool IsHardwareFrame(AVFrame* frame) const;
     bool ExtractD3D11Texture(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture);
     
 #if USE_OPENGL_RENDERER && HAVE_CUDA
-    // CUDA-specific helpers (using opaque handles)
     bool CreateCudaDeviceContext();
     bool SetupCudaDecoding();
     bool ExtractCudaDevicePtr(AVFrame* frame, void*& devicePtr, size_t& pitch);
