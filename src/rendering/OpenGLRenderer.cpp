@@ -1,10 +1,10 @@
 #include "OpenGLRenderer.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 #include "CudaOpenGLInterop.h"
-#include "VideoDecoder.h" // For DecodedFrame
+#include "video/decode/VideoDecoder.h" // For DecodedFrame
 #endif
 
 // WGL constants for modern context creation

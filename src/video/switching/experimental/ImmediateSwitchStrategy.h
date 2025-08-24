@@ -1,7 +1,7 @@
 #pragma once
 
-#include "VideoSwitchingStrategy.h"
-#include "VideoManager.h"
+#include "video/switching/VideoSwitchingStrategy.h"
+#include "video/VideoManager.h"
 
 class ImmediateSwitchStrategy : public VideoSwitchingStrategy {
 public:

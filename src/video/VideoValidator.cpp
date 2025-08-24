@@ -1,5 +1,5 @@
 #include "VideoValidator.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 
 extern "C" {

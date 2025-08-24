@@ -1,6 +1,6 @@
 #include "FFmpegInitializer.h"
-#include "VideoValidator.h"
-#include "HardwareDecoder.h"
+#include "video/VideoValidator.h"
+#include "video/decode/HardwareDecoder.h"
 
 FFmpegInitializer::~FFmpegInitializer() {
     if (initialized) {

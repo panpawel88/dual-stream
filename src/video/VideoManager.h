@@ -3,10 +3,10 @@
 #include <memory>
 #include <string>
 #include <chrono>
-#include "VideoDemuxer.h"
-#include "VideoDecoder.h"
-#include "HardwareDecoder.h"
-#include "VideoSwitchingStrategy.h"
+#include "demux/VideoDemuxer.h"
+#include "decode/VideoDecoder.h"
+#include "decode/HardwareDecoder.h"
+#include "switching/VideoSwitchingStrategy.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>

@@ -1,5 +1,5 @@
 #include "Window.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 #include <string>
 #include <windows.h>

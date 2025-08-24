@@ -1,9 +1,9 @@
 #include "VideoDecoder.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 
 #if USE_OPENGL_RENDERER && HAVE_CUDA
-#include "CudaOpenGLInterop.h"
+#include "rendering/CudaOpenGLInterop.h"
 #endif
 
 extern "C" {

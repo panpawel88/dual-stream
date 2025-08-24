@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VideoDecoder.h"
+#include "video/decode/VideoDecoder.h"
 #include <string>
 
 enum class SwitchingAlgorithm {

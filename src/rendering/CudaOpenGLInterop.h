@@ -3,7 +3,7 @@
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 
 #include <glad/gl.h>
-#include "Logger.h"
+#include "core/Logger.h"
 
 // Use opaque handles for CUDA types to avoid header conflicts
 // All CUDA types are represented as void* in headers

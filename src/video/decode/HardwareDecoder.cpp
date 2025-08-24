@@ -1,5 +1,5 @@
 #include "HardwareDecoder.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 
 extern "C" {

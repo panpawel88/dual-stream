@@ -2,7 +2,7 @@
 
 #if USE_OPENGL_RENDERER && HAVE_CUDA
 
-#include "Logger.h"
+#include "core/Logger.h"
 #include "CudaYuvConversion.h"
 #include <iostream>
 

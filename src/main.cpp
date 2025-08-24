@@ -1,19 +1,19 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include "Window.h"
-#include "CommandLineParser.h"
-#include "VideoValidator.h"
-#include "HardwareDecoder.h"
-#include "VideoDemuxer.h"
+#include "ui/Window.h"
+#include "core/CommandLineParser.h"
+#include "video/VideoValidator.h"
+#include "video/decode/HardwareDecoder.h"
+#include "video/demux/VideoDemuxer.h"
 #if USE_OPENGL_RENDERER
-#include "OpenGLRenderer.h"
+#include "rendering/OpenGLRenderer.h"
 #else
-#include "D3D11Renderer.h"
+#include "rendering/D3D11Renderer.h"
 #endif
-#include "VideoManager.h"
-#include "Logger.h"
-#include "FFmpegInitializer.h"
+#include "video/VideoManager.h"
+#include "core/Logger.h"
+#include "core/FFmpegInitializer.h"
 
 int main(int argc, char* argv[]) {
     // Parse command line arguments first to get debug flag

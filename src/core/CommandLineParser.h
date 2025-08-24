@@ -2,7 +2,7 @@
 
 #include <string>
 #include <vector>
-#include "VideoSwitchingStrategy.h"
+#include "video/switching/VideoSwitchingStrategy.h"
 
 struct VideoPlayerArgs {
     std::string video1Path;

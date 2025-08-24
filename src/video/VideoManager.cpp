@@ -1,5 +1,5 @@
 #include "VideoManager.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>

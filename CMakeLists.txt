@@ -172,34 +172,37 @@ endif()
 # Main executable - conditional renderer selection
 set(RENDERER_SOURCES)
 if(USE_OPENGL_RENDERER)
-    set(RENDERER_SOURCES src/OpenGLRenderer.cpp)
+    set(RENDERER_SOURCES src/rendering/OpenGLRenderer.cpp)
     if(HAVE_CUDA)
-        list(APPEND RENDERER_SOURCES src/CudaOpenGLInterop.cpp)
-        list(APPEND RENDERER_SOURCES src/CudaYuvConversion.cu)
+        list(APPEND RENDERER_SOURCES src/rendering/CudaOpenGLInterop.cpp)
+        list(APPEND RENDERER_SOURCES src/rendering/CudaYuvConversion.cu)
     endif()
 else()
-    set(RENDERER_SOURCES src/D3D11Renderer.cpp)
+    set(RENDERER_SOURCES src/rendering/D3D11Renderer.cpp)
 endif()
 
 add_executable(ffmpeg_player
     src/main.cpp
-    src/Window.cpp
-    src/CommandLineParser.cpp
-    src/VideoValidator.cpp
-    src/HardwareDecoder.cpp
-    src/VideoDemuxer.cpp
-    src/VideoDecoder.cpp
+    src/ui/Window.cpp
+    src/core/CommandLineParser.cpp
+    src/video/VideoValidator.cpp
+    src/video/decode/HardwareDecoder.cpp
+    src/video/demux/VideoDemuxer.cpp
+    src/video/decode/VideoDecoder.cpp
     ${RENDERER_SOURCES}
-    src/VideoManager.cpp
-    src/Logger.cpp
-    src/FFmpegInitializer.cpp
-    src/VideoSwitchingStrategy.cpp
-    src/ImmediateSwitchStrategy.cpp
-    src/PredecodedSwitchStrategy.cpp
-    src/KeyframeSwitchStrategy.cpp
+    src/video/VideoManager.cpp
+    src/core/Logger.cpp
+    src/core/FFmpegInitializer.cpp
+    src/video/switching/VideoSwitchingStrategy.cpp
+    src/video/switching/experimental/ImmediateSwitchStrategy.cpp
+    src/video/switching/experimental/PredecodedSwitchStrategy.cpp
+    src/video/switching/KeyframeSwitchStrategy.cpp
 )
 
 target_link_libraries(ffmpeg_player PRIVATE FFmpeg)
+
+# Add src directory to include path for absolute includes
+target_include_directories(ffmpeg_player PRIVATE src)
 
 # Link GLAD for OpenGL renderer
 if(USE_OPENGL_RENDERER)

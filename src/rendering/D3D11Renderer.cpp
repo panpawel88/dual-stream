@@ -1,5 +1,5 @@
 #include "D3D11Renderer.h"
-#include "Logger.h"
+#include "core/Logger.h"
 #include <iostream>
 #include <d3dcompiler.h>
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "VideoSwitchingStrategy.h"
-#include "VideoManager.h"
+#include "video/VideoManager.h"
 
 struct PendingSwitchRequest {
     ActiveVideo targetVideo;

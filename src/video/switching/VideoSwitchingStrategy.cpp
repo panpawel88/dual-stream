@@ -1,6 +1,6 @@
 #include "VideoSwitchingStrategy.h"
-#include "ImmediateSwitchStrategy.h"
-#include "PredecodedSwitchStrategy.h"
+#include "experimental/ImmediateSwitchStrategy.h"
+#include "experimental/PredecodedSwitchStrategy.h"
 #include "KeyframeSwitchStrategy.h"
 #include <algorithm>
 #include <cctype>
