@@ -86,5 +86,49 @@ echo "./ffmpeg_player test_videos/video1_red_square.mp4 test_videos/video2_blue_
 echo "./ffmpeg_player test_videos/video3_gradient.mp4 test_videos/video4_bouncing_ball.mp4"
 echo "./ffmpeg_player test_videos/short_a_red_fade.mp4 test_videos/short_b_blue_pulse.mp4"
 echo
-echo "All videos are 1280x720 resolution for compatibility testing."
+echo "Creating 4K Performance Test Videos..."
+echo
+
+echo "Creating 4K Video 1 - Moving White Square (H264, 3840x2160, 30fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=3840x2160:duration=10:rate=30" -f lavfi -i "color=white:size=300x300:duration=10:rate=30" \
+       -filter_complex "[0:v][1:v]overlay=x='150+600*sin(2*PI*t)':y='300+300*sin(2*PI*t)'[v];[v]drawtext=text='4K Video 1 - Frame %{frame_num}':fontsize=72:fontcolor=white:x=60:y=60:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/4k_video1_red_square.mp4 -y
+
+echo "Creating 4K Video 2 - Moving Yellow Circle (H264, 3840x2160, 30fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=3840x2160:duration=10:rate=30" -f lavfi -i "color=yellow:size=240x240:duration=10:rate=30" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-120)*(X-120)+(Y-120)*(Y-120)),120),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='300+600*cos(2*PI*t)':y='450+450*sin(2*PI*t)'[v];[v]drawtext=text='4K Video 2 - Frame %{frame_num}':fontsize=72:fontcolor=yellow:x=60:y=60:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/4k_video2_blue_circle.mp4 -y
+
+echo
+echo "Creating 8K Performance Test Videos..."
+echo
+
+echo "Creating 8K Video 1 - Moving White Square (H265, 7680x4320, 30fps, 8 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=7680x4320:duration=8:rate=30" -f lavfi -i "color=white:size=600x600:duration=8:rate=30" \
+       -filter_complex "[0:v][1:v]overlay=x='300+1200*sin(2*PI*t)':y='600+600*sin(2*PI*t)'[v];[v]drawtext=text='8K Video 1 - Frame %{frame_num}':fontsize=144:fontcolor=white:x=120:y=120:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx265 -preset medium -crf 28 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/8k_video1_red_square.mp4 -y
+
+echo "Creating 8K Video 2 - Moving Yellow Circle (H265, 7680x4320, 30fps, 8 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=7680x4320:duration=8:rate=30" -f lavfi -i "color=yellow:size=480x480:duration=8:rate=30" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-240)*(X-240)+(Y-240)*(Y-240)),240),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='600+1200*cos(2*PI*t)':y='900+900*sin(2*PI*t)'[v];[v]drawtext=text='8K Video 2 - Frame %{frame_num}':fontsize=144:fontcolor=yellow:x=120:y=120:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx265 -preset medium -crf 28 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/8k_video2_blue_circle.mp4 -y
+
+echo
+echo "All videos generated successfully!"
+echo
+echo "Standard HD videos (1280x720) for compatibility testing:"
+echo "4K videos (3840x2160) for performance testing:"
+echo "8K videos (7680x4320) for extreme performance testing:"
 echo "Press 1/2 to switch between videos, ESC to exit."
