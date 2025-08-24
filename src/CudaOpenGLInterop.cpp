@@ -49,9 +49,11 @@ bool CudaOpenGLInterop::RegisterTexture(GLuint textureID, void** resource) {
     }
     
     // Use CUDA runtime API instead of driver API
-    cudaGraphicsResource** cudaResource = reinterpret_cast<cudaGraphicsResource**>(resource);
-    cudaError_t result = cudaGraphicsGLRegisterImage(cudaResource, textureID, GL_TEXTURE_2D, 
-                                                     cudaGraphicsRegisterFlagsWriteDiscard);
+    cudaError_t result = cudaGraphicsGLRegisterImage(
+        reinterpret_cast<cudaGraphicsResource**>(resource), 
+        textureID, 
+        GL_TEXTURE_2D, 
+        cudaGraphicsRegisterFlagsWriteDiscard);
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaGraphicsGLRegisterImage: ", cudaGetErrorString(result));
         return false;
@@ -67,8 +69,7 @@ bool CudaOpenGLInterop::UnregisterTexture(void* resource) {
         return false;
     }
     
-    cudaGraphicsResource* cudaResource = static_cast<cudaGraphicsResource*>(resource);
-    cudaError_t result = cudaGraphicsUnregisterResource(cudaResource);
+    cudaError_t result = cudaGraphicsUnregisterResource(static_cast<cudaGraphicsResource*>(resource));
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaGraphicsUnregisterResource: ", cudaGetErrorString(result));
         return false;
@@ -82,9 +83,10 @@ bool CudaOpenGLInterop::MapResources(void** resources, unsigned int count, void*
         return false;
     }
     
-    cudaGraphicsResource** cudaResources = reinterpret_cast<cudaGraphicsResource**>(resources);
-    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
-    cudaError_t result = cudaGraphicsMapResources(count, cudaResources, cudaStream);
+    cudaError_t result = cudaGraphicsMapResources(
+        count, 
+        reinterpret_cast<cudaGraphicsResource**>(resources), 
+        static_cast<cudaStream_t>(stream));
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaGraphicsMapResources: ", cudaGetErrorString(result));
         return false;
@@ -98,9 +100,10 @@ bool CudaOpenGLInterop::UnmapResources(void** resources, unsigned int count, voi
         return false;
     }
     
-    cudaGraphicsResource** cudaResources = reinterpret_cast<cudaGraphicsResource**>(resources);
-    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
-    cudaError_t result = cudaGraphicsUnmapResources(count, cudaResources, cudaStream);
+    cudaError_t result = cudaGraphicsUnmapResources(
+        count, 
+        reinterpret_cast<cudaGraphicsResource**>(resources), 
+        static_cast<cudaStream_t>(stream));
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaGraphicsUnmapResources: ", cudaGetErrorString(result));
         return false;
@@ -114,9 +117,10 @@ bool CudaOpenGLInterop::GetMappedArray(void* resource, void** array) {
         return false;
     }
     
-    cudaGraphicsResource* cudaResource = static_cast<cudaGraphicsResource*>(resource);
-    cudaArray_t* cudaArray = reinterpret_cast<cudaArray_t*>(array);
-    cudaError_t result = cudaGraphicsSubResourceGetMappedArray(cudaArray, cudaResource, 0, 0);
+    cudaError_t result = cudaGraphicsSubResourceGetMappedArray(
+        reinterpret_cast<cudaArray_t*>(array), 
+        static_cast<cudaGraphicsResource*>(resource), 
+        0, 0);
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaGraphicsSubResourceGetMappedArray: ", cudaGetErrorString(result));
         return false;
@@ -139,12 +143,7 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
         return false;
     }
     
-    void* cudaSrcPtr = srcPtr;
-    cudaGraphicsResource* cudaDstResource = static_cast<cudaGraphicsResource*>(dstResource);
-    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
-    
     // Map the resource
-    void* resourcePtr = dstResource;
     if (!MapResources(&dstResource, 1, stream)) {
         LOG_ERROR("Failed to map CUDA graphics resource");
         return false;
@@ -154,22 +153,21 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     void* arrayPtr;
     if (!GetMappedArray(dstResource, &arrayPtr)) {
         LOG_ERROR("Failed to get mapped CUDA array");
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after GetMappedArray failure");
         }
         return false;
     }
     
-    cudaArray_t dstArray = static_cast<cudaArray_t>(arrayPtr);
-    
     // Copy from CUDA device memory to CUDA array (which is bound to OpenGL texture)
     cudaMemcpy3DParms copyParams = {0};
-    copyParams.srcPtr = make_cudaPitchedPtr(cudaSrcPtr, srcPitch, width, height);
-    copyParams.dstArray = dstArray;
+    copyParams.srcPtr = make_cudaPitchedPtr(srcPtr, srcPitch, width, height);
+    copyParams.dstArray = static_cast<cudaArray_t>(arrayPtr);
     copyParams.extent = make_cudaExtent(width, height, 1);
     copyParams.kind = cudaMemcpyDeviceToDevice;
     
     cudaError_t result;
+    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
     if (cudaStream) {
         result = cudaMemcpy3DAsync(&copyParams, cudaStream);
     } else {
@@ -178,7 +176,7 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaMemcpy3D: ", cudaGetErrorString(result));
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after cudaMemcpy3D failure");
         }
         return false;
@@ -189,7 +187,7 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
         result = cudaStreamSynchronize(cudaStream);
         if (result != cudaSuccess) {
             LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
-            if (!UnmapResources(&resourcePtr, 1, stream)) {
+            if (!UnmapResources(&dstResource, 1, stream)) {
                 LOG_WARNING("Failed to cleanup CUDA resources after cudaStreamSynchronize failure");
             }
             return false;
@@ -197,7 +195,7 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     }
     
     // Unmap the resource
-    if (!UnmapResources(&resourcePtr, 1, stream)) {
+    if (!UnmapResources(&dstResource, 1, stream)) {
         LOG_ERROR("Failed to unmap CUDA graphics resource");
         return false;
     }
@@ -220,11 +218,8 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         return false;
     }
     
-    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
-    
     // Map the resource
-    void* resourcePtr = dstResource;
-    if (!MapResources(&resourcePtr, 1, stream)) {
+    if (!MapResources(&dstResource, 1, stream)) {
         LOG_ERROR("Failed to map CUDA graphics resource");
         return false;
     }
@@ -233,7 +228,7 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     void* arrayPtr;
     if (!GetMappedArray(dstResource, &arrayPtr)) {
         LOG_ERROR("Failed to get mapped CUDA array");
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after GetMappedArray failure in YUV conversion");
         }
         return false;
@@ -247,7 +242,7 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     cudaError_t result = cudaMalloc(&tempRgbaBuffer, rgbaSize);
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error allocating temporary RGBA buffer: ", cudaGetErrorString(result));
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after RGBA buffer allocation failure");
         }
         return false;
@@ -255,11 +250,12 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     
     // Convert NV12 YUV to RGBA using CUDA kernel
     size_t rgbaPitch = width * 4; // 4 bytes per pixel (RGBA)
+    cudaStream_t cudaStream = static_cast<cudaStream_t>(stream);
     result = convertNv12ToRgba(yuvPtr, yuvPitch, tempRgbaBuffer, rgbaPitch, width, height, cudaStream);
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in YUV to RGBA conversion: ", cudaGetErrorString(result));
         cudaFree(tempRgbaBuffer);
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after YUV conversion failure");
         }
         return false;
@@ -281,7 +277,7 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaMemcpy3D (RGBA to texture): ", cudaGetErrorString(result));
         cudaFree(tempRgbaBuffer);
-        if (!UnmapResources(&resourcePtr, 1, stream)) {
+        if (!UnmapResources(&dstResource, 1, stream)) {
             LOG_WARNING("Failed to cleanup CUDA resources after RGBA cudaMemcpy3D failure");
         }
         return false;
@@ -293,7 +289,7 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         if (result != cudaSuccess) {
             LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
             cudaFree(tempRgbaBuffer);
-            if (!UnmapResources(&resourcePtr, 1, stream)) {
+            if (!UnmapResources(&dstResource, 1, stream)) {
                 LOG_WARNING("Failed to cleanup CUDA resources after YUV cudaStreamSynchronize failure");
             }
             return false;
@@ -304,7 +300,7 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     cudaFree(tempRgbaBuffer);
     
     // Unmap the resource
-    if (!UnmapResources(&resourcePtr, 1, stream)) {
+    if (!UnmapResources(&dstResource, 1, stream)) {
         LOG_ERROR("Failed to unmap CUDA graphics resource");
         return false;
     }

@@ -317,7 +317,7 @@ bool OpenGLRenderer::CreateOpenGLContext() {
     if (!tempContext) {
         LOG_ERROR("Failed to create temporary OpenGL context");
         return false;
-    }
+}
     
     if (!wglMakeCurrent(m_hdc, tempContext)) {
         LOG_ERROR("Failed to make temporary OpenGL context current");
@@ -697,13 +697,12 @@ bool OpenGLRenderer::TestCudaInterop() {
     
     // Test basic CUDA interop functionality by trying to map/unmap the texture
     // This validates that the texture registration and interop system works
-    void* resourcePtr = m_cudaTextureResource;
-    if (!m_cudaInterop->MapResources(&resourcePtr, 1, nullptr)) {
+    if (!m_cudaInterop->MapResources(&m_cudaTextureResource, 1, nullptr)) {
         LOG_ERROR("Failed to map CUDA graphics resource - interop not functional");
         return false;
     }
     
-    if (!m_cudaInterop->UnmapResources(&resourcePtr, 1, nullptr)) {
+    if (!m_cudaInterop->UnmapResources(&m_cudaTextureResource, 1, nullptr)) {
         LOG_WARNING("Failed to unmap CUDA graphics resource - potential issue");
         return false;
     }
