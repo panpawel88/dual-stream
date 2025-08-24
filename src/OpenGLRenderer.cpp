@@ -675,7 +675,9 @@ bool OpenGLRenderer::InitializeCudaInterop() {
 void OpenGLRenderer::CleanupCudaInterop() {
     if (m_cudaInterop) {
         if (m_cudaTextureResource) {
-            m_cudaInterop->UnregisterTexture(m_cudaTextureResource);
+            if (!m_cudaInterop->UnregisterTexture(m_cudaTextureResource)) {
+                LOG_WARNING("Failed to unregister CUDA texture resource during cleanup");
+            }
             m_cudaTextureResource = nullptr;
         }
         m_cudaInterop->Cleanup();

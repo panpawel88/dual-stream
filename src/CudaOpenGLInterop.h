@@ -18,7 +18,7 @@ public:
     
     // Register OpenGL texture with CUDA
     bool RegisterTexture(GLuint textureID, void** resource);
-    void UnregisterTexture(void* resource);
+    bool UnregisterTexture(void* resource);
     
     // Map/unmap resources for access
     bool MapResources(void** resources, unsigned int count, void* stream = nullptr);

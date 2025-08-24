@@ -61,14 +61,20 @@ bool CudaOpenGLInterop::RegisterTexture(GLuint textureID, void** resource) {
     return true;
 }
 
-void CudaOpenGLInterop::UnregisterTexture(void* resource) {
-    if (resource) {
-        cudaGraphicsResource* cudaResource = static_cast<cudaGraphicsResource*>(resource);
-        cudaError_t result = cudaGraphicsUnregisterResource(cudaResource);
-        if (result != cudaSuccess) {
-            LOG_ERROR("CUDA error in cudaGraphicsUnregisterResource: ", cudaGetErrorString(result));
-        }
+bool CudaOpenGLInterop::UnregisterTexture(void* resource) {
+    if (!resource) {
+        LOG_WARNING("Attempted to unregister null CUDA resource");
+        return false;
     }
+    
+    cudaGraphicsResource* cudaResource = static_cast<cudaGraphicsResource*>(resource);
+    cudaError_t result = cudaGraphicsUnregisterResource(cudaResource);
+    if (result != cudaSuccess) {
+        LOG_ERROR("CUDA error in cudaGraphicsUnregisterResource: ", cudaGetErrorString(result));
+        return false;
+    }
+    
+    return true;
 }
 
 bool CudaOpenGLInterop::MapResources(void** resources, unsigned int count, void* stream) {
@@ -148,7 +154,9 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     void* arrayPtr;
     if (!GetMappedArray(dstResource, &arrayPtr)) {
         LOG_ERROR("Failed to get mapped CUDA array");
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after GetMappedArray failure");
+        }
         return false;
     }
     
@@ -170,7 +178,9 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
     
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaMemcpy3D: ", cudaGetErrorString(result));
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after cudaMemcpy3D failure");
+        }
         return false;
     }
     
@@ -179,7 +189,9 @@ bool CudaOpenGLInterop::CopyDeviceToTexture(void* srcPtr, size_t srcPitch,
         result = cudaStreamSynchronize(cudaStream);
         if (result != cudaSuccess) {
             LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
-            UnmapResources(&resourcePtr, 1, stream);
+            if (!UnmapResources(&resourcePtr, 1, stream)) {
+                LOG_WARNING("Failed to cleanup CUDA resources after cudaStreamSynchronize failure");
+            }
             return false;
         }
     }
@@ -221,7 +233,9 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     void* arrayPtr;
     if (!GetMappedArray(dstResource, &arrayPtr)) {
         LOG_ERROR("Failed to get mapped CUDA array");
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after GetMappedArray failure in YUV conversion");
+        }
         return false;
     }
     
@@ -233,7 +247,9 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     cudaError_t result = cudaMalloc(&tempRgbaBuffer, rgbaSize);
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error allocating temporary RGBA buffer: ", cudaGetErrorString(result));
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after RGBA buffer allocation failure");
+        }
         return false;
     }
     
@@ -243,7 +259,9 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in YUV to RGBA conversion: ", cudaGetErrorString(result));
         cudaFree(tempRgbaBuffer);
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after YUV conversion failure");
+        }
         return false;
     }
     
@@ -263,7 +281,9 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
     if (result != cudaSuccess) {
         LOG_ERROR("CUDA error in cudaMemcpy3D (RGBA to texture): ", cudaGetErrorString(result));
         cudaFree(tempRgbaBuffer);
-        UnmapResources(&resourcePtr, 1, stream);
+        if (!UnmapResources(&resourcePtr, 1, stream)) {
+            LOG_WARNING("Failed to cleanup CUDA resources after RGBA cudaMemcpy3D failure");
+        }
         return false;
     }
     
@@ -273,7 +293,9 @@ bool CudaOpenGLInterop::CopyYuvToTexture(void* yuvPtr, size_t yuvPitch,
         if (result != cudaSuccess) {
             LOG_ERROR("CUDA error in cudaStreamSynchronize: ", cudaGetErrorString(result));
             cudaFree(tempRgbaBuffer);
-            UnmapResources(&resourcePtr, 1, stream);
+            if (!UnmapResources(&resourcePtr, 1, stream)) {
+                LOG_WARNING("Failed to cleanup CUDA resources after YUV cudaStreamSynchronize failure");
+            }
             return false;
         }
     }
