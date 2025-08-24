@@ -152,18 +152,10 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     }
     
     // Create geometry
-    if (!CreateGeometry()) {
-        LOG_ERROR("Failed to create geometry");
-        Cleanup();
-        return false;
-    }
+    CreateGeometry();
     
     // Create texture
-    if (!CreateTexture()) {
-        LOG_ERROR("Failed to create texture");
-        Cleanup();
-        return false;
-    }
+    CreateTexture();
     
 #if USE_OPENGL_RENDERER && HAVE_CUDA
     // Initialize CUDA interop for hardware decoding
@@ -182,8 +174,7 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    
-    
+
     m_initialized = true;
     LOG_INFO("OpenGL renderer initialized successfully");
     return true;
@@ -488,7 +479,7 @@ void GLAPIENTRY OpenGLRenderer::DebugCallback(GLenum source, GLenum type, GLuint
     }
 }
 
-bool OpenGLRenderer::CreateGeometry() {
+void OpenGLRenderer::CreateGeometry() {
     // Create fullscreen quad vertices
     GLQuadVertex vertices[] = {
         // Position (x, y, z)    // TexCoord (u, v)
@@ -529,10 +520,9 @@ bool OpenGLRenderer::CreateGeometry() {
     glBindVertexArray(0);
     
     LOG_INFO("Created OpenGL 4.6 VAO/VBO geometry buffers");
-    return true;
 }
 
-bool OpenGLRenderer::CreateTexture() {
+void OpenGLRenderer::CreateTexture() {
     // Generate texture
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
@@ -548,8 +538,6 @@ bool OpenGLRenderer::CreateTexture() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, nullptr);
     
     glBindTexture(GL_TEXTURE_2D, 0);
-    
-    return true;
 }
 
 void OpenGLRenderer::SetupRenderState(bool isYUV) {

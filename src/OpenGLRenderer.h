@@ -64,8 +64,8 @@ private:
     bool SetupOpenGLContext();
     bool CreateOpenGLContext();
     bool CreateShaders();
-    bool CreateGeometry();
-    bool CreateTexture();
+    void CreateGeometry();
+    void CreateTexture();
     
     // Modern OpenGL helpers
     bool EnableDebugOutput();
