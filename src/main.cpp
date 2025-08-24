@@ -51,8 +51,20 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    int windowWidth = std::max(video1Info.width, video2Info.width);
-    int windowHeight = std::max(video1Info.height, video2Info.height);
+    int maxVideoWidth = std::max(video1Info.width, video2Info.width);
+    int maxVideoHeight = std::max(video1Info.height, video2Info.height);
+    
+    // Get display resolution to limit window size
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    
+    int windowWidth = std::min(maxVideoWidth, screenWidth);
+    int windowHeight = std::min(maxVideoHeight, screenHeight);
+    
+    if (windowWidth != maxVideoWidth || windowHeight != maxVideoHeight) {
+        LOG_INFO("Window size limited to display resolution: ", windowWidth, "x", windowHeight, 
+                " (video max: ", maxVideoWidth, "x", maxVideoHeight, ")");
+    }
     
     Window window;
     if (!window.Create("FFmpeg Video Player", windowWidth, windowHeight)) {
