@@ -6,11 +6,15 @@
 
 bool Window::s_classRegistered = false;
 
-Window::Window() : m_hwnd(nullptr), m_width(0), m_height(0), m_shouldClose(false) {
+Window::Window() : m_hwnd(nullptr), m_width(0), m_height(0), m_shouldClose(false), m_isFullscreen(false) {
     // Initialize key press array
     for (int i = 0; i < 256; i++) {
         m_keyPressed[i] = false;
     }
+    
+    // Initialize fullscreen state
+    m_windowedRect = {0, 0, 0, 0};
+    m_windowedStyle = 0;
 }
 
 Window::~Window() {
@@ -53,6 +57,7 @@ bool Window::Create(const std::string& title, int width, int height) {
     // Calculate window size including borders
     RECT rect = {0, 0, width, height};
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    m_windowedStyle = style; // Store the windowed style for fullscreen toggle
     AdjustWindowRect(&rect, style, FALSE);
     
     int windowWidth = rect.right - rect.left;
@@ -169,6 +174,11 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
             if (wParam == VK_ESCAPE) {
                 m_shouldClose = true;
             }
+            
+            // Handle F11 for fullscreen toggle
+            if (wParam == VK_F11) {
+                ToggleFullscreen();
+            }
             return 0;
             
         case WM_PAINT: {
@@ -187,4 +197,71 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
         default:
             return DefWindowProc(hwnd, uMsg, wParam, lParam);
     }
+}
+
+bool Window::ToggleFullscreen() {
+    return SetFullscreen(!m_isFullscreen);
+}
+
+bool Window::SetFullscreen(bool fullscreen) {
+    if (!m_hwnd || m_isFullscreen == fullscreen) {
+        return true; // Already in desired state
+    }
+    
+    if (fullscreen) {
+        // Entering fullscreen mode
+        
+        // Store current window state
+        GetWindowRect(m_hwnd, &m_windowedRect);
+        
+        // Get primary monitor dimensions
+        HMONITOR hMonitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        if (!GetMonitorInfo(hMonitor, &monitorInfo)) {
+            LOG_ERROR("Failed to get monitor info for fullscreen");
+            return false;
+        }
+        
+        // Change window style to borderless
+        SetWindowLong(m_hwnd, GWL_STYLE, WS_POPUP);
+        
+        // Set window position and size to cover entire screen
+        SetWindowPos(m_hwnd, HWND_TOP,
+            monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+            monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+            monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            
+        // Update internal dimensions
+        m_width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
+        m_height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+        
+        m_isFullscreen = true;
+        LOG_INFO("Entered fullscreen mode (", m_width, "x", m_height, ")");
+        
+    } else {
+        // Exiting fullscreen mode
+        
+        // Restore window style
+        SetWindowLong(m_hwnd, GWL_STYLE, m_windowedStyle);
+        
+        // Restore window position and size
+        SetWindowPos(m_hwnd, HWND_NOTOPMOST,
+            m_windowedRect.left, m_windowedRect.top,
+            m_windowedRect.right - m_windowedRect.left,
+            m_windowedRect.bottom - m_windowedRect.top,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            
+        // Update internal dimensions to client area size
+        RECT clientRect;
+        GetClientRect(m_hwnd, &clientRect);
+        m_width = clientRect.right - clientRect.left;
+        m_height = clientRect.bottom - clientRect.top;
+        
+        m_isFullscreen = false;
+        LOG_INFO("Exited fullscreen mode (", m_width, "x", m_height, ")");
+    }
+    
+    return true;
 }

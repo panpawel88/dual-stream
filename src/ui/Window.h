@@ -23,6 +23,11 @@ public:
     bool IsKeyPressed(int key) const;
     void ClearKeyPress(int key);
     
+    // Fullscreen functionality
+    bool ToggleFullscreen();
+    bool SetFullscreen(bool fullscreen);
+    bool IsFullscreen() const { return m_isFullscreen; }
+    
 private:
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -33,4 +38,9 @@ private:
     bool m_shouldClose;
     bool m_keyPressed[256]; // Track key presses
     static bool s_classRegistered;
+    
+    // Fullscreen state management
+    bool m_isFullscreen;
+    RECT m_windowedRect; // Store windowed position/size
+    DWORD m_windowedStyle; // Store windowed window style
 };

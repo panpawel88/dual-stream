@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     }
     
     window.Show();
-    LOG_INFO("Window created. Press 1/2 to switch videos, ESC to exit");
+    LOG_INFO("Window created. Press 1/2 to switch videos, F11 for fullscreen, ESC to exit");
     
     // Create renderer using factory
     auto renderer = RendererFactory::CreateRenderer();
@@ -95,8 +95,27 @@ int main(int argc, char* argv[]) {
     
     LOG_INFO("Video playback started successfully");
     
+    // Track window dimensions for resize detection
+    int lastWindowWidth = window.GetWidth();
+    int lastWindowHeight = window.GetHeight();
+    
     // Main message loop
     while (window.ProcessMessages()) {
+        // Check for window size changes (fullscreen toggle)
+        int currentWidth = window.GetWidth();
+        int currentHeight = window.GetHeight();
+        
+        if (currentWidth != lastWindowWidth || currentHeight != lastWindowHeight) {
+            LOG_INFO("Window size changed to ", currentWidth, "x", currentHeight);
+            
+            if (!renderer->Resize(currentWidth, currentHeight)) {
+                LOG_ERROR("Failed to resize renderer to ", currentWidth, "x", currentHeight);
+                break;
+            }
+            
+            lastWindowWidth = currentWidth;
+            lastWindowHeight = currentHeight;
+        }
         // Update and process switching triggers
         videoManager.UpdateSwitchingTrigger();
         videoManager.ProcessSwitchingTriggers();
