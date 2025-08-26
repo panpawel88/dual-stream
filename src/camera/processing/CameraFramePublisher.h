@@ -223,6 +223,7 @@ private:
     void WorkerThreadFunc(int threadId);
     void ProcessDeliveryTask(const FrameDeliveryTask& task, int threadId);
     std::vector<CameraFrameListenerPtr> GetEnabledListeners() const;
+    std::vector<CameraFrameListenerPtr> GetEnabledListenersInternal() const; // No mutex lock - for internal use
     std::vector<CameraFrameListenerPtr> GetListenersForFormat(CameraFormat format) const;
     bool ShouldDropFrame(const FrameDeliveryTask& task) const;
     void UpdatePublishStats(double processingTimeMs);

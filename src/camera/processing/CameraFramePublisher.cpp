@@ -211,7 +211,7 @@ bool CameraFramePublisher::RegisterListener(CameraFrameListenerPtr listener) {
     {
         std::lock_guard<std::mutex> statsLock(m_statsMutex);
         m_stats.activeListeners = static_cast<int>(m_listeners.size());
-        m_stats.enabledListeners = static_cast<int>(GetEnabledListeners().size());
+        m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
     }
     
     return true;
@@ -232,7 +232,7 @@ bool CameraFramePublisher::UnregisterListener(const std::string& listenerId) {
         {
             std::lock_guard<std::mutex> statsLock(m_statsMutex);
             m_stats.activeListeners = static_cast<int>(m_listeners.size());
-            m_stats.enabledListeners = static_cast<int>(GetEnabledListeners().size());
+            m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
         }
         
         return true;
@@ -265,13 +265,19 @@ CameraFrameListenerPtr CameraFramePublisher::GetListener(const std::string& list
 }
 
 bool CameraFramePublisher::SetListenerEnabled(const std::string& listenerId, bool enabled) {
-    auto listener = GetListener(listenerId);
-    if (listener) {
-        listener->SetEnabled(enabled);
+    std::lock_guard<std::mutex> lock(m_listenersMutex);
+    
+    auto it = std::find_if(m_listeners.begin(), m_listeners.end(),
+        [&listenerId](const CameraFrameListenerPtr& listener) {
+            return listener->GetListenerId() == listenerId;
+        });
+    
+    if (it != m_listeners.end()) {
+        (*it)->SetEnabled(enabled);
         
         {
-            std::lock_guard<std::mutex> lock(m_statsMutex);
-            m_stats.enabledListeners = static_cast<int>(GetEnabledListeners().size());
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
         }
         
         return true;
@@ -281,7 +287,11 @@ bool CameraFramePublisher::SetListenerEnabled(const std::string& listenerId, boo
 
 std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetEnabledListeners() const {
     std::lock_guard<std::mutex> lock(m_listenersMutex);
-    
+    return GetEnabledListenersInternal();
+}
+
+std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetEnabledListenersInternal() const {
+    // This method assumes m_listenersMutex is already locked by the caller
     std::vector<CameraFrameListenerPtr> enabledListeners;
     for (const auto& listener : m_listeners) {
         if (listener && listener->IsEnabled()) {
@@ -369,10 +379,12 @@ PublisherStats CameraFramePublisher::GetStats() const {
 }
 
 void CameraFramePublisher::ResetStats() {
-    std::lock_guard<std::mutex> lock(m_statsMutex);
+    std::lock_guard<std::mutex> statsLock(m_statsMutex);
+    std::lock_guard<std::mutex> listenersLock(m_listenersMutex);
+    
     m_stats.Reset();
     m_stats.activeListeners = static_cast<int>(m_listeners.size());
-    m_stats.enabledListeners = static_cast<int>(GetEnabledListeners().size());
+    m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
 }
 
 size_t CameraFramePublisher::GetQueueSize() const {
