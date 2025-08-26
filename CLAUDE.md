@@ -210,13 +210,6 @@ Each directory contains detailed technical documentation:
 - **Robust Error Handling:** Graceful degradation and comprehensive validation
 - **Production Quality:** Memory management, resource cleanup, and error recovery
 
-## Git Commit Guidelines
-
-All changes must be committed with:
-```bash
-git commit --author="Claude <noreply@anthropic.com>" -m "commit message"
-```
-
 ## License and Usage
 
 This application demonstrates advanced video processing techniques and serves as a reference implementation for:
