@@ -154,6 +154,61 @@ else()
     add_definitions(-DHAVE_OPENCV=0 -DHAVE_REALSENSE=0)
 endif()
 
+# Face detection model downloading (OpenCV Haar cascades)
+option(DOWNLOAD_FACE_DETECTION_MODELS "Download OpenCV Haar cascade models at build time" ON)
+
+if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
+    message(STATUS "Downloading face detection models...")
+    
+    # Create data directory structure
+    set(FACE_MODELS_DIR "${CMAKE_BINARY_DIR}/data/haarcascades")
+    file(MAKE_DIRECTORY "${FACE_MODELS_DIR}")
+    
+    # Define model files to download
+    set(OPENCV_MODELS_BASE_URL "https://github.com/opencv/opencv/raw/master/data/haarcascades")
+    set(FACE_DETECTION_MODELS
+        "haarcascade_frontalface_alt.xml"
+        "haarcascade_frontalface_default.xml"
+        "haarcascade_frontalface_alt2.xml"
+    )
+    
+    # Download each model file
+    foreach(MODEL_FILE ${FACE_DETECTION_MODELS})
+        set(MODEL_URL "${OPENCV_MODELS_BASE_URL}/${MODEL_FILE}")
+        set(MODEL_PATH "${FACE_MODELS_DIR}/${MODEL_FILE}")
+        
+        if(NOT EXISTS "${MODEL_PATH}")
+            message(STATUS "Downloading ${MODEL_FILE}...")
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT 30
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+            )
+            
+            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
+            if(NOT DOWNLOAD_RESULT EQUAL 0)
+                list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
+                message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
+                message(STATUS "Download log: ${DOWNLOAD_LOG}")
+            else()
+                message(STATUS "Successfully downloaded ${MODEL_FILE}")
+            endif()
+        else()
+            message(STATUS "${MODEL_FILE} already exists, skipping download")
+        endif()
+    endforeach()
+    
+    # Store face models directory for later use in executable post-build
+    set(FACE_MODELS_DOWNLOAD_DIR "${FACE_MODELS_DIR}" CACHE INTERNAL "Face models directory")
+    
+else()
+    if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND NOT DOWNLOAD_FACE_DETECTION_MODELS)
+        message(STATUS "Face detection model downloading disabled (DOWNLOAD_FACE_DETECTION_MODELS=OFF)")
+    endif()
+endif()
+
 # GLAD OpenGL loader (for modern OpenGL)
 if(USE_OPENGL_RENDERER)
     include(FetchContent)
@@ -336,6 +391,16 @@ if(WIN32)
         endif()
     endif()
     
+endif()
+
+# Copy face detection models to runtime directory (all platforms)
+if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS AND DEFINED FACE_MODELS_DOWNLOAD_DIR)
+    add_custom_command(TARGET dual_stream POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${FACE_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
+        COMMENT "Copying face detection models to runtime directory"
+        VERBATIM
+    )
 endif()
 
 # Set target properties

@@ -1,4 +1,5 @@
 #include "FaceDetectionSwitchingTrigger.h"
+#include "../../core/Logger.h"
 
 FaceDetectionSwitchingTrigger::FaceDetectionSwitchingTrigger(const FaceDetectionConfig& config)
     : m_config(config) {
@@ -20,23 +21,38 @@ bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& c
     std::string actualPath = cascadePath.empty() ? GetDefaultCascadePath() : cascadePath;
     
     if (!m_faceClassifier.load(actualPath)) {
-        // Try common OpenCV data paths
+        LOG_DEBUG("Failed to load cascade from primary path: ", actualPath);
+        
+        // Try fallback cascade paths (in order of preference)
         std::vector<std::string> fallbackPaths = {
-            "haarcascade_frontalface_alt.xml",
-            "data/haarcascades/haarcascade_frontalface_alt.xml"
+            "data/haarcascades/haarcascade_frontalface_alt.xml",
+            "data/haarcascades/haarcascade_frontalface_default.xml",
+            "data/haarcascades/haarcascade_frontalface_alt2.xml",
+            "haarcascade_frontalface_alt.xml",              // Legacy fallback
+            "haarcascade_frontalface_default.xml"           // Legacy fallback
         };
         
         bool loaded = false;
         for (const auto& fallback : fallbackPaths) {
+            LOG_DEBUG("Attempting to load cascade from: ", fallback);
             if (m_faceClassifier.load(fallback)) {
+                LOG_INFO("Successfully loaded face detection cascade: ", fallback);
                 loaded = true;
                 break;
             }
         }
         
         if (!loaded) {
+            LOG_ERROR("Failed to load any face detection cascade file. Tried paths:");
+            LOG_ERROR("  Primary: ", actualPath);
+            for (const auto& path : fallbackPaths) {
+                LOG_ERROR("  Fallback: ", path);
+            }
+            LOG_ERROR("Ensure face detection models are downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
             return false;
         }
+    } else {
+        LOG_INFO("Successfully loaded face detection cascade: ", actualPath);
     }
     
     m_detectionInitialized = true;
@@ -291,8 +307,8 @@ std::vector<cv::Rect> FaceDetectionSwitchingTrigger::GetLastFaceRects() const {
 }
 
 std::string FaceDetectionSwitchingTrigger::GetDefaultCascadePath() {
-    // Return path to default Haar cascade file
-    return "haarcascade_frontalface_alt.xml";
+    // Return path to default Haar cascade file in data directory
+    return "data/haarcascades/haarcascade_frontalface_alt.xml";
 }
 
 void FaceDetectionSwitchingTrigger::Reset() {
