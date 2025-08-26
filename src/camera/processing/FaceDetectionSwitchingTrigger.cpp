@@ -23,9 +23,7 @@ bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& c
         // Try common OpenCV data paths
         std::vector<std::string> fallbackPaths = {
             "haarcascade_frontalface_alt.xml",
-            "data/haarcascades/haarcascade_frontalface_alt.xml",
-            "/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml",
-            "/usr/local/share/opencv/haarcascades/haarcascade_frontalface_alt.xml"
+            "data/haarcascades/haarcascade_frontalface_alt.xml"
         };
         
         bool loaded = false;
