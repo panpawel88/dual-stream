@@ -45,6 +45,8 @@ public:
     void Update() override;
     bool ShouldSwitchToVideo1() override;
     bool ShouldSwitchToVideo2() override;
+    void Reset() override;
+    std::string GetName() const override;
 
     // ICameraFrameListener interface implementation
     FrameProcessingResult ProcessFrame(const CameraFrame& frame) override;

@@ -10,7 +10,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     if (argc < 3) {
         args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>] [--trigger=<trigger>] [--speed=<speed>]";
         args.errorMessage += "\nSwitching algorithms: immediate (default), predecoded, keyframe-sync";
-        args.errorMessage += "\nTrigger types: keyboard (default)";
+        args.errorMessage += "\nTrigger types: keyboard (default), face, face_detection";
         args.errorMessage += "\nPlayback speeds: 0.05, 0.1, 0.2, 0.5, 1.0 (default)";
         return args;
     }
@@ -20,7 +20,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     
     // Parse optional arguments
     const std::string algorithmErrorMsg = "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
-    const std::string triggerErrorMsg = "\nAvailable trigger types: keyboard";
+    const std::string triggerErrorMsg = "\nAvailable trigger types: keyboard, face, face_detection";
     const std::string speedErrorMsg = "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
     
     for (int i = 3; i < argc; i++) {

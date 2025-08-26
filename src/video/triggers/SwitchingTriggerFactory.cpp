@@ -1,23 +1,38 @@
 #include "SwitchingTriggerFactory.h"
 #include "KeyboardSwitchingTrigger.h"
+#include "../../camera/processing/FaceDetectionSwitchingTrigger.h"
 #include <algorithm>
 #include <cctype>
 
-std::unique_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, Window* window) {
+std::unique_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, const TriggerConfig& config) {
     switch (triggerType) {
         case TriggerType::KEYBOARD:
-            if (!window) {
+            if (!config.window) {
                 return nullptr; // Keyboard trigger requires window instance
             }
-            return std::make_unique<KeyboardSwitchingTrigger>(window);
+            return std::make_unique<KeyboardSwitchingTrigger>(config.window);
+            
+        case TriggerType::FACE_DETECTION: {
+            auto trigger = std::make_unique<FaceDetectionSwitchingTrigger>(config.faceDetectionConfig);
+            if (config.cameraManager) {
+                trigger->SetCameraManager(config.cameraManager);
+            }
+            return trigger;
+        }
             
         default:
             // Default to keyboard trigger if type is unrecognized
-            if (window) {
-                return std::make_unique<KeyboardSwitchingTrigger>(window);
+            if (config.window) {
+                return std::make_unique<KeyboardSwitchingTrigger>(config.window);
             }
             return nullptr;
     }
+}
+
+std::unique_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, Window* window) {
+    TriggerConfig config;
+    config.window = window;
+    return Create(triggerType, config);
 }
 
 TriggerType SwitchingTriggerFactory::ParseTriggerType(const std::string& triggerName) {
@@ -28,6 +43,10 @@ TriggerType SwitchingTriggerFactory::ParseTriggerType(const std::string& trigger
     
     if (lowerName == "keyboard") {
         return TriggerType::KEYBOARD;
+    }
+    
+    if (lowerName == "face" || lowerName == "face_detection") {
+        return TriggerType::FACE_DETECTION;
     }
     
     // Add more trigger types here as they are implemented:
@@ -44,6 +63,9 @@ std::string SwitchingTriggerFactory::GetTriggerTypeName(TriggerType triggerType)
     switch (triggerType) {
         case TriggerType::KEYBOARD:
             return "Keyboard";
+            
+        case TriggerType::FACE_DETECTION:
+            return "Face Detection";
             
         default:
             return "Unknown";

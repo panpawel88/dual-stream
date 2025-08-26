@@ -307,3 +307,13 @@ std::string FaceDetectionSwitchingTrigger::GetDefaultCascadePath() {
     // Return path to default Haar cascade file
     return "haarcascade_frontalface_alt.xml";
 }
+
+void FaceDetectionSwitchingTrigger::Reset() {
+    // Reset switching state flags after a switch has occurred
+    m_shouldSwitchToVideo1.store(false);
+    m_shouldSwitchToVideo2.store(false);
+}
+
+std::string FaceDetectionSwitchingTrigger::GetName() const {
+    return "FaceDetection";
+}

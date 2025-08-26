@@ -16,7 +16,7 @@ enum class CameraManagerState {
     UNINITIALIZED,      // Not initialized
     INITIALIZED,        // Initialized but not capturing
     CAPTURING,          // Currently capturing frames
-    ERROR               // Error state
+    ERROR_STATE         // Error state
 };
 
 /**

@@ -46,14 +46,14 @@ bool CameraManager::InitializeInternal(const CameraDeviceInfo& deviceInfo,
     m_cameraSource = CameraSourceFactory::CreateForDevice(deviceInfo);
     if (!m_cameraSource) {
         UpdateLastError("Failed to create camera source for device: " + deviceInfo.deviceName);
-        SetState(CameraManagerState::ERROR);
+        SetState(CameraManagerState::ERROR_STATE);
         return false;
     }
     
     // Initialize camera source
     if (!m_cameraSource->Initialize(deviceInfo, cameraConfig)) {
         UpdateLastError("Failed to initialize camera source: " + m_cameraSource->GetLastError());
-        SetState(CameraManagerState::ERROR);
+        SetState(CameraManagerState::ERROR_STATE);
         return false;
     }
     
@@ -61,7 +61,7 @@ bool CameraManager::InitializeInternal(const CameraDeviceInfo& deviceInfo,
     m_publisher = std::make_unique<CameraFramePublisher>(publisherConfig);
     if (!m_publisher->Start()) {
         UpdateLastError("Failed to start camera frame publisher");
-        SetState(CameraManagerState::ERROR);
+        SetState(CameraManagerState::ERROR_STATE);
         return false;
     }
     
@@ -89,7 +89,7 @@ bool CameraManager::StartCapture() {
     
     if (!m_cameraSource->StartCapture()) {
         UpdateLastError("Failed to start camera capture: " + m_cameraSource->GetLastError());
-        SetState(CameraManagerState::ERROR);
+        SetState(CameraManagerState::ERROR_STATE);
         return false;
     }
     

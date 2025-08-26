@@ -16,6 +16,7 @@
 #include "rendering/TextureConverter.h"
 #include "video/VideoManager.h"
 #include "video/triggers/SwitchingTriggerFactory.h"
+#include "camera/CameraManager.h"
 #include "core/Logger.h"
 #include "core/FFmpegInitializer.h"
 
@@ -89,10 +90,48 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, &window);
+    // Initialize camera manager if face detection is requested
+    std::unique_ptr<CameraManager> cameraManager;
+    if (args.triggerType == TriggerType::FACE_DETECTION) {
+        cameraManager = std::make_unique<CameraManager>();
+        if (!cameraManager->InitializeAuto()) {
+            LOG_ERROR("Failed to initialize camera for face detection");
+            return 1;
+        }
+        if (!cameraManager->StartCapture()) {
+            LOG_ERROR("Failed to start camera capture");
+            return 1;
+        }
+        LOG_INFO("Camera initialized for face detection");
+    }
+    
+    // Create trigger configuration
+    TriggerConfig triggerConfig;
+    triggerConfig.window = &window;
+    triggerConfig.cameraManager = cameraManager.get();
+    
+    auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, triggerConfig);
     if (!switchingTrigger) {
         LOG_ERROR("Failed to create switching trigger");
         return 1;
+    }
+    
+    // Initialize face detection if needed
+    if (args.triggerType == TriggerType::FACE_DETECTION) {
+        auto* faceDetection = dynamic_cast<FaceDetectionSwitchingTrigger*>(switchingTrigger.get());
+        if (faceDetection && !faceDetection->InitializeFaceDetection()) {
+            LOG_ERROR("Failed to initialize face detection");
+            return 1;
+        }
+        
+        // Register the trigger as a frame listener
+        if (cameraManager) {
+            // Create a shared_ptr that doesn't own the trigger (since videoManager will own it)
+            std::shared_ptr<FaceDetectionSwitchingTrigger> faceDetectionPtr(
+                faceDetection, [](FaceDetectionSwitchingTrigger*){} // No-op deleter
+            );
+            cameraManager->RegisterFrameListener(faceDetectionPtr);
+        }
     }
     
     if (!videoManager.SetSwitchingTrigger(std::move(switchingTrigger))) {
