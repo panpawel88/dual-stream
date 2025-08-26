@@ -108,7 +108,6 @@ int main(int argc, char* argv[]) {
     // Create trigger configuration
     TriggerConfig triggerConfig;
     triggerConfig.window = &window;
-    triggerConfig.cameraManager = cameraManager.get();
     
     auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, triggerConfig);
     if (!switchingTrigger) {
@@ -118,23 +117,19 @@ int main(int argc, char* argv[]) {
     
     // Initialize face detection if needed
     if (args.triggerType == TriggerType::FACE_DETECTION) {
-        auto* faceDetection = dynamic_cast<FaceDetectionSwitchingTrigger*>(switchingTrigger.get());
+        auto faceDetection = std::dynamic_pointer_cast<FaceDetectionSwitchingTrigger>(switchingTrigger);
         if (faceDetection && !faceDetection->InitializeFaceDetection()) {
             LOG_ERROR("Failed to initialize face detection");
             return 1;
         }
         
-        // Register the trigger as a frame listener
-        if (cameraManager) {
-            // Create a shared_ptr that doesn't own the trigger (since videoManager will own it)
-            std::shared_ptr<FaceDetectionSwitchingTrigger> faceDetectionPtr(
-                faceDetection, [](FaceDetectionSwitchingTrigger*){} // No-op deleter
-            );
-            cameraManager->RegisterFrameListener(faceDetectionPtr);
+        // Register the trigger as a frame listener with the camera manager
+        if (cameraManager && faceDetection) {
+            cameraManager->RegisterFrameListener(faceDetection);
         }
     }
     
-    if (!videoManager.SetSwitchingTrigger(std::move(switchingTrigger))) {
+    if (!videoManager.SetSwitchingTrigger(switchingTrigger)) {
         LOG_ERROR("Failed to set switching trigger");
         return 1;
     }

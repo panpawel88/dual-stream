@@ -47,7 +47,7 @@ public:
     ~VideoManager();
     
     bool Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
-    bool SetSwitchingTrigger(std::unique_ptr<ISwitchingTrigger> trigger);
+    bool SetSwitchingTrigger(std::shared_ptr<ISwitchingTrigger> trigger);
     void Cleanup();
     
     // Playback control
@@ -89,7 +89,7 @@ private:
     std::unique_ptr<VideoSwitchingStrategy> m_switchingStrategy;
     
     // Switching trigger
-    std::unique_ptr<ISwitchingTrigger> m_switchingTrigger;
+    std::shared_ptr<ISwitchingTrigger> m_switchingTrigger;
     
     // Timing management
     std::chrono::steady_clock::time_point m_playbackStartTime;

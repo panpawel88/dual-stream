@@ -161,12 +161,20 @@ void CameraFramePublisher::ProcessDeliveryTask(const FrameDeliveryTask& task, in
             // Handle critical errors
             if (result == FrameProcessingResult::CRITICAL_ERROR) {
                 // Disable listener on critical error
-                listener->SetEnabled(false);
+                try {
+                    listener->SetEnabled(false);
+                } catch (...) {
+                    // Ignore errors when trying to disable listener
+                }
             }
             
         } catch (const std::exception& e) {
             // Handle listener exceptions gracefully
-            listener->SetEnabled(false);
+            try {
+                listener->SetEnabled(false);
+            } catch (...) {
+                // Ignore errors when trying to disable listener
+            }
         }
         
         auto listenerEndTime = std::chrono::steady_clock::now();
@@ -294,8 +302,19 @@ std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetEnabledListenersInt
     // This method assumes m_listenersMutex is already locked by the caller
     std::vector<CameraFrameListenerPtr> enabledListeners;
     for (const auto& listener : m_listeners) {
-        if (listener && listener->IsEnabled()) {
-            enabledListeners.push_back(listener);
+        // Defensive check: ensure listener is valid before accessing its methods
+        if (!listener) {
+            continue; // Skip null pointers
+        }
+        
+        try {
+            if (listener->IsEnabled()) {
+                enabledListeners.push_back(listener);
+            }
+        } catch (const std::exception& e) {
+            // Log the error but continue processing other listeners
+            // Note: In a real implementation, we might want to remove invalid listeners
+            continue;
         }
     }
     
@@ -307,8 +326,17 @@ std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetListenersForFormat(
     
     std::vector<CameraFrameListenerPtr> compatibleListeners;
     for (const auto& listener : enabledListeners) {
-        if (listener->CanProcessFormat(format)) {
-            compatibleListeners.push_back(listener);
+        if (!listener) {
+            continue; // Skip null pointers
+        }
+        
+        try {
+            if (listener->CanProcessFormat(format)) {
+                compatibleListeners.push_back(listener);
+            }
+        } catch (const std::exception& e) {
+            // Skip listeners that throw exceptions during format check
+            continue;
         }
     }
     

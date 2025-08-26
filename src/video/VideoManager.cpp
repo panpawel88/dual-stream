@@ -332,13 +332,13 @@ void VideoManager::ResetPlaybackTiming() {
     m_lastFrameTime = m_playbackStartTime;
 }
 
-bool VideoManager::SetSwitchingTrigger(std::unique_ptr<ISwitchingTrigger> trigger) {
+bool VideoManager::SetSwitchingTrigger(std::shared_ptr<ISwitchingTrigger> trigger) {
     if (!trigger) {
         LOG_ERROR("Cannot set null switching trigger");
         return false;
     }
     
-    m_switchingTrigger = std::move(trigger);
+    m_switchingTrigger = trigger;
     LOG_INFO("Switching trigger set to: ", m_switchingTrigger->GetName());
     return true;
 }

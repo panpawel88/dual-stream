@@ -4,32 +4,29 @@
 #include <algorithm>
 #include <cctype>
 
-std::unique_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, const TriggerConfig& config) {
+std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, const TriggerConfig& config) {
     switch (triggerType) {
         case TriggerType::KEYBOARD:
             if (!config.window) {
                 return nullptr; // Keyboard trigger requires window instance
             }
-            return std::make_unique<KeyboardSwitchingTrigger>(config.window);
+            return std::make_shared<KeyboardSwitchingTrigger>(config.window);
             
         case TriggerType::FACE_DETECTION: {
-            auto trigger = std::make_unique<FaceDetectionSwitchingTrigger>(config.faceDetectionConfig);
-            if (config.cameraManager) {
-                trigger->SetCameraManager(config.cameraManager);
-            }
+            auto trigger = std::make_shared<FaceDetectionSwitchingTrigger>(config.faceDetectionConfig);
             return trigger;
         }
             
         default:
             // Default to keyboard trigger if type is unrecognized
             if (config.window) {
-                return std::make_unique<KeyboardSwitchingTrigger>(config.window);
+                return std::make_shared<KeyboardSwitchingTrigger>(config.window);
             }
             return nullptr;
     }
 }
 
-std::unique_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, Window* window) {
+std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, Window* window) {
     TriggerConfig config;
     config.window = window;
     return Create(triggerType, config);

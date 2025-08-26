@@ -46,17 +46,17 @@ public:
      * Create a switching trigger of the specified type.
      * @param triggerType The type of trigger to create
      * @param config Configuration parameters for the trigger
-     * @return Unique pointer to the created trigger, or nullptr if creation failed
+     * @return Shared pointer to the created trigger, or nullptr if creation failed
      */
-    static std::unique_ptr<ISwitchingTrigger> Create(TriggerType triggerType, const TriggerConfig& config = TriggerConfig());
+    static std::shared_ptr<ISwitchingTrigger> Create(TriggerType triggerType, const TriggerConfig& config = TriggerConfig());
     
     /**
      * Create a switching trigger of the specified type (legacy method).
      * @param triggerType The type of trigger to create
      * @param window Window instance for input handling (required for KEYBOARD type)
-     * @return Unique pointer to the created trigger, or nullptr if creation failed
+     * @return Shared pointer to the created trigger, or nullptr if creation failed
      */
-    static std::unique_ptr<ISwitchingTrigger> Create(TriggerType triggerType, Window* window);
+    static std::shared_ptr<ISwitchingTrigger> Create(TriggerType triggerType, Window* window);
     
     /**
      * Parse trigger type from string name.

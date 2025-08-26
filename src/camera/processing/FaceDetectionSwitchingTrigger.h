@@ -68,12 +68,6 @@ public:
      */
     bool InitializeFaceDetection(const std::string& cascadePath = "");
     
-    /**
-     * Set camera manager for integration.
-     * 
-     * @param cameraManager Camera manager instance
-     */
-    void SetCameraManager(CameraManager* cameraManager);
     
     /**
      * Get current face detection configuration.
@@ -108,7 +102,6 @@ private:
     mutable std::mutex m_detectionMutex;
     
     FaceDetectionConfig m_config;
-    CameraManager* m_cameraManager = nullptr;
 
     // Face detection components
     cv::CascadeClassifier m_faceClassifier;

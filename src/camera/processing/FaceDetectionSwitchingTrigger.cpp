@@ -45,17 +45,6 @@ bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& c
     return true;
 }
 
-void FaceDetectionSwitchingTrigger::SetCameraManager(CameraManager* cameraManager) {
-    m_cameraManager = cameraManager;
-    
-    // Register ourselves as a frame listener if camera manager is available
-    if (m_cameraManager) {
-        auto self = std::shared_ptr<FaceDetectionSwitchingTrigger>(this, [](FaceDetectionSwitchingTrigger*) {
-            // Custom deleter that does nothing - we don't own this object
-        });
-        m_cameraManager->RegisterFrameListener(self);
-    }
-}
 
 void FaceDetectionSwitchingTrigger::Update() {
     // ISwitchingTrigger::Update() - called by main application loop
