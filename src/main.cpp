@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
     
     Logger::GetInstance().SetLogLevel(args.debugLogging ? LogLevel::Debug : LogLevel::Info);
     
-    LOG_INFO("FFmpeg Video Player v1.0.0");
+    LOG_INFO("DualStream Video Player v2.0.0");
     
     FFmpegInitializer ffmpegInit;
     if (!ffmpegInit.Initialize()) {
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
     }
     
     Window window;
-    if (!window.Create("FFmpeg Video Player", windowWidth, windowHeight)) {
+    if (!window.Create("DualStream Video Player", windowWidth, windowHeight)) {
         LOG_ERROR("Failed to create window");
         return 1;
     }

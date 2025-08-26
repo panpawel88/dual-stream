@@ -196,8 +196,8 @@ struct VideoPlayerArgs {
 };
 
 // Usage examples:
-// ./ffmpeg_player video1.mp4 video2.mp4 --trigger keyboard
-// ./ffmpeg_player video1.mp4 video2.mp4 -t keyboard
+// ./dual_stream video1.mp4 video2.mp4 --trigger keyboard
+// ./dual_stream video1.mp4 video2.mp4 -t keyboard
 ```
 
 ### Parser Integration

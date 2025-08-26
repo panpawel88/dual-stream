@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ffmpeg_player VERSION 1.0.0 LANGUAGES C CXX CUDA)
+project(dual_stream VERSION 2.0.0 LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -262,7 +262,7 @@ if(ENABLE_CAMERA_SUPPORT)
     )
 endif()
 
-add_executable(ffmpeg_player
+add_executable(dual_stream
     src/main.cpp
     src/ui/Window.cpp
     src/core/CommandLineParser.cpp
@@ -285,28 +285,28 @@ add_executable(ffmpeg_player
     ${CAMERA_SOURCES}
 )
 
-target_link_libraries(ffmpeg_player PRIVATE FFmpeg)
+target_link_libraries(dual_stream PRIVATE FFmpeg)
 
 # Add src directory to include path for absolute includes
-target_include_directories(ffmpeg_player PRIVATE src)
+target_include_directories(dual_stream PRIVATE src)
 
 # Link GLAD for OpenGL renderer
 if(USE_OPENGL_RENDERER)
-    target_link_libraries(ffmpeg_player PRIVATE glad)
+    target_link_libraries(dual_stream PRIVATE glad)
     # Link CUDA libraries if CUDA is available
     if(HAVE_CUDA)
-        target_link_libraries(ffmpeg_player PRIVATE CUDA::cudart)
+        target_link_libraries(dual_stream PRIVATE CUDA::cudart)
     endif()
 endif()
 
 # Link camera support libraries
 if(ENABLE_CAMERA_SUPPORT)
     if(HAVE_OPENCV)
-        target_link_libraries(ffmpeg_player PRIVATE CameraOpenCV)
+        target_link_libraries(dual_stream PRIVATE CameraOpenCV)
     endif()
     
     if(HAVE_REALSENSE)
-        target_link_libraries(ffmpeg_player PRIVATE CameraRealSense)
+        target_link_libraries(dual_stream PRIVATE CameraRealSense)
     endif()
 endif()
 
@@ -314,9 +314,9 @@ endif()
 if(WIN32)
     file(GLOB FFMPEG_DLLS "${FFMPEG_BIN_DIR}/*.dll")
     foreach(DLL ${FFMPEG_DLLS})
-        add_custom_command(TARGET ffmpeg_player POST_BUILD
+        add_custom_command(TARGET dual_stream POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DLL}" $<TARGET_FILE_DIR:ffmpeg_player>
+            "${DLL}" $<TARGET_FILE_DIR:dual_stream>
         )
     endforeach()
     
@@ -327,9 +327,9 @@ if(WIN32)
             file(GLOB OpenCV_DLLS "${OpenCV_BIN_DIR}/opencv_*${OpenCV_VERSION_MAJOR}${OpenCV_VERSION_MINOR}${OpenCV_VERSION_PATCH}*.dll")
             foreach(DLL ${OpenCV_DLLS})
                 if(EXISTS "${DLL}")
-                    add_custom_command(TARGET ffmpeg_player POST_BUILD
+                    add_custom_command(TARGET dual_stream POST_BUILD
                         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${DLL}" $<TARGET_FILE_DIR:ffmpeg_player>
+                        "${DLL}" $<TARGET_FILE_DIR:dual_stream>
                     )
                 endif()
             endforeach()
@@ -339,7 +339,7 @@ if(WIN32)
 endif()
 
 # Set target properties
-set_target_properties(ffmpeg_player PROPERTIES
+set_target_properties(dual_stream PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
 )
@@ -347,7 +347,7 @@ set_target_properties(ffmpeg_player PROPERTIES
 # Additional linker flags to resolve runtime library conflicts on Windows
 if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # Exclude conflicting static runtime libraries
-    target_link_options(ffmpeg_player PRIVATE 
+    target_link_options(dual_stream PRIVATE 
         "$<$<CONFIG:Debug>:/NODEFAULTLIB:LIBCMT>"
         "$<$<CONFIG:Debug>:/NODEFAULTLIB:LIBCMTD>"
         "$<$<CONFIG:Release>:/NODEFAULTLIB:LIBCMT>"

@@ -1,5 +1,5 @@
 @echo off
-echo Generating test video files for FFmpeg Video Player...
+echo Generating test video files for DualStream Video Player...
 echo.
 
 REM Check if FFmpeg is available
@@ -50,7 +50,7 @@ ffmpeg -f lavfi -i "color=green:size=1280x720:duration=12:rate=30" ^
 echo.
 echo Creating Test Video 5 - Rotating Text with Frame Numbers (H265, 1280x720, 30fps, 15 seconds)...
 ffmpeg -f lavfi -i "color=black:size=1280x720:duration=15:rate=30" ^
-       -vf "drawtext=text='FFmpeg Video Player':fontsize=60:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2+50*sin(2*PI*t/3):enable='between(t,0,15)',drawtext=text='Video 5 H265 - Frame %%{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8" ^
+       -vf "drawtext=text='DualStream Video Player':fontsize=60:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2+50*sin(2*PI*t/3):enable='between(t,0,15)',drawtext=text='Video 5 H265 - Frame %%{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8" ^
        -c:v libx265 -preset medium -crf 28 -g 30 -keyint_min 30 -pix_fmt yuv420p ^
        -movflags +faststart ^
        test_videos/video5_text.mp4 -y
@@ -81,9 +81,9 @@ dir test_videos\*.mp4 /b
 echo.
 echo Usage examples:
 echo ---------------
-echo ffmpeg_player.exe test_videos\video1_red_square.mp4 test_videos\video2_blue_circle.mp4
-echo ffmpeg_player.exe test_videos\video3_gradient.mp4 test_videos\video4_bouncing_ball.mp4
-echo ffmpeg_player.exe test_videos\short_a_red_fade.mp4 test_videos\short_b_blue_pulse.mp4
+echo dual_stream.exe test_videos\video1_red_square.mp4 test_videos\video2_blue_circle.mp4
+echo dual_stream.exe test_videos\video3_gradient.mp4 test_videos\video4_bouncing_ball.mp4
+echo dual_stream.exe test_videos\short_a_red_fade.mp4 test_videos\short_b_blue_pulse.mp4
 echo.
 echo.
 echo Creating 4K Performance Test Videos...

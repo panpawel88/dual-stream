@@ -36,11 +36,11 @@ struct VideoPlayerArgs {
 **Command Line Interface:**
 ```bash
 # Basic usage (required arguments)
-./ffmpeg_player video1.mp4 video2.mp4
+./dual_stream video1.mp4 video2.mp4
 
 # Advanced usage with optional parameters
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm predecoded --speed 1.5 --debug
-./ffmpeg_player video1.mp4 video2.mp4 -a keyframe-sync -t keyboard -s 0.5 -d
+./dual_stream video1.mp4 video2.mp4 --algorithm predecoded --speed 1.5 --debug
+./dual_stream video1.mp4 video2.mp4 -a keyframe-sync -t keyboard -s 0.5 -d
 
 # Algorithm options
 --algorithm immediate     # Default: seek new video to current time  
@@ -130,7 +130,7 @@ Logger::GetInstance().SetLogLevel(args.debugLogging ? LogLevel::Debug : LogLevel
 
 **Output Format:**
 ```
-[INFO] FFmpeg Video Player v1.0.0
+[INFO] DualStream Video Player v1.0.0
 [INFO] Video 1: /path/to/video1.mp4
 [INFO] Video 2: /path/to/video2.mp4
 [DEBUG] Decoded frame at time: 1.2345 seconds
@@ -196,7 +196,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     
     // Require minimum 3 arguments (program + 2 videos)
     if (argc < 3) {
-        args.errorMessage = "Usage: ffmpeg_player <video1> <video2> [options]";
+        args.errorMessage = "Usage: dual_stream <video1> <video2> [options]";
         return args;
     }
     
@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
     }
     
     // 4. Log application startup information
-    LOG_INFO("FFmpeg Video Player v1.0.0");
+    LOG_INFO("DualStream Video Player v1.0.0");
     LOG_INFO("Video 1: ", args.video1Path);
     LOG_INFO("Video 2: ", args.video2Path);
     LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm));

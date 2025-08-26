@@ -1,6 +1,6 @@
-# FFmpeg Video Player - Source Code Architecture
+# DualStream Video Player - Source Code Architecture
 
-This directory contains the complete source code for the FFmpeg Video Player, a sophisticated dual-video switching application with hardware acceleration and multiple rendering backends.
+This directory contains the complete source code for the DualStream Video Player, a sophisticated dual-video switching application with hardware acceleration and multiple rendering backends.
 
 ## System Architecture Overview
 
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     
     // 3. UI System Creation
     Window window;
-    window.Create("FFmpeg Video Player", windowWidth, windowHeight);
+    window.Create("DualStream Video Player", windowWidth, windowHeight);
     
     // 4. Rendering System Initialization  
     auto renderer = RendererFactory::CreateRenderer();
@@ -236,16 +236,16 @@ if (!VideoValidator::ValidateCompatibility(video1Info, video2Info, compatibility
 ### Command Line Configuration
 ```bash
 # Algorithm Selection
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm predecoded
+./dual_stream video1.mp4 video2.mp4 --algorithm predecoded
 
 # Playback Speed Control
-./ffmpeg_player video1.mp4 video2.mp4 --speed 1.5
+./dual_stream video1.mp4 video2.mp4 --speed 1.5
 
 # Debug Output  
-./ffmpeg_player video1.mp4 video2.mp4 --debug
+./dual_stream video1.mp4 video2.mp4 --debug
 
 # Combined Options
-./ffmpeg_player video1.mp4 video2.mp4 -a keyframe-sync -s 0.8 -d
+./dual_stream video1.mp4 video2.mp4 -a keyframe-sync -s 0.8 -d
 ```
 
 ### Extensibility Framework

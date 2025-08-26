@@ -1,4 +1,4 @@
-# FFmpeg Video Player Application
+# DualStream Video Player Application
 
 A sophisticated dual-video switching application with hardware acceleration, multiple rendering backends, and advanced switching strategies.
 
@@ -34,7 +34,7 @@ The application has evolved far beyond its original requirements into a comprehe
 ## Architecture Overview
 
 ```
-FFmpeg Video Player
+DualStream Video Player
 ├── src/                           # Complete source code
 │   ├── main.cpp                   # Application orchestration  
 │   ├── core/                      # Foundation services
@@ -78,24 +78,24 @@ FFmpeg Video Player
 
 ### Basic Usage
 ```bash
-./ffmpeg_player video1.mp4 video2.mp4
+./dual_stream video1.mp4 video2.mp4
 ```
 
 ### Advanced Configuration  
 ```bash
 # Switching algorithm selection
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm predecoded
-./ffmpeg_player video1.mp4 video2.mp4 -a keyframe-sync
+./dual_stream video1.mp4 video2.mp4 --algorithm predecoded
+./dual_stream video1.mp4 video2.mp4 -a keyframe-sync
 
 # Playback speed control
-./ffmpeg_player video1.mp4 video2.mp4 --speed 1.5
-./ffmpeg_player video1.mp4 video2.mp4 -s 0.5
+./dual_stream video1.mp4 video2.mp4 --speed 1.5
+./dual_stream video1.mp4 video2.mp4 -s 0.5
 
 # Debug logging
-./ffmpeg_player video1.mp4 video2.mp4 --debug
+./dual_stream video1.mp4 video2.mp4 --debug
 
 # Combined options
-./ffmpeg_player video1.mp4 video2.mp4 -a predecoded -s 2.0 -d
+./dual_stream video1.mp4 video2.mp4 -a predecoded -s 2.0 -d
 ```
 
 ### Runtime Controls

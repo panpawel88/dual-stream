@@ -139,7 +139,7 @@ int maxVideoWidth = std::max(video1Info.width, video2Info.width);
 int maxVideoHeight = std::max(video1Info.height, video2Info.height);
 
 // Window sized to accommodate largest video
-if (!window.Create("FFmpeg Video Player", maxVideoWidth, maxVideoHeight)) {
+if (!window.Create("DualStream Video Player", maxVideoWidth, maxVideoHeight)) {
     // Window creation with dynamic sizing
 }
 ```
@@ -233,16 +233,16 @@ bool VideoManager::UpdateFrame() {
 ### Video System Parameters
 ```bash
 # Algorithm selection
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm immediate
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm predecoded  
-./ffmpeg_player video1.mp4 video2.mp4 --algorithm keyframe-sync
+./dual_stream video1.mp4 video2.mp4 --algorithm immediate
+./dual_stream video1.mp4 video2.mp4 --algorithm predecoded  
+./dual_stream video1.mp4 video2.mp4 --algorithm keyframe-sync
 
 # Trigger selection
-./ffmpeg_player video1.mp4 video2.mp4 --trigger keyboard
+./dual_stream video1.mp4 video2.mp4 --trigger keyboard
 
 # Playback speed control  
-./ffmpeg_player video1.mp4 video2.mp4 --speed 0.5  # Half speed
-./ffmpeg_player video1.mp4 video2.mp4 --speed 2.0  # Double speed
+./dual_stream video1.mp4 video2.mp4 --speed 0.5  # Half speed
+./dual_stream video1.mp4 video2.mp4 --speed 2.0  # Double speed
 ```
 
 ## Subsystem Documentation

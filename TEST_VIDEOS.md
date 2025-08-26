@@ -1,6 +1,6 @@
-# Test Videos for FFmpeg Video Player
+# Test Videos for DualStream Video Player
 
-This document describes how to generate and use test videos for the FFmpeg Video Player application.
+This document describes how to generate and use test videos for the DualStream Video Player application.
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ All videos are created with:
    - Tests longer duration playback
 
 5. **video5_text.mp4** (H265, 15s, 30fps)
-   - Animated text "FFmpeg Video Player"
+   - Animated text "DualStream Video Player"
    - **Frame counter**: "Video 5 H265 - Frame XXX" in yellow text
    - Tests text rendering and H265
 
@@ -92,13 +92,13 @@ Video 3 H265 - Frame 45 - Time: 00:00:01.50 ← With timestamp
 ### Basic Testing
 ```bash
 # Test H264 videos
-ffmpeg_player.exe test_videos/video1_red_square.mp4 test_videos/video2_blue_circle.mp4
+dual_stream.exe test_videos/video1_red_square.mp4 test_videos/video2_blue_circle.mp4
 
 # Test mixed H264/H265
-ffmpeg_player.exe test_videos/video1_red_square.mp4 test_videos/video3_gradient.mp4
+dual_stream.exe test_videos/video1_red_square.mp4 test_videos/video3_gradient.mp4
 
 # Quick testing
-ffmpeg_player.exe test_videos/short_a_red_fade.mp4 test_videos/short_b_blue_pulse.mp4
+dual_stream.exe test_videos/short_a_red_fade.mp4 test_videos/short_b_blue_pulse.mp4
 ```
 
 ### Controls
@@ -117,7 +117,7 @@ The application will automatically:
 ## Expected Console Output
 
 ```
-FFmpeg Video Player v1.0.0
+DualStream Video Player v2.0.0
 FFmpeg version: ...
 Initializing hardware decoder detection...
 H264 NVDEC decoder found

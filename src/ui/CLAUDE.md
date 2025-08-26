@@ -154,7 +154,7 @@ private:
             WNDCLASS wc = {};
             wc.lpfnWndProc = WindowProc;
             wc.hInstance = GetModuleHandle(nullptr);
-            wc.lpszClassName = "FFmpegVideoPlayerWindow";
+            wc.lpszClassName = "DualStreamVideoPlayerWindow";
             RegisterClass(&wc);
             s_classRegistered = true;
         }
@@ -252,7 +252,7 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 ```cpp
 // Renderer initialization
 Window window;
-window.Create("FFmpeg Video Player", width, height);
+window.Create("DualStream Video Player", width, height);
 window.Show();
 
 auto renderer = RendererFactory::CreateRenderer();
