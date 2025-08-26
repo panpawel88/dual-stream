@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.24)
 project(ffmpeg_player VERSION 1.0.0 LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -103,6 +103,57 @@ else()
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
 endif()
 
+# Camera support configuration
+option(ENABLE_CAMERA_SUPPORT "Enable camera capture support" ON)
+if(ENABLE_CAMERA_SUPPORT)
+    message(STATUS "Camera support enabled")
+    
+    # OpenCV support (required for camera processing)
+    find_package(OpenCV QUIET COMPONENTS core imgproc objdetect videoio)
+    if(OpenCV_FOUND)
+        message(STATUS "OpenCV found: ${OpenCV_VERSION}")
+        set(HAVE_OPENCV TRUE)
+        add_definitions(-DHAVE_OPENCV=1)
+        
+        # Create OpenCV target for linking
+        add_library(CameraOpenCV INTERFACE)
+        target_link_libraries(CameraOpenCV INTERFACE ${OpenCV_LIBS})
+        target_include_directories(CameraOpenCV INTERFACE ${OpenCV_INCLUDE_DIRS})
+        
+    else()
+        message(WARNING "OpenCV not found - camera support will be limited")
+        set(HAVE_OPENCV FALSE)
+        add_definitions(-DHAVE_OPENCV=0)
+    endif()
+    
+    # Intel RealSense support (optional - install via vcpkg)
+    find_package(realsense2 QUIET)
+    if(realsense2_FOUND)
+        message(STATUS "Intel RealSense SDK found: ${realsense2_VERSION}")
+        set(HAVE_REALSENSE TRUE)
+        add_definitions(-DHAVE_REALSENSE=1)
+        
+        # Create RealSense target for linking
+        add_library(CameraRealSense INTERFACE)
+        target_link_libraries(CameraRealSense INTERFACE ${realsense2_LIBRARY})
+        target_include_directories(CameraRealSense INTERFACE ${realsense2_INCLUDE_DIR})
+        
+    else()
+        message(STATUS "Intel RealSense SDK not found")
+        message(STATUS "To enable RealSense support, install via vcpkg:")
+        message(STATUS "  vcpkg install librealsense2")
+        message(STATUS "  Or manually: https://github.com/IntelRealSense/librealsense")
+        set(HAVE_REALSENSE FALSE)
+        add_definitions(-DHAVE_REALSENSE=0)
+    endif()
+    
+else()
+    message(STATUS "Camera support disabled")
+    set(HAVE_OPENCV FALSE)
+    set(HAVE_REALSENSE FALSE)
+    add_definitions(-DHAVE_OPENCV=0 -DHAVE_REALSENSE=0)
+endif()
+
 # GLAD OpenGL loader (for modern OpenGL)
 if(USE_OPENGL_RENDERER)
     include(FetchContent)
@@ -181,6 +232,36 @@ else()
     set(RENDERER_SOURCES src/rendering/D3D11Renderer.cpp)
 endif()
 
+# Camera source files (conditional compilation)
+set(CAMERA_SOURCES)
+if(ENABLE_CAMERA_SUPPORT)
+    list(APPEND CAMERA_SOURCES
+        src/camera/sources/CameraSourceFactory.cpp
+    )
+    
+    # Add OpenCV camera source if OpenCV is available
+    if(HAVE_OPENCV)
+        list(APPEND CAMERA_SOURCES
+            src/camera/sources/OpenCVCameraSource.cpp
+        )
+    endif()
+    
+    # Add RealSense camera source if RealSense is available
+    if(HAVE_REALSENSE)
+        list(APPEND CAMERA_SOURCES
+            src/camera/sources/RealSenseCameraSource.cpp
+        )
+    endif()
+    
+    # Add camera processing and management sources
+    list(APPEND CAMERA_SOURCES
+        src/camera/CameraFrame.cpp
+        src/camera/processing/CameraFramePublisher.cpp
+        src/camera/processing/FaceDetectionSwitchingTrigger.cpp
+        src/camera/CameraManager.cpp
+    )
+endif()
+
 add_executable(ffmpeg_player
     src/main.cpp
     src/ui/Window.cpp
@@ -201,6 +282,7 @@ add_executable(ffmpeg_player
     src/video/switching/KeyframeSwitchStrategy.cpp
     src/video/triggers/KeyboardSwitchingTrigger.cpp
     src/video/triggers/SwitchingTriggerFactory.cpp
+    ${CAMERA_SOURCES}
 )
 
 target_link_libraries(ffmpeg_player PRIVATE FFmpeg)
@@ -217,6 +299,17 @@ if(USE_OPENGL_RENDERER)
     endif()
 endif()
 
+# Link camera support libraries
+if(ENABLE_CAMERA_SUPPORT)
+    if(HAVE_OPENCV)
+        target_link_libraries(ffmpeg_player PRIVATE CameraOpenCV)
+    endif()
+    
+    if(HAVE_REALSENSE)
+        target_link_libraries(ffmpeg_player PRIVATE CameraRealSense)
+    endif()
+endif()
+
 # Copy FFmpeg DLLs to output directory on Windows
 if(WIN32)
     file(GLOB FFMPEG_DLLS "${FFMPEG_BIN_DIR}/*.dll")
@@ -226,6 +319,23 @@ if(WIN32)
             "${DLL}" $<TARGET_FILE_DIR:ffmpeg_player>
         )
     endforeach()
+    
+    # Copy OpenCV DLLs if OpenCV is found and camera support is enabled
+    if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND OpenCV_SHARED)
+        get_filename_component(OpenCV_BIN_DIR "${OpenCV_LIB_PATH}/../bin" ABSOLUTE)
+        if(EXISTS "${OpenCV_BIN_DIR}")
+            file(GLOB OpenCV_DLLS "${OpenCV_BIN_DIR}/opencv_*${OpenCV_VERSION_MAJOR}${OpenCV_VERSION_MINOR}${OpenCV_VERSION_PATCH}*.dll")
+            foreach(DLL ${OpenCV_DLLS})
+                if(EXISTS "${DLL}")
+                    add_custom_command(TARGET ffmpeg_player POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLL}" $<TARGET_FILE_DIR:ffmpeg_player>
+                    )
+                endif()
+            endforeach()
+        endif()
+    endif()
+    
 endif()
 
 # Set target properties
