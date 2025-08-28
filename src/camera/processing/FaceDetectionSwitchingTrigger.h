@@ -6,6 +6,7 @@
 #include "ui/Window.h"
 #include <opencv2/opencv.hpp>
 #include <opencv2/objdetect.hpp>
+#include <opencv2/highgui.hpp>
 
 #if defined(HAVE_OPENCV_DNN)
 #include <opencv2/dnn.hpp>
@@ -22,6 +23,25 @@
  * - Single face detected → Switch to Video 1
  * - Multiple faces detected → Switch to Video 2
  * - No faces detected → No switching action
+ * 
+ * Preview Feature:
+ * When enablePreview is set to true, displays a real-time preview window showing:
+ * - Live camera feed with face detection rectangles
+ * - Face count and switching status overlay
+ * - Algorithm information
+ * 
+ * Usage Example:
+ * ```cpp
+ * FaceDetectionSwitchingTrigger::FaceDetectionConfig config;
+ * config.enablePreview = true;
+ * config.algorithm = FaceDetectionAlgorithm::HAAR_CASCADE;
+ * 
+ * auto trigger = std::make_shared<FaceDetectionSwitchingTrigger>(config);
+ * trigger->InitializeFaceDetection();
+ * 
+ * // To enable/disable preview at runtime:
+ * trigger->SetPreviewEnabled(true);
+ * ```
  */
 /**
  * Face detection algorithm types
@@ -45,6 +65,7 @@ public:
         int stabilityFrames = 5;            // Frames to wait before triggering switch
         double switchCooldownMs = 2000.0;   // Cooldown between switches (ms)
         bool enableVisualization = false;   // Draw face rectangles on frames
+        bool enablePreview = false;         // Show face detection preview window
         
         // Switching thresholds
         int singleFaceThreshold = 1;        // Faces needed for Video 1
@@ -122,6 +143,21 @@ public:
      * @return Vector of face rectangles
      */
     std::vector<cv::Rect> GetLastFaceRects() const;
+    
+    /**
+     * Enable/disable face detection preview window.
+     * 
+     * @param enable Whether to show preview window
+     * @return true if preview was successfully enabled/disabled
+     */
+    bool SetPreviewEnabled(bool enable);
+    
+    /**
+     * Check if preview window is currently enabled.
+     * 
+     * @return true if preview is enabled
+     */
+    bool IsPreviewEnabled() const;
 
 private:
     mutable std::mutex m_configMutex;
@@ -154,6 +190,11 @@ private:
     // Performance tracking
     mutable FrameProcessingStats m_stats;
     
+    // Preview window state
+    bool m_previewEnabled = false;
+    std::string m_previewWindowName;
+    mutable std::mutex m_previewMutex;
+    
     // Private methods
     std::vector<cv::Rect> DetectFaces(const cv::Mat& frame);
     std::vector<cv::Rect> DetectFacesHaar(const cv::Mat& frame);
@@ -172,5 +213,11 @@ private:
     cv::Mat PreprocessFrame(const cv::Mat& frame);
     cv::Mat PreprocessFrameHaar(const cv::Mat& frame);
     std::string GetDefaultCascadePath();
+    
+    // Preview functionality
+    void InitializePreview();
+    void DestroyPreview();
+    void UpdatePreview(const cv::Mat& frame, const std::vector<cv::Rect>& faces);
+    cv::Mat CreatePreviewFrame(const cv::Mat& frame, const std::vector<cv::Rect>& faces);
 };
 

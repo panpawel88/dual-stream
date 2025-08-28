@@ -109,7 +109,7 @@ if(ENABLE_CAMERA_SUPPORT)
     message(STATUS "Camera support enabled")
     
     # OpenCV support (required for camera processing)
-    find_package(OpenCV QUIET COMPONENTS core imgproc objdetect videoio)
+    find_package(OpenCV QUIET COMPONENTS core imgproc objdetect videoio highgui)
     if(OpenCV_FOUND)
         message(STATUS "OpenCV found: ${OpenCV_VERSION}")
         set(HAVE_OPENCV TRUE)
