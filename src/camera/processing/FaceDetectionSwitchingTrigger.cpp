@@ -6,13 +6,22 @@ FaceDetectionSwitchingTrigger::FaceDetectionSwitchingTrigger(const FaceDetection
     m_stats.Reset();
     m_lastDetectionTime = std::chrono::steady_clock::now();
     m_lastSwitchTime = std::chrono::steady_clock::now();
+    m_previewWindowName = "Face Detection Preview - " + GetListenerId();
     
     // Initialize recent face counts buffer
     m_recentFaceCounts.reserve(m_config.stabilityFrames);
+    
+    // Initialize preview if enabled in config
+    if (m_config.enablePreview) {
+        SetPreviewEnabled(true);
+    }
 }
 
 FaceDetectionSwitchingTrigger::~FaceDetectionSwitchingTrigger() {
-    // Cleanup will be handled by destructor
+    // Cleanup preview window
+    if (m_previewEnabled) {
+        DestroyPreview();
+    }
 }
 
 bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& modelPath) {
@@ -81,6 +90,11 @@ FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFr
         
         // Process detection results
         ProcessDetectionResult(faces);
+        
+        // Update preview window if enabled
+        if (m_previewEnabled) {
+            UpdatePreview(processedFrame, faces);
+        }
         
         auto endTime = std::chrono::steady_clock::now();
         auto processingTime = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -265,11 +279,17 @@ FaceDetectionSwitchingTrigger::FaceDetectionConfig FaceDetectionSwitchingTrigger
 
 void FaceDetectionSwitchingTrigger::UpdateConfig(const FaceDetectionConfig& config) {
     std::lock_guard<std::mutex> lock(m_configMutex);
+    bool previewChanged = (m_config.enablePreview != config.enablePreview);
     m_config = config;
     
     // Clear stability buffer when config changes
     m_recentFaceCounts.clear();
     m_stableFrameCount = 0;
+    
+    // Handle preview state change
+    if (previewChanged) {
+        SetPreviewEnabled(m_config.enablePreview);
+    }
 }
 
 int FaceDetectionSwitchingTrigger::GetLastFaceCount() const {
@@ -502,4 +522,141 @@ void FaceDetectionSwitchingTrigger::Reset() {
 
 std::string FaceDetectionSwitchingTrigger::GetName() const {
     return "FaceDetection";
+}
+
+bool FaceDetectionSwitchingTrigger::SetPreviewEnabled(bool enable) {
+    std::lock_guard<std::mutex> lock(m_previewMutex);
+    
+    if (enable == m_previewEnabled) {
+        return true; // Already in desired state
+    }
+    
+    if (enable) {
+        InitializePreview();
+        m_previewEnabled = true;
+        LOG_INFO("Face detection preview enabled for: ", GetListenerName());
+    } else {
+        DestroyPreview();
+        m_previewEnabled = false;
+        LOG_INFO("Face detection preview disabled for: ", GetListenerName());
+    }
+    
+    return true;
+}
+
+bool FaceDetectionSwitchingTrigger::IsPreviewEnabled() const {
+    std::lock_guard<std::mutex> lock(m_previewMutex);
+    return m_previewEnabled;
+}
+
+void FaceDetectionSwitchingTrigger::InitializePreview() {
+    try {
+        // Create named window for preview
+        cv::namedWindow(m_previewWindowName, cv::WINDOW_AUTOSIZE);
+        
+        // Set window properties
+        cv::setWindowProperty(m_previewWindowName, cv::WND_PROP_TOPMOST, 1.0);
+        
+        LOG_DEBUG("Initialized face detection preview window: ", m_previewWindowName);
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Failed to initialize preview window: ", e.what());
+    }
+}
+
+void FaceDetectionSwitchingTrigger::DestroyPreview() {
+    try {
+        cv::destroyWindow(m_previewWindowName);
+        LOG_DEBUG("Destroyed face detection preview window: ", m_previewWindowName);
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error destroying preview window: ", e.what());
+    }
+}
+
+void FaceDetectionSwitchingTrigger::UpdatePreview(const cv::Mat& frame, const std::vector<cv::Rect>& faces) {
+    std::lock_guard<std::mutex> lock(m_previewMutex);
+    
+    if (!m_previewEnabled) {
+        return;
+    }
+    
+    try {
+        // Create preview frame with face rectangles
+        cv::Mat previewFrame = CreatePreviewFrame(frame, faces);
+        
+        // Display the preview
+        cv::imshow(m_previewWindowName, previewFrame);
+        
+        // Process window events (non-blocking)
+        cv::waitKey(1);
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error updating preview window: ", e.what());
+    }
+}
+
+cv::Mat FaceDetectionSwitchingTrigger::CreatePreviewFrame(const cv::Mat& frame, const std::vector<cv::Rect>& faces) {
+    cv::Mat previewFrame;
+    
+    // Convert to color if grayscale for better visualization
+    if (frame.channels() == 1) {
+        cv::cvtColor(frame, previewFrame, cv::COLOR_GRAY2BGR);
+    } else {
+        previewFrame = frame.clone();
+    }
+    
+    // Draw face rectangles
+    for (const auto& face : faces) {
+        // Draw main face rectangle in green
+        cv::rectangle(previewFrame, face, cv::Scalar(0, 255, 0), 2);
+        
+        // Add face size text
+        std::string sizeText = std::to_string(face.width) + "x" + std::to_string(face.height);
+        cv::putText(previewFrame, sizeText, 
+                   cv::Point(face.x, face.y - 10), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+    }
+    
+    // Add status information overlay
+    std::string statusText = "Faces: " + std::to_string(faces.size());
+    cv::putText(previewFrame, statusText, 
+               cv::Point(10, 30), 
+               cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
+    
+    // Add switching state information
+    std::string switchText;
+    if (m_shouldSwitchToVideo1.load()) {
+        switchText = "SWITCH TO VIDEO 1";
+        cv::putText(previewFrame, switchText, 
+                   cv::Point(10, 60), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
+    } else if (m_shouldSwitchToVideo2.load()) {
+        switchText = "SWITCH TO VIDEO 2";
+        cv::putText(previewFrame, switchText, 
+                   cv::Point(10, 60), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
+    }
+    
+    // Add algorithm information
+    std::string algoText = "Algorithm: ";
+    switch (m_config.algorithm) {
+        case FaceDetectionAlgorithm::HAAR_CASCADE:
+            algoText += "Haar Cascade";
+            break;
+#if defined(HAVE_OPENCV_DNN)
+        case FaceDetectionAlgorithm::YUNET:
+            algoText += "YuNet";
+            break;
+#endif
+        default:
+            algoText += "Unknown";
+            break;
+    }
+    
+    cv::putText(previewFrame, algoText, 
+               cv::Point(10, previewFrame.rows - 20), 
+               cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(128, 128, 128), 1);
+    
+    return previewFrame;
 }
