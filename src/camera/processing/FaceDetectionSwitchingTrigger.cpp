@@ -15,48 +15,20 @@ FaceDetectionSwitchingTrigger::~FaceDetectionSwitchingTrigger() {
     // Cleanup will be handled by destructor
 }
 
-bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& cascadePath) {
+bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& modelPath) {
     std::lock_guard<std::mutex> lock(m_detectionMutex);
     
-    std::string actualPath = cascadePath.empty() ? GetDefaultCascadePath() : cascadePath;
-    
-    if (!m_faceClassifier.load(actualPath)) {
-        LOG_DEBUG("Failed to load cascade from primary path: ", actualPath);
-        
-        // Try fallback cascade paths (in order of preference)
-        std::vector<std::string> fallbackPaths = {
-            "data/haarcascades/haarcascade_frontalface_alt.xml",
-            "data/haarcascades/haarcascade_frontalface_default.xml",
-            "data/haarcascades/haarcascade_frontalface_alt2.xml",
-            "haarcascade_frontalface_alt.xml",              // Legacy fallback
-            "haarcascade_frontalface_default.xml"           // Legacy fallback
-        };
-        
-        bool loaded = false;
-        for (const auto& fallback : fallbackPaths) {
-            LOG_DEBUG("Attempting to load cascade from: ", fallback);
-            if (m_faceClassifier.load(fallback)) {
-                LOG_INFO("Successfully loaded face detection cascade: ", fallback);
-                loaded = true;
-                break;
-            }
-        }
-        
-        if (!loaded) {
-            LOG_ERROR("Failed to load any face detection cascade file. Tried paths:");
-            LOG_ERROR("  Primary: ", actualPath);
-            for (const auto& path : fallbackPaths) {
-                LOG_ERROR("  Fallback: ", path);
-            }
-            LOG_ERROR("Ensure face detection models are downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
+    switch (m_config.algorithm) {
+        case FaceDetectionAlgorithm::HAAR_CASCADE:
+            return InitializeHaarCascade(modelPath);
+#if defined(HAVE_OPENCV_DNN)
+        case FaceDetectionAlgorithm::YUNET:
+            return InitializeYuNetDetection(modelPath);
+#endif
+        default:
+            LOG_ERROR("Unknown face detection algorithm");
             return false;
-        }
-    } else {
-        LOG_INFO("Successfully loaded face detection cascade: ", actualPath);
     }
-    
-    m_detectionInitialized = true;
-    return true;
 }
 
 
@@ -126,31 +98,35 @@ FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFr
 }
 
 std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFaces(const cv::Mat& frame) {
-    std::lock_guard<std::mutex> lock(m_detectionMutex);
-    
-    std::vector<cv::Rect> faces;
-    
-    if (m_faceClassifier.empty()) {
-        return faces;
+    switch (m_config.algorithm) {
+        case FaceDetectionAlgorithm::HAAR_CASCADE:
+            return DetectFacesHaar(frame);
+#if defined(HAVE_OPENCV_DNN)
+        case FaceDetectionAlgorithm::YUNET:
+            return DetectFacesYuNet(frame);
+#endif
+        default:
+            return std::vector<cv::Rect>();
     }
-    
-    m_faceClassifier.detectMultiScale(
-        frame,
-        faces,
-        m_config.scaleFactor,
-        m_config.minNeighbors,
-        0,
-        cv::Size(m_config.minFaceSize, m_config.minFaceSize),
-        cv::Size(m_config.maxFaceSize, m_config.maxFaceSize)
-    );
-    
-    return faces;
 }
 
 cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrame(const cv::Mat& frame) {
+    switch (m_config.algorithm) {
+        case FaceDetectionAlgorithm::HAAR_CASCADE:
+            return PreprocessFrameHaar(frame);
+#if defined(HAVE_OPENCV_DNN)
+        case FaceDetectionAlgorithm::YUNET:
+            return PreprocessFrameYuNet(frame);
+#endif
+        default:
+            return frame.clone();
+    }
+}
+
+cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrameHaar(const cv::Mat& frame) {
     cv::Mat processed;
     
-    // Convert to grayscale for face detection
+    // Convert to grayscale for Haar cascade detection
     if (frame.channels() == 3) {
         cv::cvtColor(frame, processed, cv::COLOR_BGR2GRAY);
     } else if (frame.channels() == 4) {
@@ -310,6 +286,213 @@ std::string FaceDetectionSwitchingTrigger::GetDefaultCascadePath() {
     // Return path to default Haar cascade file in data directory
     return "data/haarcascades/haarcascade_frontalface_alt.xml";
 }
+
+#if defined(HAVE_OPENCV_DNN)
+std::string FaceDetectionSwitchingTrigger::GetDefaultYuNetModelPath() {
+    // Return path to default YuNet model file in data directory
+    return "data/yunet/face_detection_yunet_2023mar.onnx";
+}
+#endif
+
+bool FaceDetectionSwitchingTrigger::InitializeHaarCascade(const std::string& cascadePath) {
+    std::string actualPath = cascadePath.empty() ? GetDefaultCascadePath() : cascadePath;
+    
+    if (!m_faceClassifier.load(actualPath)) {
+        LOG_DEBUG("Failed to load cascade from primary path: ", actualPath);
+        
+        // Try fallback cascade paths (in order of preference)
+        std::vector<std::string> fallbackPaths = {
+            "data/haarcascades/haarcascade_frontalface_alt.xml",
+            "data/haarcascades/haarcascade_frontalface_default.xml",
+            "data/haarcascades/haarcascade_frontalface_alt2.xml",
+            "haarcascade_frontalface_alt.xml",              // Legacy fallback
+            "haarcascade_frontalface_default.xml"           // Legacy fallback
+        };
+        
+        bool loaded = false;
+        for (const auto& fallback : fallbackPaths) {
+            LOG_DEBUG("Attempting to load cascade from: ", fallback);
+            if (m_faceClassifier.load(fallback)) {
+                LOG_INFO("Successfully loaded face detection cascade: ", fallback);
+                loaded = true;
+                break;
+            }
+        }
+        
+        if (!loaded) {
+            LOG_ERROR("Failed to load any face detection cascade file. Tried paths:");
+            LOG_ERROR("  Primary: ", actualPath);
+            for (const auto& path : fallbackPaths) {
+                LOG_ERROR("  Fallback: ", path);
+            }
+            LOG_ERROR("Ensure face detection models are downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
+            return false;
+        }
+    } else {
+        LOG_INFO("Successfully loaded face detection cascade: ", actualPath);
+    }
+    
+    m_detectionInitialized = true;
+    return true;
+}
+
+#if defined(HAVE_OPENCV_DNN)
+bool FaceDetectionSwitchingTrigger::InitializeYuNetDetection(const std::string& modelPath) {
+    std::string actualPath = modelPath.empty() ? GetDefaultYuNetModelPath() : modelPath;
+    
+    try {
+        // Create YuNet face detector
+        m_yunetDetector = cv::FaceDetectorYN::create(
+            actualPath,
+            "",  // config (empty for default)
+            m_config.inputSize,
+            m_config.scoreThreshold,
+            m_config.nmsThreshold
+        );
+        
+        if (m_yunetDetector.empty()) {
+            LOG_ERROR("Failed to create YuNet face detector from: ", actualPath);
+            
+            // Try fallback paths
+            std::vector<std::string> fallbackPaths = {
+                "data/yunet/face_detection_yunet_2023mar.onnx",
+                "face_detection_yunet_2023mar.onnx"  // Legacy fallback
+            };
+            
+            bool loaded = false;
+            for (const auto& fallback : fallbackPaths) {
+                LOG_DEBUG("Attempting to load YuNet model from: ", fallback);
+                try {
+                    m_yunetDetector = cv::FaceDetectorYN::create(
+                        fallback,
+                        "",
+                        m_config.inputSize,
+                        m_config.scoreThreshold,
+                        m_config.nmsThreshold
+                    );
+                    
+                    if (!m_yunetDetector.empty()) {
+                        LOG_INFO("Successfully loaded YuNet face detector: ", fallback);
+                        loaded = true;
+                        break;
+                    }
+                } catch (const std::exception& e) {
+                    LOG_DEBUG("Failed to load YuNet model from ", fallback, ": ", e.what());
+                }
+            }
+            
+            if (!loaded) {
+                LOG_ERROR("Failed to load any YuNet model file. Tried paths:");
+                LOG_ERROR("  Primary: ", actualPath);
+                for (const auto& path : fallbackPaths) {
+                    LOG_ERROR("  Fallback: ", path);
+                }
+                LOG_ERROR("Ensure YuNet model is downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
+                return false;
+            }
+        } else {
+            LOG_INFO("Successfully loaded YuNet face detector: ", actualPath);
+        }
+        
+        m_detectionInitialized = true;
+        return true;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during YuNet initialization: ", e.what());
+        return false;
+    }
+}
+
+std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFacesHaar(const cv::Mat& frame) {
+    std::lock_guard<std::mutex> lock(m_detectionMutex);
+    
+    std::vector<cv::Rect> faces;
+    
+    if (m_faceClassifier.empty()) {
+        return faces;
+    }
+    
+    m_faceClassifier.detectMultiScale(
+        frame,
+        faces,
+        m_config.scaleFactor,
+        m_config.minNeighbors,
+        0,
+        cv::Size(m_config.minFaceSize, m_config.minFaceSize),
+        cv::Size(m_config.maxFaceSize, m_config.maxFaceSize)
+    );
+    
+    return faces;
+}
+
+std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFacesYuNet(const cv::Mat& frame) {
+    std::lock_guard<std::mutex> lock(m_detectionMutex);
+    
+    std::vector<cv::Rect> faces;
+    
+    if (m_yunetDetector.empty()) {
+        return faces;
+    }
+    
+    try {
+        // Set input size for this frame
+        m_yunetDetector->setInputSize(cv::Size(frame.cols, frame.rows));
+        
+        // Detect faces
+        cv::Mat detectionResult;
+        m_yunetDetector->detect(frame, detectionResult);
+        
+        // Convert detection results to cv::Rect format
+        if (detectionResult.rows > 0) {
+            for (int i = 0; i < detectionResult.rows; ++i) {
+                // YuNet returns [x, y, w, h, x_re, y_re, x_le, y_le, x_nt, y_nt, x_rcm, y_rcm, x_lcm, y_lcm]
+                // We only need the bounding box: [x, y, w, h]
+                float x = detectionResult.at<float>(i, 0);
+                float y = detectionResult.at<float>(i, 1);
+                float w = detectionResult.at<float>(i, 2);
+                float h = detectionResult.at<float>(i, 3);
+                
+                // Convert to cv::Rect
+                cv::Rect faceRect(
+                    static_cast<int>(x),
+                    static_cast<int>(y),
+                    static_cast<int>(w),
+                    static_cast<int>(h)
+                );
+                
+                faces.push_back(faceRect);
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during YuNet face detection: ", e.what());
+    }
+    
+    return faces;
+}
+
+cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrameYuNet(const cv::Mat& frame) {
+    // YuNet can work with color images directly, no need for grayscale conversion
+    // Just ensure we have the right format (BGR)
+    cv::Mat processed;
+    
+    if (frame.channels() == 4) {
+        // Convert BGRA to BGR
+        cv::cvtColor(frame, processed, cv::COLOR_BGRA2BGR);
+    } else if (frame.channels() == 1) {
+        // Convert grayscale to BGR
+        cv::cvtColor(frame, processed, cv::COLOR_GRAY2BGR);
+    } else if (frame.channels() == 3) {
+        // Already BGR, just clone
+        processed = frame.clone();
+    } else {
+        // Fallback
+        processed = frame.clone();
+    }
+    
+    return processed;
+}
+#endif
 
 void FaceDetectionSwitchingTrigger::Reset() {
     // Reset switching state flags after a switch has occurred

@@ -115,6 +115,19 @@ if(ENABLE_CAMERA_SUPPORT)
         set(HAVE_OPENCV TRUE)
         add_definitions(-DHAVE_OPENCV=1)
         
+        # Check for DNN module support (required for YuNet)
+        find_package(OpenCV QUIET COMPONENTS dnn)
+        if(TARGET opencv_dnn OR opencv_dnn_FOUND)
+            message(STATUS "OpenCV DNN module found - YuNet face detection enabled")
+            set(HAVE_OPENCV_DNN TRUE)
+            add_definitions(-DHAVE_OPENCV_DNN=1)
+        else()
+            message(STATUS "OpenCV DNN module not found - YuNet face detection disabled")
+            message(STATUS "Only Haar cascade face detection will be available")
+            set(HAVE_OPENCV_DNN FALSE)
+            add_definitions(-DHAVE_OPENCV_DNN=0)
+        endif()
+        
         # Create OpenCV target for linking
         add_library(CameraOpenCV INTERFACE)
         target_link_libraries(CameraOpenCV INTERFACE ${OpenCV_LIBS})
@@ -161,21 +174,29 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     message(STATUS "Downloading face detection models...")
     
     # Create data directory structure
-    set(FACE_MODELS_DIR "${CMAKE_BINARY_DIR}/data/haarcascades")
-    file(MAKE_DIRECTORY "${FACE_MODELS_DIR}")
+    set(HAAR_MODELS_DIR "${CMAKE_BINARY_DIR}/data/haarcascades")
+    set(YUNET_MODELS_DIR "${CMAKE_BINARY_DIR}/data/yunet")
+    file(MAKE_DIRECTORY "${HAAR_MODELS_DIR}")
+    file(MAKE_DIRECTORY "${YUNET_MODELS_DIR}")
     
-    # Define model files to download
+    # Define Haar cascade model files to download
     set(OPENCV_MODELS_BASE_URL "https://github.com/opencv/opencv/raw/master/data/haarcascades")
-    set(FACE_DETECTION_MODELS
+    set(HAAR_CASCADE_MODELS
         "haarcascade_frontalface_alt.xml"
         "haarcascade_frontalface_default.xml"
         "haarcascade_frontalface_alt2.xml"
     )
     
-    # Download each model file
-    foreach(MODEL_FILE ${FACE_DETECTION_MODELS})
+    # Define YuNet model files to download
+    set(YUNET_MODELS_BASE_URL "https://github.com/opencv/opencv_zoo/raw/master/models/face_detection_yunet")
+    set(YUNET_MODELS
+        "face_detection_yunet_2023mar.onnx"
+    )
+    
+    # Download Haar cascade models
+    foreach(MODEL_FILE ${HAAR_CASCADE_MODELS})
         set(MODEL_URL "${OPENCV_MODELS_BASE_URL}/${MODEL_FILE}")
-        set(MODEL_PATH "${FACE_MODELS_DIR}/${MODEL_FILE}")
+        set(MODEL_PATH "${HAAR_MODELS_DIR}/${MODEL_FILE}")
         
         if(NOT EXISTS "${MODEL_PATH}")
             message(STATUS "Downloading ${MODEL_FILE}...")
@@ -200,8 +221,37 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
         endif()
     endforeach()
     
-    # Store face models directory for later use in executable post-build
-    set(FACE_MODELS_DOWNLOAD_DIR "${FACE_MODELS_DIR}" CACHE INTERNAL "Face models directory")
+    # Download YuNet models
+    foreach(MODEL_FILE ${YUNET_MODELS})
+        set(MODEL_URL "${YUNET_MODELS_BASE_URL}/${MODEL_FILE}")
+        set(MODEL_PATH "${YUNET_MODELS_DIR}/${MODEL_FILE}")
+        
+        if(NOT EXISTS "${MODEL_PATH}")
+            message(STATUS "Downloading ${MODEL_FILE}...")
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT 60
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+            )
+            
+            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
+            if(NOT DOWNLOAD_RESULT EQUAL 0)
+                list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
+                message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
+                message(STATUS "Download log: ${DOWNLOAD_LOG}")
+            else()
+                message(STATUS "Successfully downloaded ${MODEL_FILE}")
+            endif()
+        else()
+            message(STATUS "${MODEL_FILE} already exists, skipping download")
+        endif()
+    endforeach()
+    
+    # Store face models directories for later use in executable post-build
+    set(HAAR_MODELS_DOWNLOAD_DIR "${HAAR_MODELS_DIR}" CACHE INTERNAL "Haar cascade models directory")
+    set(YUNET_MODELS_DOWNLOAD_DIR "${YUNET_MODELS_DIR}" CACHE INTERNAL "YuNet models directory")
     
 else()
     if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND NOT DOWNLOAD_FACE_DETECTION_MODELS)
