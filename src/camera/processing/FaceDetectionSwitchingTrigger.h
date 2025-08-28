@@ -6,6 +6,10 @@
 #include "ui/Window.h"
 #include <opencv2/opencv.hpp>
 #include <opencv2/objdetect.hpp>
+
+#if defined(HAVE_OPENCV_DNN)
+#include <opencv2/dnn.hpp>
+#endif
 #include <vector>
 #include <chrono>
 #include <atomic>
@@ -19,16 +23,25 @@
  * - Multiple faces detected → Switch to Video 2
  * - No faces detected → No switching action
  */
+/**
+ * Face detection algorithm types
+ */
+enum class FaceDetectionAlgorithm {
+    HAAR_CASCADE,  // Traditional Haar cascade classifier
+#if defined(HAVE_OPENCV_DNN)
+    YUNET         // Modern YuNet face detector using DNN
+#endif
+};
+
 class FaceDetectionSwitchingTrigger : public ISwitchingTrigger, public ICameraFrameListener {
 public:
     /**
      * Configuration for face detection behavior
      */
     struct FaceDetectionConfig {
-        int minFaceSize = 30;               // Minimum face size in pixels
-        int maxFaceSize = 300;              // Maximum face size in pixels
-        double scaleFactor = 1.1;           // Scale factor for detection
-        int minNeighbors = 3;               // Minimum neighbors for detection
+        FaceDetectionAlgorithm algorithm = FaceDetectionAlgorithm::HAAR_CASCADE;
+        
+        // Common parameters
         int stabilityFrames = 5;            // Frames to wait before triggering switch
         double switchCooldownMs = 2000.0;   // Cooldown between switches (ms)
         bool enableVisualization = false;   // Draw face rectangles on frames
@@ -36,6 +49,19 @@ public:
         // Switching thresholds
         int singleFaceThreshold = 1;        // Faces needed for Video 1
         int multipleFaceThreshold = 2;      // Faces needed for Video 2
+        
+        // Haar Cascade specific parameters
+        int minFaceSize = 30;               // Minimum face size in pixels
+        int maxFaceSize = 300;              // Maximum face size in pixels
+        double scaleFactor = 1.1;           // Scale factor for detection
+        int minNeighbors = 3;               // Minimum neighbors for detection
+        
+#if defined(HAVE_OPENCV_DNN)
+        // YuNet specific parameters
+        float scoreThreshold = 0.9f;        // Confidence score threshold
+        float nmsThreshold = 0.3f;          // Non-maximum suppression threshold
+        cv::Size inputSize = cv::Size(320, 320); // Input size for YuNet model
+#endif
     };
 
     explicit FaceDetectionSwitchingTrigger(const FaceDetectionConfig& config = FaceDetectionConfig());
@@ -61,12 +87,12 @@ public:
     void OnUnregistered() override;
 
 /**
-     * Initialize face detection with Haar cascade classifier.
+     * Initialize face detection with the configured algorithm.
      * 
-     * @param cascadePath Path to Haar cascade file (empty for default)
+     * @param modelPath Path to model file (empty for default)
      * @return true if initialization successful
      */
-    bool InitializeFaceDetection(const std::string& cascadePath = "");
+    bool InitializeFaceDetection(const std::string& modelPath = "");
     
     
     /**
@@ -104,7 +130,10 @@ private:
     FaceDetectionConfig m_config;
 
     // Face detection components
-    cv::CascadeClassifier m_faceClassifier;
+    cv::CascadeClassifier m_faceClassifier;          // Haar cascade detector
+#if defined(HAVE_OPENCV_DNN)
+    cv::Ptr<cv::FaceDetectorYN> m_yunetDetector;     // YuNet detector
+#endif
     bool m_detectionInitialized = false;
     
     // Detection results and state
@@ -127,12 +156,21 @@ private:
     
     // Private methods
     std::vector<cv::Rect> DetectFaces(const cv::Mat& frame);
+    std::vector<cv::Rect> DetectFacesHaar(const cv::Mat& frame);
+#if defined(HAVE_OPENCV_DNN)
+    std::vector<cv::Rect> DetectFacesYuNet(const cv::Mat& frame);
+    bool InitializeYuNetDetection(const std::string& modelPath);
+    cv::Mat PreprocessFrameYuNet(const cv::Mat& frame);
+    std::string GetDefaultYuNetModelPath();
+#endif
+    bool InitializeHaarCascade(const std::string& cascadePath);
     bool IsFrameStable(int faceCount);
     bool ShouldTriggerSwitch(int stableFaceCount);
     void UpdateSwitchingState(int faceCount);
     bool IsInSwitchCooldown() const;
     void ProcessDetectionResult(const std::vector<cv::Rect>& faces);
     cv::Mat PreprocessFrame(const cv::Mat& frame);
+    cv::Mat PreprocessFrameHaar(const cv::Mat& frame);
     std::string GetDefaultCascadePath();
 };
 
