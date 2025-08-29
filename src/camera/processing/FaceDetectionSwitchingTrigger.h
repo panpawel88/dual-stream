@@ -14,6 +14,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
+#include <queue>
 
 /**
  * Face detection switching trigger that implements both ISwitchingTrigger and ICameraFrameListener.
@@ -158,6 +159,13 @@ public:
      * @return true if preview is enabled
      */
     bool IsPreviewEnabled() const;
+    
+    /**
+     * Update preview window from main thread.
+     * This method safely processes queued preview frames using OpenCV GUI functions.
+     * MUST be called from the main thread to avoid Win32 message pump conflicts.
+     */
+    void UpdatePreviewMainThread();
 
 private:
     mutable std::mutex m_configMutex;
@@ -195,6 +203,11 @@ private:
     std::string m_previewWindowName;
     mutable std::mutex m_previewMutex;
     
+    // Thread-safe preview frame queue for main thread processing
+    std::queue<cv::Mat> m_previewFrameQueue;
+    mutable std::mutex m_previewQueueMutex;
+    static constexpr size_t MAX_PREVIEW_QUEUE_SIZE = 3;
+    
     // Private methods
     std::vector<cv::Rect> DetectFaces(const cv::Mat& frame);
     std::vector<cv::Rect> DetectFacesHaar(const cv::Mat& frame);
@@ -219,5 +232,8 @@ private:
     void DestroyPreview();
     void UpdatePreview(const cv::Mat& frame, const std::vector<cv::Rect>& faces);
     cv::Mat CreatePreviewFrame(const cv::Mat& frame, const std::vector<cv::Rect>& faces);
+    
+    // Thread-safe preview frame queueing
+    void QueuePreviewFrame(const cv::Mat& previewFrame);
 };
 
