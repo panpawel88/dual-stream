@@ -31,6 +31,23 @@ struct CameraDeviceInfo {
 };
 
 /**
+ * OpenCV camera backend types for Windows-only application
+ * Optimized for DirectShow and MSMF backends available on Windows
+ */
+enum class CameraBackend {
+    AUTO,           // Smart selection: try DirectShow first, fallback to MSMF (recommended)
+    PREFER_DSHOW,   // Try DirectShow first, fallback to MSMF if DirectShow fails
+    PREFER_MSMF,    // Use MSMF directly (more reliable but slower initialization)
+    FORCE_DSHOW,    // Only use DirectShow, fail if not available
+    FORCE_MSMF,     // Only use MSMF, fail if not available
+    
+    // Legacy options (for compatibility)
+    DEFAULT,        // Same as AUTO
+    DSHOW,          // Same as FORCE_DSHOW  
+    MSMF            // Same as FORCE_MSMF
+};
+
+/**
  * Camera configuration parameters
  */
 struct CameraConfig {
@@ -42,6 +59,7 @@ struct CameraConfig {
     int bufferSize = 3;                 // Internal frame buffer size
     
     // OpenCV specific settings
+    CameraBackend backend = CameraBackend::AUTO;  // Camera backend selection
     int brightness = -1;                // Camera brightness (-1 = auto)
     int contrast = -1;                  // Camera contrast (-1 = auto)
     int exposure = -1;                  // Camera exposure (-1 = auto)

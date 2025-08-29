@@ -1,4 +1,6 @@
 #include "OpenCVCameraSource.h"
+#include "../../core/Logger.h"
+#include <Windows.h>  // Windows-only application
 
 OpenCVCameraSource::OpenCVCameraSource() {
     m_stats.Reset();
@@ -24,14 +26,19 @@ bool OpenCVCameraSource::Initialize(const CameraDeviceInfo& deviceInfo,
 }
 
 bool OpenCVCameraSource::InitializeCapture() {
-    // Open camera based on device type
+    bool opened = false;
+    CameraBackend backend = m_config.backend;
+    
+    // Open camera based on device type with smart backend selection
     if (m_deviceInfo.type == CameraSourceType::OPENCV_WEBCAM) {
-        if (!m_capture.open(m_deviceInfo.deviceIndex)) {
+        opened = TryOpenWebcam(m_deviceInfo.deviceIndex, backend);
+        if (!opened) {
             UpdateLastError("Failed to open camera device " + std::to_string(m_deviceInfo.deviceIndex));
             return false;
         }
     } else if (m_deviceInfo.type == CameraSourceType::OPENCV_VIDEO_FILE) {
-        if (!m_capture.open(m_deviceInfo.deviceName)) {
+        opened = TryOpenVideoFile(m_deviceInfo.deviceName, backend);
+        if (!opened) {
             UpdateLastError("Failed to open video file: " + m_deviceInfo.deviceName);
             return false;
         }
@@ -285,24 +292,78 @@ std::string OpenCVCameraSource::GetSourceName() const {
 }
 
 std::vector<CameraDeviceInfo> OpenCVCameraSource::EnumerateDevices() {
+    LOG_INFO("Starting camera device enumeration...");
     std::vector<CameraDeviceInfo> devices;
+    int consecutiveFailures = 0;
     
-    // Try to open cameras from index 0 to MAX_CAMERA_INDEX
+    // Try to open cameras from index 0 to MAX_CAMERA_INDEX with simplified approach
     for (int i = 0; i < MAX_CAMERA_INDEX; ++i) {
-        cv::VideoCapture testCap(i);
-        if (testCap.isOpened()) {
-            CameraDeviceInfo info = CreateWebcamDevice(i);
+        LOG_DEBUG("Testing camera index ", i);
+        cv::VideoCapture testCap;
+        bool opened = false;
+        std::string backendUsed = "none";
+        
+        try {
+            // Try DirectShow first (faster initialization when it works)
+            opened = testCap.open(i, cv::CAP_DSHOW);
+            if (opened) {
+                backendUsed = "DirectShow";
+                LOG_DEBUG("Camera ", i, " opened successfully with DirectShow backend");
+            } else {
+                // Fall back to MSMF if DirectShow fails
+                opened = testCap.open(i, cv::CAP_MSMF);
+                if (opened) {
+                    backendUsed = "MSMF";
+                    LOG_DEBUG("Camera ", i, " opened successfully with MSMF backend (DirectShow failed)");
+                }
+            }
             
-            // Get camera capabilities
-            info.maxWidth = static_cast<int>(testCap.get(cv::CAP_PROP_FRAME_WIDTH));
-            info.maxHeight = static_cast<int>(testCap.get(cv::CAP_PROP_FRAME_HEIGHT));
-            info.maxFrameRate = testCap.get(cv::CAP_PROP_FPS);
-            
-            devices.push_back(info);
-            testCap.release();
+            if (opened && testCap.isOpened()) {
+                CameraDeviceInfo info = CreateWebcamDevice(i);
+                
+                // Get camera capabilities with error checking
+                info.maxWidth = static_cast<int>(testCap.get(cv::CAP_PROP_FRAME_WIDTH));
+                info.maxHeight = static_cast<int>(testCap.get(cv::CAP_PROP_FRAME_HEIGHT));
+                info.maxFrameRate = testCap.get(cv::CAP_PROP_FPS);
+                
+                // Validate the retrieved values
+                if (info.maxWidth > 0 && info.maxHeight > 0) {
+                    LOG_INFO("Found camera ", i, " (", info.deviceName, ") - Resolution: ", 
+                            info.maxWidth, "x", info.maxHeight, " @ ", info.maxFrameRate, 
+                            " FPS using ", backendUsed, " backend");
+                    devices.push_back(info);
+                    consecutiveFailures = 0;  // Reset failure counter
+                } else {
+                    LOG_WARNING("Camera ", i, " opened but has invalid capabilities - skipping");
+                    consecutiveFailures++;
+                }
+                
+                testCap.release();
+            } else {
+                LOG_DEBUG("Camera ", i, " not available (both DirectShow and MSMF failed)");
+                consecutiveFailures++;
+            }
+        } catch (...) {
+            // Ignore problematic cameras
+            LOG_DEBUG("Camera ", i, " threw exception during testing - skipping");
+            consecutiveFailures++;
+        }
+        
+        // Early exit: if we have 2 consecutive failures and at least one camera found,
+        // assume no more cameras are available
+        if (consecutiveFailures >= 2 && !devices.empty()) {
+            LOG_DEBUG("Early exit after ", consecutiveFailures, " consecutive failures with ", devices.size(), " cameras found");
+            break;
+        }
+        
+        // Complete failure early exit: if first 3 indices fail, likely no cameras at all
+        if (i >= 2 && devices.empty() && consecutiveFailures >= 3) {
+            LOG_DEBUG("No cameras found after testing indices 0-", i, " - stopping enumeration");
+            break;
         }
     }
     
+    LOG_INFO("Camera enumeration complete - found ", devices.size(), " camera(s)");
     return devices;
 }
 
@@ -346,4 +407,164 @@ bool OpenCVCameraSource::SetCameraProperty(int propId, double value) {
         return m_capture.set(propId, value);
     }
     return false;
+}
+
+int OpenCVCameraSource::ConvertBackendToOpenCV(CameraBackend backend) const {
+    switch (backend) {
+        case CameraBackend::FORCE_DSHOW:
+        case CameraBackend::DSHOW:
+            return cv::CAP_DSHOW;
+        case CameraBackend::FORCE_MSMF:
+        case CameraBackend::MSMF:
+            return cv::CAP_MSMF;
+        case CameraBackend::AUTO:
+        case CameraBackend::DEFAULT:
+        case CameraBackend::PREFER_DSHOW:
+        case CameraBackend::PREFER_MSMF:
+        default:
+            return -1;  // Use smart selection logic
+    }
+}
+
+CameraBackend OpenCVCameraSource::GetOptimalBackend() const {
+    // Windows-only application: prefer DirectShow with MSMF fallback
+    return CameraBackend::PREFER_DSHOW;
+}
+
+bool OpenCVCameraSource::TryOpenWebcam(int deviceIndex, CameraBackend backend) {
+    LOG_DEBUG("Attempting to open camera ", deviceIndex, " with backend configuration");
+    
+    switch (backend) {
+        case CameraBackend::FORCE_DSHOW:
+        case CameraBackend::DSHOW:
+            // Force DirectShow only
+            LOG_DEBUG("Forcing DirectShow backend for camera ", deviceIndex);
+            if (m_capture.open(deviceIndex, cv::CAP_DSHOW)) {
+                LOG_INFO("Camera ", deviceIndex, " opened successfully with DirectShow backend");
+                m_lastError = "Using DirectShow backend";
+                return true;
+            } else {
+                LOG_ERROR("Failed to open camera ", deviceIndex, " with DirectShow backend");
+                return false;
+            }
+            
+        case CameraBackend::FORCE_MSMF:
+        case CameraBackend::MSMF:
+            // Force MSMF only
+            LOG_DEBUG("Forcing MSMF backend for camera ", deviceIndex);
+            if (m_capture.open(deviceIndex, cv::CAP_MSMF)) {
+                LOG_INFO("Camera ", deviceIndex, " opened successfully with MSMF backend");
+                m_lastError = "Using MSMF backend";
+                return true;
+            } else {
+                LOG_ERROR("Failed to open camera ", deviceIndex, " with MSMF backend");
+                return false;
+            }
+            
+        case CameraBackend::PREFER_MSMF:
+            // Try MSMF first (reliable but slower)
+            LOG_DEBUG("Trying MSMF backend first for camera ", deviceIndex);
+            if (m_capture.open(deviceIndex, cv::CAP_MSMF)) {
+                LOG_INFO("Camera ", deviceIndex, " opened successfully with MSMF backend");
+                m_lastError = "Using MSMF backend";
+                return true;
+            }
+            // No fallback for PREFER_MSMF
+            LOG_ERROR("MSMF backend failed for camera ", deviceIndex, ", no fallback configured");
+            m_lastError = "MSMF backend failed";
+            return false;
+            
+        case CameraBackend::AUTO:
+        case CameraBackend::DEFAULT:
+        case CameraBackend::PREFER_DSHOW:
+        default:
+            // Try DirectShow first (faster when it works), fallback to MSMF
+            LOG_DEBUG("Trying DirectShow first for camera ", deviceIndex, ", with MSMF fallback");
+            if (m_capture.open(deviceIndex, cv::CAP_DSHOW)) {
+                LOG_INFO("Camera ", deviceIndex, " opened successfully with DirectShow backend");
+                m_lastError = "Using DirectShow backend";
+                return true;
+            }
+            
+            LOG_WARNING("DirectShow failed for camera ", deviceIndex, ", trying MSMF fallback");
+            if (m_capture.open(deviceIndex, cv::CAP_MSMF)) {
+                LOG_INFO("Camera ", deviceIndex, " opened successfully with MSMF backend (DirectShow failed)");
+                m_lastError = "Using MSMF backend (DirectShow failed)";
+                return true;
+            }
+            
+            LOG_ERROR("Both DirectShow and MSMF backends failed for camera ", deviceIndex);
+            m_lastError = "Both DirectShow and MSMF backends failed";
+            return false;
+    }
+}
+
+bool OpenCVCameraSource::TryOpenVideoFile(const std::string& filename, CameraBackend backend) {
+    LOG_DEBUG("Attempting to open video file: ", filename);
+    
+    switch (backend) {
+        case CameraBackend::FORCE_DSHOW:
+        case CameraBackend::DSHOW:
+            LOG_DEBUG("Forcing DirectShow backend for video file");
+            if (m_capture.open(filename, cv::CAP_DSHOW)) {
+                LOG_INFO("Video file opened successfully with DirectShow backend");
+                m_lastError = "Using DirectShow backend for video file";
+                return true;
+            } else {
+                LOG_ERROR("Failed to open video file with DirectShow backend");
+                return false;
+            }
+            
+        case CameraBackend::FORCE_MSMF:
+        case CameraBackend::MSMF:
+            LOG_DEBUG("Forcing MSMF backend for video file");
+            if (m_capture.open(filename, cv::CAP_MSMF)) {
+                LOG_INFO("Video file opened successfully with MSMF backend");
+                m_lastError = "Using MSMF backend for video file";
+                return true;
+            } else {
+                LOG_ERROR("Failed to open video file with MSMF backend");
+                return false;
+            }
+            
+        case CameraBackend::PREFER_MSMF:
+            LOG_DEBUG("Trying MSMF backend first for video file");
+            if (m_capture.open(filename, cv::CAP_MSMF)) {
+                LOG_INFO("Video file opened successfully with MSMF backend");
+                m_lastError = "Using MSMF backend for video file";
+                return true;
+            }
+            LOG_ERROR("MSMF backend failed for video file, no fallback configured");
+            return false;
+            
+        case CameraBackend::AUTO:
+        case CameraBackend::DEFAULT:
+        case CameraBackend::PREFER_DSHOW:
+        default:
+            // Try DirectShow first, fallback to MSMF, then default
+            LOG_DEBUG("Trying DirectShow first for video file, with multiple fallbacks");
+            if (m_capture.open(filename, cv::CAP_DSHOW)) {
+                LOG_INFO("Video file opened successfully with DirectShow backend");
+                m_lastError = "Using DirectShow backend for video file";
+                return true;
+            }
+            
+            LOG_WARNING("DirectShow failed for video file, trying MSMF fallback");
+            if (m_capture.open(filename, cv::CAP_MSMF)) {
+                LOG_INFO("Video file opened successfully with MSMF backend (DirectShow failed)");
+                m_lastError = "Using MSMF backend for video file (DirectShow failed)";
+                return true;
+            }
+            
+            LOG_WARNING("MSMF failed for video file, trying default backend");
+            // Final fallback - let OpenCV choose
+            if (m_capture.open(filename)) {
+                LOG_INFO("Video file opened successfully with default backend (DSHOW and MSMF failed)");
+                m_lastError = "Using default backend for video file";
+                return true;
+            }
+            
+            LOG_ERROR("All backends failed for video file: ", filename);
+            return false;
+    }
 }

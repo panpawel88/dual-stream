@@ -79,6 +79,12 @@ private:
     double GetCameraProperty(int propId) const;
     bool SetCameraProperty(int propId, double value);
     
+    // Backend conversion and selection helpers
+    int ConvertBackendToOpenCV(CameraBackend backend) const;
+    CameraBackend GetOptimalBackend() const;
+    bool TryOpenWebcam(int deviceIndex, CameraBackend backend);
+    bool TryOpenVideoFile(const std::string& filename, CameraBackend backend);
+    
     static constexpr int MAX_CAMERA_INDEX = 10;  // Maximum camera index to check
 };
 
