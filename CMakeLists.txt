@@ -18,6 +18,23 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CUDA_RUNTIME_LIBRARY "Shared")
     # Explicitly set C++20 flag for MSVC C++ compiler only
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++20>)
+    
+    # Build performance optimizations for MSVC
+    add_compile_options(
+        /MP           # Enable parallel compilation
+        /bigobj       # Increase object file capacity for template-heavy code
+        $<$<CONFIG:Debug>:/Od>      # No optimization in Debug
+        $<$<CONFIG:Debug>:/Zi>      # Debug info
+        $<$<CONFIG:Release>:/O2>    # Maximum speed optimization
+        $<$<CONFIG:Release>:/GL>    # Whole program optimization
+    )
+    
+    # Linker optimizations
+    add_link_options(
+        $<$<CONFIG:Release>:/LTCG>  # Link-time code generation
+        $<$<CONFIG:Release>:/OPT:REF>  # Remove unreferenced code
+        $<$<CONFIG:Release>:/OPT:ICF>  # Remove duplicate code
+    )
 endif()
 
 # Enable Unicode support for Windows
@@ -410,6 +427,7 @@ if(ENABLE_CAMERA_SUPPORT)
 endif()
 
 add_executable(dual_stream
+    src/pch.cpp  # Precompiled header source
     src/main.cpp
     src/ui/Window.cpp
     src/core/CommandLineParser.cpp
@@ -430,6 +448,18 @@ add_executable(dual_stream
     src/video/triggers/KeyboardSwitchingTrigger.cpp
     src/video/triggers/SwitchingTriggerFactory.cpp
     ${CAMERA_SOURCES}
+)
+
+# Enable Unity Build for faster compilation
+set_target_properties(dual_stream PROPERTIES
+    UNITY_BUILD ON
+    UNITY_BUILD_BATCH_SIZE 8  # Compile 8 source files together
+)
+
+# Configure precompiled headers
+target_precompile_headers(dual_stream
+    PRIVATE
+    src/pch.h
 )
 
 target_link_libraries(dual_stream PRIVATE FFmpeg)
@@ -512,6 +542,8 @@ endif()
 set_target_properties(dual_stream PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
+    # Additional performance properties
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE ON  # Enable LTO for Release builds
 )
 
 # Additional linker flags to resolve runtime library conflicts on Windows
