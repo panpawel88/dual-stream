@@ -1,5 +1,6 @@
 #include "VideoManager.h"
 #include "core/Logger.h"
+#include "core/Config.h"
 #include "rendering/IRenderer.h"
 #if USE_OPENGL_RENDERER
 #include "rendering/OpenGLRenderer.h"
@@ -15,8 +16,8 @@ VideoManager::VideoManager()
     , m_state(VideoState::STOPPED)
     , m_activeVideo(ActiveVideo::VIDEO_1)
     , m_pausedTime(0.0)
-    , m_frameInterval(1.0 / 60.0) // Default to 60 FPS
-    , m_playbackSpeed(1.0) { // Default to normal speed
+    , m_frameInterval(1.0 / Config::GetInstance()->GetInt("rendering.target_fps", 60))
+    , m_playbackSpeed(Config::GetInstance()->GetDouble("video.default_speed", 1.0)) {
 }
 
 VideoManager::~VideoManager() {
@@ -83,9 +84,11 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     if (frameRate > 0) {
         m_frameInterval = 1.0 / frameRate;
     } else {
-        // Fallback to 30 FPS if frame rate couldn't be determined
-        m_frameInterval = 1.0 / 30.0;
-        frameRate = 30.0;
+        // Fallback frame rate from configuration if frame rate couldn't be determined
+        double fallbackFps = Config::GetInstance()->GetDouble("video.fallback_fps", 30.0);
+        m_frameInterval = 1.0 / fallbackFps;
+        frameRate = fallbackFps;
+        LOG_INFO("Using fallback frame rate: ", fallbackFps, " FPS");
     }
     
     m_switchingStrategy = VideoSwitchingStrategyFactory::Create(switchingAlgorithm);

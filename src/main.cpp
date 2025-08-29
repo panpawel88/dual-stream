@@ -20,6 +20,7 @@
 #include "camera/processing/FaceDetectionSwitchingTrigger.h"
 #include "core/Logger.h"
 #include "core/FFmpegInitializer.h"
+#include "core/Config.h"
 
 int main(int argc, char* argv[]) {
     VideoPlayerArgs args = CommandLineParser::Parse(argc, argv);
@@ -28,7 +29,35 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    Logger::GetInstance().SetLogLevel(args.debugLogging ? LogLevel::Debug : LogLevel::Info);
+    // Initialize configuration system early
+    Config* config = Config::GetInstance();
+    
+    // Load configuration file from command line or default location
+    std::string configPath = args.configPath.empty() ? "config/default.ini" : args.configPath;
+    if (!config->LoadFromFile(configPath)) {
+        // If specified config doesn't exist, use built-in defaults
+        LOG_INFO("Configuration file not found at '", configPath, "', using built-in defaults");
+    }
+    
+    // Apply command line overrides to logging level
+    LogLevel logLevel = args.debugLogging ? LogLevel::Debug : 
+                       (config->GetString("logging.default_level") == "debug" ? LogLevel::Debug :
+                        config->GetString("logging.default_level") == "warning" ? LogLevel::Warning :
+                        config->GetString("logging.default_level") == "error" ? LogLevel::Error :
+                        LogLevel::Info);
+    
+    Logger::GetInstance().SetLogLevel(logLevel);
+    
+    // Apply command line overrides to configuration
+    if (args.switchingAlgorithm != SwitchingAlgorithm::IMMEDIATE || !args.configPath.empty()) {
+        // Only override if explicitly set or using non-default config
+        std::string algorithmName = VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm);
+        config->SetString("video.default_algorithm", algorithmName);
+    }
+    
+    if (args.playbackSpeed != 1.0) {
+        config->SetDouble("video.default_speed", args.playbackSpeed);
+    }
     
     LOG_INFO("DualStream Video Player v2.0.0");
     
@@ -56,17 +85,25 @@ int main(int argc, char* argv[]) {
     int maxVideoWidth = std::max(video1Info.width, video2Info.width);
     int maxVideoHeight = std::max(video1Info.height, video2Info.height);
     
-    // Get display resolution to limit window size
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    // Get default window size from configuration
+    int defaultWidth = config->GetInt("window.default_width", 1280);
+    int defaultHeight = config->GetInt("window.default_height", 720);
     
-    int windowWidth = std::min(maxVideoWidth, screenWidth);
-    int windowHeight = std::min(maxVideoHeight, screenHeight);
+    // Use the larger of video size or default size, but respect config preference
+    int windowWidth = std::max(maxVideoWidth, defaultWidth);
+    int windowHeight = std::max(maxVideoHeight, defaultHeight);
     
-    if (windowWidth != maxVideoWidth || windowHeight != maxVideoHeight) {
-        LOG_INFO("Window size limited to display resolution: ", windowWidth, "x", windowHeight, 
-                " (video max: ", maxVideoWidth, "x", maxVideoHeight, ")");
+    // Limit to display resolution if configured to do so
+    if (config->GetBool("window.limit_to_display", true)) {
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+        windowWidth = std::min(windowWidth, screenWidth);
+        windowHeight = std::min(windowHeight, screenHeight);
     }
+    
+    LOG_INFO("Window size: ", windowWidth, "x", windowHeight, 
+             " (video max: ", maxVideoWidth, "x", maxVideoHeight, 
+             ", config default: ", defaultWidth, "x", defaultHeight, ")");
     
     Window window;
     if (!window.Create("DualStream Video Player", windowWidth, windowHeight)) {
@@ -95,7 +132,9 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<CameraManager> cameraManager;
     if (args.triggerType == TriggerType::FACE_DETECTION) {
         cameraManager = std::make_unique<CameraManager>();
-        if (!cameraManager->InitializeAuto()) {
+        CameraConfig cameraConfig = CameraManager::CreateCameraConfigFromGlobal();
+        PublisherConfig publisherConfig = CameraManager::CreatePublisherConfigFromGlobal();
+        if (!cameraManager->InitializeAuto(cameraConfig, publisherConfig)) {
             LOG_ERROR("Failed to initialize camera for face detection");
             return 1;
         }
@@ -109,7 +148,7 @@ int main(int argc, char* argv[]) {
     // Create trigger configuration
     TriggerConfig triggerConfig;
     triggerConfig.window = &window;
-    triggerConfig.faceDetectionConfig.enablePreview = true;
+    triggerConfig.faceDetectionConfig = FaceDetectionSwitchingTrigger::CreateConfigFromGlobal();
     
     auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, triggerConfig);
     if (!switchingTrigger) {

@@ -8,10 +8,14 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
     if (argc < 3) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [--debug] [--switching-algorithm=<algorithm>] [--trigger=<trigger>] [--speed=<speed>]";
-        args.errorMessage += "\nSwitching algorithms: immediate (default), predecoded, keyframe-sync";
-        args.errorMessage += "\nTrigger types: keyboard (default), face, face_detection";
-        args.errorMessage += "\nPlayback speeds: 0.05, 0.1, 0.2, 0.5, 1.0 (default)";
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [options]";
+        args.errorMessage += "\nOptions:";
+        args.errorMessage += "\n  --config=<path>                Configuration file path (default: config/default.ini)";
+        args.errorMessage += "\n  --debug, -d                    Enable debug logging";
+        args.errorMessage += "\n  --switching-algorithm=<alg>    Switching algorithm: immediate (default), predecoded, keyframe-sync";
+        args.errorMessage += "\n  --trigger=<type>               Trigger type: keyboard (default), face_detection";
+        args.errorMessage += "\n  --speed=<speed>                Playback speed: 0.05, 0.1, 0.2, 0.5, 1.0 (default), 2.0, 5.0, 10.0";
+        args.errorMessage += "\nNote: Command line options override configuration file settings";
         return args;
     }
     
@@ -28,6 +32,8 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
         
         if (arg == "--debug" || arg == "-d") {
             args.debugLogging = true;
+        } else if (arg.find("--config=") == 0) {
+            args.configPath = arg.substr(9); // Skip "--config="
         } else if (arg.find("--switching-algorithm=") == 0 || arg.find("-s=") == 0) {
             std::string algorithmName;
             if (arg.find("--switching-algorithm=") == 0) {
@@ -66,7 +72,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
             }
         } else {
             args.errorMessage = "Unknown option: " + arg;
-            args.errorMessage += "\nValid options: --debug, --switching-algorithm=<algorithm>, --trigger=<trigger>, --speed=<speed>";
+            args.errorMessage += "\nValid options: --config=<path>, --debug, --switching-algorithm=<algorithm>, --trigger=<trigger>, --speed=<speed>";
             return args;
         }
     }

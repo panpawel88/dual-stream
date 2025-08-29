@@ -441,6 +441,7 @@ add_executable(dual_stream
     src/video/VideoManager.cpp
     src/core/Logger.cpp
     src/core/FFmpegInitializer.cpp
+    src/core/Config.cpp
     src/video/switching/VideoSwitchingStrategy.cpp
     src/video/switching/experimental/ImmediateSwitchStrategy.cpp
     src/video/switching/experimental/PredecodedSwitchStrategy.cpp

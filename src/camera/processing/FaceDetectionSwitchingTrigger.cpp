@@ -1,6 +1,47 @@
 #include "FaceDetectionSwitchingTrigger.h"
 #include "../../core/Logger.h"
+#include "../../core/Config.h"
 #include <fstream>
+
+FaceDetectionSwitchingTrigger::FaceDetectionConfig FaceDetectionSwitchingTrigger::CreateConfigFromGlobal() {
+    Config* config = Config::GetInstance();
+    FaceDetectionConfig faceConfig;
+    
+    // Parse algorithm from string
+    std::string algorithmStr = config->GetString("face_detection.algorithm", "haar_cascade");
+    if (algorithmStr == "yunet") {
+        faceConfig.algorithm = FaceDetectionAlgorithm::YUNET;
+    } else {
+        faceConfig.algorithm = FaceDetectionAlgorithm::HAAR_CASCADE;
+    }
+    
+    // Common parameters
+    faceConfig.stabilityFrames = config->GetInt("face_detection.stability_frames", 5);
+    faceConfig.switchCooldownMs = config->GetDouble("face_detection.switch_cooldown_ms", 2000.0);
+    faceConfig.enableVisualization = config->GetBool("face_detection.enable_visualization", false);
+    faceConfig.enablePreview = config->GetBool("face_detection.enable_preview", false);
+    
+    // Switching thresholds
+    faceConfig.singleFaceThreshold = config->GetInt("face_detection.single_face_threshold", 1);
+    faceConfig.multipleFaceThreshold = config->GetInt("face_detection.multiple_face_threshold", 2);
+    
+    // Haar Cascade specific parameters
+    faceConfig.minFaceSize = config->GetInt("face_detection.min_face_size", 30);
+    faceConfig.maxFaceSize = config->GetInt("face_detection.max_face_size", 300);
+    faceConfig.scaleFactor = config->GetDouble("face_detection.scale_factor", 1.1);
+    faceConfig.minNeighbors = config->GetInt("face_detection.min_neighbors", 3);
+    
+#if defined(HAVE_OPENCV_DNN)
+    // YuNet specific parameters
+    faceConfig.scoreThreshold = config->GetFloat("face_detection.score_threshold", 0.9f);
+    faceConfig.nmsThreshold = config->GetFloat("face_detection.nms_threshold", 0.3f);
+    int inputWidth = config->GetInt("face_detection.input_width", 320);
+    int inputHeight = config->GetInt("face_detection.input_height", 320);
+    faceConfig.inputSize = cv::Size(inputWidth, inputHeight);
+#endif
+    
+    return faceConfig;
+}
 
 FaceDetectionSwitchingTrigger::FaceDetectionSwitchingTrigger(const FaceDetectionConfig& config)
     : m_config(config) {

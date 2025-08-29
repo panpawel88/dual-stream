@@ -14,6 +14,7 @@ struct VideoPlayerArgs {
     bool valid;
     bool debugLogging;
     std::string errorMessage;
+    std::string configPath;
     
     VideoPlayerArgs() : switchingAlgorithm(SwitchingAlgorithm::IMMEDIATE), triggerType(TriggerType::KEYBOARD), playbackSpeed(1.0), valid(false), debugLogging(false) {}
 };
