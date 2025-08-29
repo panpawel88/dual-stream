@@ -46,6 +46,11 @@ void FaceDetectionSwitchingTrigger::Update() {
     // Face detection happens asynchronously through ProcessFrame()
     // This method just needs to maintain switching state
     
+    // Update face detection preview from main thread (safe for OpenCV GUI operations)
+    if (m_previewEnabled) {
+        UpdatePreviewMainThread();
+    }
+    
     // Check if we need to clear switching flags after they've been consumed
     auto now = std::chrono::steady_clock::now();
     auto timeSinceLastSwitch = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastSwitchTime);

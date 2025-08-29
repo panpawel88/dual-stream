@@ -165,11 +165,6 @@ int main(int argc, char* argv[]) {
         videoManager.UpdateSwitchingTrigger();
         videoManager.ProcessSwitchingTriggers();
         
-        // Update face detection preview from main thread (safe for OpenCV GUI operations)
-        if (faceDetectionTrigger && faceDetectionTrigger->IsPreviewEnabled()) {
-            faceDetectionTrigger->UpdatePreviewMainThread();
-        }
-        
         // Update video frames only when needed (based on video frame rate)
         if (videoManager.ShouldUpdateFrame()) {
             if (!videoManager.UpdateFrame()) {
