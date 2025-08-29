@@ -538,6 +538,15 @@ bool FaceDetectionSwitchingTrigger::SetPreviewEnabled(bool enable) {
     } else {
         DestroyPreview();
         m_previewEnabled = false;
+        
+        // Clear preview queue when disabling
+        {
+            std::lock_guard<std::mutex> lock(m_previewQueueMutex);
+            while (!m_previewFrameQueue.empty()) {
+                m_previewFrameQueue.pop();
+            }
+        }
+        
         LOG_INFO("Face detection preview disabled for: ", GetListenerName());
     }
     
@@ -575,8 +584,6 @@ void FaceDetectionSwitchingTrigger::DestroyPreview() {
 }
 
 void FaceDetectionSwitchingTrigger::UpdatePreview(const cv::Mat& frame, const std::vector<cv::Rect>& faces) {
-    std::lock_guard<std::mutex> lock(m_previewMutex);
-    
     if (!m_previewEnabled) {
         return;
     }
@@ -585,14 +592,11 @@ void FaceDetectionSwitchingTrigger::UpdatePreview(const cv::Mat& frame, const st
         // Create preview frame with face rectangles
         cv::Mat previewFrame = CreatePreviewFrame(frame, faces);
         
-        // Display the preview
-        cv::imshow(m_previewWindowName, previewFrame);
-        
-        // Process window events (non-blocking)
-        cv::waitKey(1);
+        // Queue the frame for main thread processing (no OpenCV GUI calls here)
+        QueuePreviewFrame(previewFrame);
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Error updating preview window: ", e.what());
+        LOG_ERROR("Error creating preview frame: ", e.what());
     }
 }
 
@@ -659,4 +663,49 @@ cv::Mat FaceDetectionSwitchingTrigger::CreatePreviewFrame(const cv::Mat& frame, 
                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(128, 128, 128), 1);
     
     return previewFrame;
+}
+
+void FaceDetectionSwitchingTrigger::QueuePreviewFrame(const cv::Mat& previewFrame) {
+    std::lock_guard<std::mutex> lock(m_previewQueueMutex);
+    
+    // Add frame to queue
+    m_previewFrameQueue.push(previewFrame.clone());
+    
+    // Keep queue size limited to prevent memory buildup
+    while (m_previewFrameQueue.size() > MAX_PREVIEW_QUEUE_SIZE) {
+        m_previewFrameQueue.pop();
+    }
+}
+
+void FaceDetectionSwitchingTrigger::UpdatePreviewMainThread() {
+    if (!m_previewEnabled) {
+        return;
+    }
+    
+    cv::Mat frameToDisplay;
+    
+    // Get the most recent frame from the queue
+    {
+        std::lock_guard<std::mutex> lock(m_previewQueueMutex);
+        if (m_previewFrameQueue.empty()) {
+            return;
+        }
+        
+        // Get the most recent frame and clear older ones
+        while (!m_previewFrameQueue.empty()) {
+            frameToDisplay = m_previewFrameQueue.front();
+            m_previewFrameQueue.pop();
+        }
+    }
+    
+    if (!frameToDisplay.empty()) {
+        try {
+            // Safe to call OpenCV GUI functions from main thread
+            cv::imshow(m_previewWindowName, frameToDisplay);
+            cv::waitKey(1);  // Process window events (non-blocking)
+            
+        } catch (const std::exception& e) {
+            LOG_ERROR("Error displaying preview window: ", e.what());
+        }
+    }
 }

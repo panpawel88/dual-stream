@@ -17,6 +17,7 @@
 #include "video/VideoManager.h"
 #include "video/triggers/SwitchingTriggerFactory.h"
 #include "camera/CameraManager.h"
+#include "camera/processing/FaceDetectionSwitchingTrigger.h"
 #include "core/Logger.h"
 #include "core/FFmpegInitializer.h"
 
@@ -108,6 +109,7 @@ int main(int argc, char* argv[]) {
     // Create trigger configuration
     TriggerConfig triggerConfig;
     triggerConfig.window = &window;
+    triggerConfig.faceDetectionConfig.enablePreview = true;
     
     auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, triggerConfig);
     if (!switchingTrigger) {
@@ -115,17 +117,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Initialize face detection if needed
+    // Initialize face detection if needed and store reference for main loop
+    std::shared_ptr<FaceDetectionSwitchingTrigger> faceDetectionTrigger;
     if (args.triggerType == TriggerType::FACE_DETECTION) {
-        auto faceDetection = std::dynamic_pointer_cast<FaceDetectionSwitchingTrigger>(switchingTrigger);
-        if (faceDetection && !faceDetection->InitializeFaceDetection()) {
+        faceDetectionTrigger = std::dynamic_pointer_cast<FaceDetectionSwitchingTrigger>(switchingTrigger);
+        if (faceDetectionTrigger && !faceDetectionTrigger->InitializeFaceDetection()) {
             LOG_ERROR("Failed to initialize face detection");
             return 1;
         }
         
         // Register the trigger as a frame listener with the camera manager
-        if (cameraManager && faceDetection) {
-            cameraManager->RegisterFrameListener(faceDetection);
+        if (cameraManager && faceDetectionTrigger) {
+            cameraManager->RegisterFrameListener(faceDetectionTrigger);
         }
     }
     
@@ -161,6 +164,11 @@ int main(int argc, char* argv[]) {
         }
         videoManager.UpdateSwitchingTrigger();
         videoManager.ProcessSwitchingTriggers();
+        
+        // Update face detection preview from main thread (safe for OpenCV GUI operations)
+        if (faceDetectionTrigger && faceDetectionTrigger->IsPreviewEnabled()) {
+            faceDetectionTrigger->UpdatePreviewMainThread();
+        }
         
         // Update video frames only when needed (based on video frame rate)
         if (videoManager.ShouldUpdateFrame()) {
