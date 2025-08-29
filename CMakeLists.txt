@@ -188,7 +188,7 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     )
     
     # Define YuNet model files to download
-    set(YUNET_MODELS_BASE_URL "https://github.com/opencv/opencv_zoo/raw/master/models/face_detection_yunet")
+    set(YUNET_MODELS_BASE_URL "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet")
     set(YUNET_MODELS
         "face_detection_yunet_2023mar.onnx"
     )
@@ -234,6 +234,7 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
                 TIMEOUT 60
                 STATUS DOWNLOAD_STATUS
                 LOG DOWNLOAD_LOG
+                SHOW_PROGRESS
             )
             
             list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
@@ -241,11 +242,52 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
                 list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
                 message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
                 message(STATUS "Download log: ${DOWNLOAD_LOG}")
+                # Remove empty/failed file
+                if(EXISTS "${MODEL_PATH}")
+                    file(REMOVE "${MODEL_PATH}")
+                endif()
             else()
-                message(STATUS "Successfully downloaded ${MODEL_FILE}")
+                # Validate that the downloaded file is not empty
+                file(SIZE "${MODEL_PATH}" MODEL_SIZE)
+                if(MODEL_SIZE EQUAL 0)
+                    message(WARNING "Downloaded ${MODEL_FILE} is empty (0 bytes). Removing invalid file.")
+                    file(REMOVE "${MODEL_PATH}")
+                else()
+                    message(STATUS "Successfully downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
+                endif()
             endif()
         else()
-            message(STATUS "${MODEL_FILE} already exists, skipping download")
+            # Check if existing file is empty and re-download if necessary
+            file(SIZE "${MODEL_PATH}" EXISTING_SIZE)
+            if(EXISTING_SIZE EQUAL 0)
+                message(STATUS "Existing ${MODEL_FILE} is empty, re-downloading...")
+                file(REMOVE "${MODEL_PATH}")
+                file(DOWNLOAD
+                    "${MODEL_URL}"
+                    "${MODEL_PATH}"
+                    TIMEOUT 60
+                    STATUS DOWNLOAD_STATUS
+                    LOG DOWNLOAD_LOG
+                    SHOW_PROGRESS
+                )
+                
+                list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
+                if(NOT DOWNLOAD_RESULT EQUAL 0)
+                    list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
+                    message(WARNING "Failed to re-download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
+                    file(REMOVE "${MODEL_PATH}")
+                else()
+                    file(SIZE "${MODEL_PATH}" MODEL_SIZE)
+                    if(MODEL_SIZE EQUAL 0)
+                        message(WARNING "Re-downloaded ${MODEL_FILE} is still empty. Removing invalid file.")
+                        file(REMOVE "${MODEL_PATH}")
+                    else()
+                        message(STATUS "Successfully re-downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
+                    endif()
+                endif()
+            else()
+                message(STATUS "${MODEL_FILE} already exists (${EXISTING_SIZE} bytes), skipping download")
+            endif()
         endif()
     endforeach()
     
@@ -444,13 +486,26 @@ if(WIN32)
 endif()
 
 # Copy face detection models to runtime directory (all platforms)
-if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS AND DEFINED FACE_MODELS_DOWNLOAD_DIR)
-    add_custom_command(TARGET dual_stream POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${FACE_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
-        COMMENT "Copying face detection models to runtime directory"
-        VERBATIM
-    )
+if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
+    # Copy Haar cascade models
+    if(DEFINED HAAR_MODELS_DOWNLOAD_DIR)
+        add_custom_command(TARGET dual_stream POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${HAAR_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/haarcascades"
+            COMMENT "Copying Haar cascade models to runtime directory"
+            VERBATIM
+        )
+    endif()
+    
+    # Copy YuNet models
+    if(DEFINED YUNET_MODELS_DOWNLOAD_DIR)
+        add_custom_command(TARGET dual_stream POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/yunet"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${YUNET_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/yunet"
+            COMMENT "Copying YuNet models to runtime directory"
+            VERBATIM
+        )
+    endif()
 endif()
 
 # Set target properties

@@ -1,5 +1,6 @@
 #include "FaceDetectionSwitchingTrigger.h"
 #include "../../core/Logger.h"
+#include <fstream>
 
 FaceDetectionSwitchingTrigger::FaceDetectionSwitchingTrigger(const FaceDetectionConfig& config)
     : m_config(config) {
@@ -365,6 +366,30 @@ bool FaceDetectionSwitchingTrigger::InitializeHaarCascade(const std::string& cas
 bool FaceDetectionSwitchingTrigger::InitializeYuNetDetection(const std::string& modelPath) {
     std::string actualPath = modelPath.empty() ? GetDefaultYuNetModelPath() : modelPath;
     
+    // Validate that the model file exists and is not empty
+    std::ifstream modelFile(actualPath, std::ios::binary | std::ios::ate);
+    if (!modelFile.is_open()) {
+        LOG_ERROR("YuNet model file does not exist: ", actualPath);
+        return false;
+    }
+    
+    std::streamsize fileSize = modelFile.tellg();
+    modelFile.close();
+    
+    if (fileSize == 0) {
+        LOG_ERROR("YuNet model file is empty (0 bytes): ", actualPath);
+        LOG_ERROR("The model may not have been downloaded correctly. Try cleaning build directory and rebuilding.");
+        return false;
+    }
+    
+    if (fileSize < 1024) {  // Expect at least 1KB for a valid ONNX model
+        LOG_ERROR("YuNet model file is too small (", fileSize, " bytes): ", actualPath);
+        LOG_ERROR("The file appears to be corrupted. Try cleaning build directory and rebuilding.");
+        return false;
+    }
+    
+    LOG_DEBUG("Loading YuNet model file (", fileSize, " bytes): ", actualPath);
+    
     try {
         // Create YuNet face detector
         m_yunetDetector = cv::FaceDetectorYN::create(
@@ -377,44 +402,8 @@ bool FaceDetectionSwitchingTrigger::InitializeYuNetDetection(const std::string& 
         
         if (m_yunetDetector.empty()) {
             LOG_ERROR("Failed to create YuNet face detector from: ", actualPath);
-            
-            // Try fallback paths
-            std::vector<std::string> fallbackPaths = {
-                "data/yunet/face_detection_yunet_2023mar.onnx",
-                "face_detection_yunet_2023mar.onnx"  // Legacy fallback
-            };
-            
-            bool loaded = false;
-            for (const auto& fallback : fallbackPaths) {
-                LOG_DEBUG("Attempting to load YuNet model from: ", fallback);
-                try {
-                    m_yunetDetector = cv::FaceDetectorYN::create(
-                        fallback,
-                        "",
-                        m_config.inputSize,
-                        m_config.scoreThreshold,
-                        m_config.nmsThreshold
-                    );
-                    
-                    if (!m_yunetDetector.empty()) {
-                        LOG_INFO("Successfully loaded YuNet face detector: ", fallback);
-                        loaded = true;
-                        break;
-                    }
-                } catch (const std::exception& e) {
-                    LOG_DEBUG("Failed to load YuNet model from ", fallback, ": ", e.what());
-                }
-            }
-            
-            if (!loaded) {
-                LOG_ERROR("Failed to load any YuNet model file. Tried paths:");
-                LOG_ERROR("  Primary: ", actualPath);
-                for (const auto& path : fallbackPaths) {
-                    LOG_ERROR("  Fallback: ", path);
-                }
-                LOG_ERROR("Ensure YuNet model is downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
-                return false;
-            }
+            LOG_ERROR("Ensure YuNet model is downloaded by running CMake with DOWNLOAD_FACE_DETECTION_MODELS=ON");
+            return false;
         } else {
             LOG_INFO("Successfully loaded YuNet face detector: ", actualPath);
         }
