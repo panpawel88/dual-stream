@@ -29,6 +29,18 @@ public:
     ~CameraManager();
     
     /**
+     * Create a CameraConfig populated from the global configuration system
+     * @return CameraConfig with values from Config::GetInstance()
+     */
+    static CameraConfig CreateCameraConfigFromGlobal();
+    
+    /**
+     * Create a PublisherConfig populated from the global configuration system
+     * @return PublisherConfig with values from Config::GetInstance()
+     */
+    static PublisherConfig CreatePublisherConfigFromGlobal();
+    
+    /**
      * Initialize camera manager with specified source type and configuration.
      * 
      * @param sourceType Type of camera source to use

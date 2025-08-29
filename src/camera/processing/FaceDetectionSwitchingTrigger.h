@@ -87,6 +87,12 @@ public:
     };
 
     explicit FaceDetectionSwitchingTrigger(const FaceDetectionConfig& config = FaceDetectionConfig());
+
+    /**
+     * Create a FaceDetectionConfig populated from the global configuration system
+     * @return FaceDetectionConfig with values from Config::GetInstance()
+     */
+    static FaceDetectionConfig CreateConfigFromGlobal();
     ~FaceDetectionSwitchingTrigger() override;
     
     // ISwitchingTrigger interface implementation

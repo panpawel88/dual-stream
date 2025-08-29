@@ -1,4 +1,5 @@
 #include "CameraManager.h"
+#include "../core/Config.h"
 
 CameraManager::CameraManager() 
     : m_state(CameraManagerState::UNINITIALIZED) {
@@ -6,6 +7,51 @@ CameraManager::CameraManager()
 
 CameraManager::~CameraManager() {
     Cleanup();
+}
+
+CameraConfig CameraManager::CreateCameraConfigFromGlobal() {
+    Config* config = Config::GetInstance();
+    CameraConfig cameraConfig;
+    
+    cameraConfig.width = config->GetInt("camera.default_width", 640);
+    cameraConfig.height = config->GetInt("camera.default_height", 480);
+    cameraConfig.frameRate = config->GetDouble("camera.default_fps", 30.0);
+    
+    // Parse camera format from string
+    std::string formatStr = config->GetString("camera.default_format", "BGR8");
+    if (formatStr == "RGB8") {
+        cameraConfig.format = CameraFormat::RGB8;
+    } else if (formatStr == "GRAY8") {
+        cameraConfig.format = CameraFormat::GRAY8;
+    } else if (formatStr == "BGRA8") {
+        cameraConfig.format = CameraFormat::BGRA8;
+    } else if (formatStr == "RGBA8") {
+        cameraConfig.format = CameraFormat::RGBA8;
+    } else if (formatStr == "DEPTH16") {
+        cameraConfig.format = CameraFormat::DEPTH16;
+    } else {
+        cameraConfig.format = CameraFormat::BGR8; // Default
+    }
+    
+    cameraConfig.brightness = config->GetInt("camera.brightness", -1);
+    cameraConfig.enableDepth = config->GetBool("camera.enable_depth", false);
+    
+    return cameraConfig;
+}
+
+PublisherConfig CameraManager::CreatePublisherConfigFromGlobal() {
+    Config* config = Config::GetInstance();
+    PublisherConfig publisherConfig;
+    
+    publisherConfig.maxFrameQueueSize = config->GetInt("frame_publisher.max_frame_queue_size", 5);
+    publisherConfig.maxWorkerThreads = config->GetInt("frame_publisher.max_worker_threads", 2);
+    publisherConfig.maxFrameAgeMs = config->GetDouble("frame_publisher.max_frame_age_ms", 100.0);
+    publisherConfig.enableFrameSkipping = config->GetBool("frame_publisher.enable_frame_skipping", true);
+    publisherConfig.enablePriorityProcessing = config->GetBool("frame_publisher.enable_priority_processing", true);
+    publisherConfig.enablePerformanceLogging = config->GetBool("frame_publisher.enable_performance_logging", false);
+    publisherConfig.statsReportIntervalMs = config->GetDouble("frame_publisher.stats_report_interval_ms", 5000.0);
+    
+    return publisherConfig;
 }
 
 bool CameraManager::Initialize(CameraSourceType sourceType, 
