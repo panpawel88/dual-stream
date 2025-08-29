@@ -97,9 +97,9 @@ FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFr
         // Process detection results
         ProcessDetectionResult(faces);
         
-        // Update preview window if enabled
+        // Update preview window if enabled (use original frame for consistent brightness)
         if (m_previewEnabled) {
-            UpdatePreview(processedFrame, faces);
+            UpdatePreview(frame.cpu.mat, faces);
         }
         
         auto endTime = std::chrono::steady_clock::now();
