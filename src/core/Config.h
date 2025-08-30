@@ -171,6 +171,9 @@ private:
     // Prevent copying
     Config(const Config&) = delete;
     Config& operator=(const Config&) = delete;
+    
+    // Allow std::unique_ptr to access private destructor
+    friend struct std::default_delete<Config>;
 
     /**
      * Parse a string value to the appropriate type
