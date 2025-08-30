@@ -24,11 +24,10 @@ void Config::LoadDefaults() {
     m_values.clear();
     
     // Application settings
-    m_values["application.version"] = "2.0.0";
     m_values["application.auto_save_config"] = "true";
     
     // Video settings
-    m_values["video.default_algorithm"] = "immediate";
+    m_values["video.default_algorithm"] = "keyframe-sync";
     m_values["video.default_speed"] = "1.0";
     m_values["video.fallback_fps"] = "30.0";
     m_values["video.enable_hardware_decode"] = "true";
