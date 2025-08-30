@@ -48,10 +48,21 @@ int main(int argc, char* argv[]) {
     
     Logger::GetInstance().SetLogLevel(logLevel);
     
-    // Apply command line overrides to configuration
-    if (args.switchingAlgorithm != SwitchingAlgorithm::IMMEDIATE || !args.configPath.empty()) {
-        // Only override if explicitly set or using non-default config
-        std::string algorithmName = VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm);
+    // If algorithm not specified on command line, use config default
+    SwitchingAlgorithm finalAlgorithm;
+    if (!args.switchingAlgorithm.has_value()) {
+        std::string configAlgorithm = config->GetString("video.default_algorithm", "keyframe-sync");
+        SwitchingAlgorithm parsedAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(configAlgorithm);
+        if (parsedAlgorithm != static_cast<SwitchingAlgorithm>(-1)) {
+            finalAlgorithm = parsedAlgorithm;
+        } else {
+            finalAlgorithm = SwitchingAlgorithm::KEYFRAME_SYNC;  // Fallback to keyframe-sync
+        }
+    } else {
+        finalAlgorithm = args.switchingAlgorithm.value();
+        
+        // Apply command line overrides to configuration
+        std::string algorithmName = VideoSwitchingStrategyFactory::GetAlgorithmName(finalAlgorithm);
         config->SetString("video.default_algorithm", algorithmName);
     }
     
@@ -69,7 +80,7 @@ int main(int argc, char* argv[]) {
     
     LOG_INFO("Video 1: ", args.video1Path);
     LOG_INFO("Video 2: ", args.video2Path);
-    LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(args.switchingAlgorithm));
+    LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(finalAlgorithm));
     LOG_INFO("Switching Trigger: ", SwitchingTriggerFactory::GetTriggerTypeName(args.triggerType));
     LOG_INFO("Playback Speed: ", args.playbackSpeed, "x");
     
@@ -136,7 +147,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Successfully initialized ", actualRendererName, " renderer");
     
     VideoManager videoManager;
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.get(), args.switchingAlgorithm, args.playbackSpeed)) {
+    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.get(), finalAlgorithm, args.playbackSpeed)) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }
