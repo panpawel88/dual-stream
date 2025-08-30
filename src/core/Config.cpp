@@ -23,26 +23,18 @@ void Config::LoadDefaults() {
     // Clear existing values
     m_values.clear();
     
-    // Application settings
-    m_values["application.auto_save_config"] = "true";
-    
     // Video settings
-    m_values["video.default_algorithm"] = "keyframe-sync";
     m_values["video.default_speed"] = "1.0";
     m_values["video.fallback_fps"] = "30.0";
-    m_values["video.enable_hardware_decode"] = "true";
     m_values["video.max_resolution_width"] = "7680";
     m_values["video.max_resolution_height"] = "4320";
     
     // Window settings
     m_values["window.default_width"] = "1280";
     m_values["window.default_height"] = "720";
-    m_values["window.start_fullscreen"] = "false";
     m_values["window.limit_to_display"] = "true";
-    m_values["window.allow_resize"] = "true";
     
     // Camera settings
-    m_values["camera.enabled"] = "true";
     m_values["camera.default_width"] = "640";
     m_values["camera.default_height"] = "480";
     m_values["camera.default_fps"] = "30";
@@ -51,7 +43,6 @@ void Config::LoadDefaults() {
     m_values["camera.enable_depth"] = "false";
     
     // Face detection settings
-    m_values["face_detection.enabled"] = "false";
     m_values["face_detection.algorithm"] = "haar_cascade";
     m_values["face_detection.min_face_size"] = "30";
     m_values["face_detection.max_face_size"] = "300";
@@ -70,13 +61,10 @@ void Config::LoadDefaults() {
     
     // Rendering settings
     m_values["rendering.preferred_backend"] = "auto";
-    m_values["rendering.vsync_enabled"] = "true";
     m_values["rendering.target_fps"] = "60";
     
     // Logging settings
     m_values["logging.default_level"] = "info";
-    m_values["logging.log_to_file"] = "false";
-    m_values["logging.log_file_path"] = "./logs/player.log";
     
     // Frame publisher settings
     m_values["frame_publisher.max_frame_queue_size"] = "5";
