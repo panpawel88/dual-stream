@@ -1,4 +1,6 @@
 #include "RenderPassPipeline.h"
+#include "RenderPassConfig.h"
+#include "passes/YUVToRGBRenderPass.h"
 #include "core/Logger.h"
 #include <d3dcompiler.h>
 
@@ -69,6 +71,12 @@ void RenderPassPipeline::Cleanup() {
     }
     m_passes.clear();
     
+    // Clean up dynamically created YUV pass
+    if (m_yuvToRgbPass) {
+        m_yuvToRgbPass->Cleanup();
+        m_yuvToRgbPass.reset();
+    }
+    
     // Clean up copy resources
     m_copyRasterizerState.Reset();
     m_copyBlendState.Reset();
@@ -105,8 +113,33 @@ bool RenderPassPipeline::Execute(const RenderPassContext& context,
                          context.inputWidth, context.inputHeight);
     }
     
-    // Count enabled passes
+    // Build list of enabled passes, with dynamic YUV conversion if needed
     std::vector<RenderPass*> enabledPasses;
+    
+    // Check if we need YUV to RGB conversion at the beginning
+    bool needsYuvConversion = context.isYUV;
+    if (needsYuvConversion) {
+        // Ensure YUV conversion pass exists and is initialized
+        if (!m_yuvToRgbPass) {
+            m_yuvToRgbPass = std::make_unique<YUVToRGBRenderPass>();
+            
+            // Initialize with config specifying YUVToRGB shader
+            RenderPassConfig yuvConfig;
+            yuvConfig.SetString("shader", "YUVToRGB");
+            if (!m_yuvToRgbPass->Initialize(m_device.Get(), yuvConfig)) {
+                LOG_ERROR("RenderPassPipeline: Failed to initialize YUV to RGB conversion pass");
+                needsYuvConversion = false; // Fall back to direct copy
+            } else {
+                LOG_DEBUG("RenderPassPipeline: Dynamically created YUV to RGB conversion pass");
+            }
+        }
+        
+        if (m_yuvToRgbPass && needsYuvConversion) {
+            enabledPasses.push_back(m_yuvToRgbPass.get());
+        }
+    }
+    
+    // Add user-configured passes
     for (auto& pass : m_passes) {
         if (pass && pass->IsEnabled()) {
             enabledPasses.push_back(pass.get());
@@ -144,8 +177,10 @@ bool RenderPassPipeline::Execute(const RenderPassContext& context,
         }
         
         // Execute pass
+        LOG_DEBUG("RenderPassPipeline: Executing pass '", pass->GetName(), "'");
         if (!pass->Execute(context, currentInput, currentOutput)) {
             LOG_ERROR("RenderPassPipeline: Pass '", pass->GetName(), "' failed");
+            LOG_ERROR("Context: isYUV=", context.isYUV, ", uvSRV=", (context.uvSRV ? "available" : "null"));
             success = false;
             break;
         }

@@ -221,6 +221,9 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
                 context.frameNumber = m_frameNumber;
                 context.inputWidth = m_width;
                 context.inputHeight = m_height;
+                context.isYUV = texture.isYUV;
+                context.uvSRV = texture.isYUV ? m_currentFrameUVSRV.Get() : nullptr;
+                context.textureFormat = texture.d3d11.dxgiFormat;
                 
                 renderSuccess = m_renderPassPipeline->Execute(context, inputSRV, m_renderTargetView.Get());
             } else {

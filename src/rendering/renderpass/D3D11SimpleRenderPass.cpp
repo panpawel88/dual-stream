@@ -108,6 +108,16 @@ bool D3D11SimpleRenderPass::Execute(const RenderPassContext& context,
     // Set input texture
     if (inputSRV) {
         deviceContext->PSSetShaderResources(0, 1, &inputSRV);
+        
+        // Set UV texture if available (for YUV shaders like YUVToRGB)
+        if (m_shaderName == "YUVToRGB" || context.isYUV) {
+            if (context.uvSRV) {
+                deviceContext->PSSetShaderResources(1, 1, &context.uvSRV);
+            } else {
+                // If no UV texture, bind the Y texture to slot 1 as well for fallback
+                deviceContext->PSSetShaderResources(1, 1, &inputSRV);
+            }
+        }
     }
     
     // Set sampler state
@@ -141,8 +151,8 @@ bool D3D11SimpleRenderPass::Execute(const RenderPassContext& context,
     RenderFullscreenQuad(deviceContext);
     
     // Unbind resources
-    ID3D11ShaderResourceView* nullSRV = nullptr;
-    deviceContext->PSSetShaderResources(0, 1, &nullSRV);
+    ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
+    deviceContext->PSSetShaderResources(0, 2, nullSRVs);
     
     return true;
 }
@@ -222,6 +232,40 @@ float4 main(PS_INPUT input) : SV_TARGET {
     }
     
     return result / float(samples);
+}
+)";
+    } else if (shaderName == "YUVToRGB") {
+        pixelShaderSource = R"(
+Texture2D yTexture : register(t0);   // Y plane
+Texture2D uvTexture : register(t1);  // UV plane (for NV12, fallback to single Y for other formats)
+SamplerState inputSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float2 tex : TEXCOORD0;
+};
+
+float4 main(PS_INPUT input) : SV_TARGET {
+    // Sample Y (luminance)
+    float y = yTexture.Sample(inputSampler, input.tex).r;
+    
+    // Sample UV (chrominance) - for NV12, UV is at half resolution
+    // If UV texture is not available, default to grayscale
+    float2 chroma = uvTexture.Sample(inputSampler, input.tex).rg;
+    float u = chroma.r - 0.5;
+    float v = chroma.g - 0.5;
+    
+    // Handle case where UV might be zero (fallback to grayscale)
+    if (abs(u) < 0.001 && abs(v) < 0.001) {
+        return float4(y, y, y, 1.0); // Grayscale fallback
+    }
+    
+    // BT.709 YUV to RGB conversion (full range)
+    float r = y + 1.402 * v;
+    float g = y - 0.344 * u - 0.714 * v;
+    float b = y + 1.772 * u;
+    
+    return float4(saturate(r), saturate(g), saturate(b), 1.0);
 }
 )";
     } else {

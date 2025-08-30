@@ -26,6 +26,9 @@ struct RenderPassContext {
     int frameNumber;        // Frame counter
     int inputWidth;         // Input texture width
     int inputHeight;        // Input texture height
+    bool isYUV;             // True if input texture is in YUV format
+    ID3D11ShaderResourceView* uvSRV;  // Second texture plane for NV12 (UV), nullptr for single-plane
+    DXGI_FORMAT textureFormat;  // Exact texture format (NV12, BGRA8, etc.)
 };
 
 /**

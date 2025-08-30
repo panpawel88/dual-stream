@@ -104,6 +104,9 @@ private:
     std::vector<std::unique_ptr<RenderPass>> m_passes;
     bool m_enabled;
     
+    // Cached YUV conversion pass for dynamic insertion
+    std::unique_ptr<RenderPass> m_yuvToRgbPass;
+    
     // Intermediate textures for pass chaining (ping-pong buffers)
     ComPtr<ID3D11Texture2D> m_intermediateTexture[2];
     ComPtr<ID3D11ShaderResourceView> m_intermediateSRV[2];
