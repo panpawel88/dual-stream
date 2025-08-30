@@ -563,6 +563,14 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     endif()
 endif()
 
+# Copy configuration file to output directory
+add_custom_command(TARGET dual_stream POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_SOURCE_DIR}/config/default.ini" $<TARGET_FILE_DIR:dual_stream>/config/default.ini
+    COMMENT "Copying configuration file to runtime directory"
+    VERBATIM
+)
+
 # Set target properties
 set_target_properties(dual_stream PROPERTIES
     CXX_STANDARD 17
