@@ -1,7 +1,10 @@
 #include "D3D11Renderer.h"
+#include "renderpass/RenderPassConfigLoader.h"
 #include "core/Logger.h"
+#include "core/Config.h"
 #include <iostream>
 #include <d3dcompiler.h>
+#include <chrono>
 
 // Simple vertex shader source
 const char* g_vertexShaderSource = R"(
@@ -71,7 +74,9 @@ D3D11Renderer::D3D11Renderer()
     : m_initialized(false)
     , m_hwnd(nullptr)
     , m_width(0)
-    , m_height(0) {
+    , m_height(0)
+    , m_frameNumber(0)
+    , m_totalTime(0.0f) {
 }
 
 D3D11Renderer::~D3D11Renderer() {
@@ -128,6 +133,15 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     viewport.TopLeftY = 0.0f;
     m_context->RSSetViewports(1, &viewport);
     
+    // Initialize render pass pipeline
+    Config* config = Config::GetInstance();
+    m_renderPassPipeline = RenderPassConfigLoader::LoadPipeline(m_device.Get(), config);
+    if (m_renderPassPipeline) {
+        LOG_INFO("D3D11 render pass pipeline initialized successfully");
+    } else {
+        LOG_INFO("D3D11 render pass pipeline disabled or failed to initialize");
+    }
+    
     m_initialized = true;
     LOG_INFO("D3D11 renderer initialized successfully");
     return true;
@@ -142,23 +156,43 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
         return false;
     }
     
+    // Update frame timing
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto deltaTime = std::chrono::duration<float>(currentTime - startTime);
+    static auto lastFrameTime = startTime;
+    auto frameDelta = std::chrono::duration<float>(currentTime - lastFrameTime);
+    
+    m_totalTime = deltaTime.count();
+    lastFrameTime = currentTime;
+    m_frameNumber++;
+    
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
     m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
     
-    // Handle different texture types
     bool renderSuccess = false;
     
     if (!texture.IsValid()) {
         // Present black screen for invalid texture
         renderSuccess = true;
     } else {
+        // Convert texture to shader resource view for render pass pipeline
+        ID3D11ShaderResourceView* inputSRV = nullptr;
+        
         switch (texture.type) {
             case TextureType::D3D11:
-                renderSuccess = PresentD3D11Texture(texture);
+                // Create SRV from D3D11 texture
+                if (texture.d3d11.texture) {
+                    // Update the current frame texture (similar to old method)
+                    if (UpdateFrameTexture(texture.d3d11.texture.Get(), texture.isYUV, texture.d3d11.dxgiFormat)) {
+                        inputSRV = m_currentFrameSRV.Get();
+                    }
+                }
                 break;
                 
             case TextureType::Software:
-                renderSuccess = PresentSoftwareTexture(texture);
+                LOG_WARNING("Software texture not supported with render pass pipeline");
+                renderSuccess = false;
                 break;
                 
             case TextureType::CUDA:
@@ -175,6 +209,24 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
                 LOG_ERROR("Unknown texture type");
                 renderSuccess = false;
                 break;
+        }
+        
+        if (inputSRV) {
+            if (m_renderPassPipeline && m_renderPassPipeline->IsEnabled()) {
+                // Use render pass pipeline
+                RenderPassContext context;
+                context.deviceContext = m_context.Get();
+                context.deltaTime = frameDelta.count();
+                context.totalTime = m_totalTime;
+                context.frameNumber = m_frameNumber;
+                context.inputWidth = m_width;
+                context.inputHeight = m_height;
+                
+                renderSuccess = m_renderPassPipeline->Execute(context, inputSRV, m_renderTargetView.Get());
+            } else {
+                // Direct rendering without render passes (fallback to original behavior)
+                renderSuccess = PresentD3D11TextureDirect(inputSRV, texture.isYUV);
+            }
         }
     }
     
@@ -622,6 +674,30 @@ bool D3D11Renderer::PresentD3D11Texture(const RenderTexture& texture) {
     return true;
 }
 
+bool D3D11Renderer::PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV) {
+    if (!inputSRV) {
+        return false;
+    }
+    
+    // Set render target
+    m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
+    
+    // Setup render state
+    SetupRenderState(isYUV);
+    
+    // Override the SRV binding since we're providing it directly
+    m_context->PSSetShaderResources(0, 1, &inputSRV);
+    
+    // Draw fullscreen quad
+    DrawQuad();
+    
+    // Unbind resources
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    m_context->PSSetShaderResources(0, 1, &nullSRV);
+    
+    return true;
+}
+
 bool D3D11Renderer::PresentSoftwareTexture(const RenderTexture& texture) {
     if (texture.type != TextureType::Software || !texture.software.data) {
         return false;
@@ -636,6 +712,9 @@ bool D3D11Renderer::PresentSoftwareTexture(const RenderTexture& texture) {
 
 void D3D11Renderer::Reset() {
     m_initialized = false;
+    
+    // Clean up render pass pipeline
+    m_renderPassPipeline.reset();
     
     // Reset all COM objects
     m_currentFrameUVSRV.Reset();

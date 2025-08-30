@@ -400,6 +400,10 @@ endif()
 set(RENDERER_SOURCES
     src/rendering/OpenGLRenderer.cpp
     src/rendering/D3D11Renderer.cpp
+    src/rendering/renderpass/RenderPassConfig.cpp
+    src/rendering/renderpass/D3D11SimpleRenderPass.cpp
+    src/rendering/renderpass/RenderPassPipeline.cpp
+    src/rendering/renderpass/RenderPassConfigLoader.cpp
 )
 
 # Add CUDA sources for OpenGL renderer if CUDA is available

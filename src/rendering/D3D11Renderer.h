@@ -4,6 +4,8 @@
 #include <dxgi.h>
 #include <wrl/client.h>
 #include "IRenderer.h"
+#include "renderpass/RenderPassPipeline.h"
+#include <memory>
 
 using Microsoft::WRL::ComPtr;
 
@@ -53,6 +55,11 @@ private:
     ComPtr<ID3D11ShaderResourceView> m_currentFrameSRV;
     ComPtr<ID3D11ShaderResourceView> m_currentFrameUVSRV; // For UV plane in NV12
     
+    // Render pass pipeline
+    std::unique_ptr<RenderPassPipeline> m_renderPassPipeline;
+    int m_frameNumber;
+    float m_totalTime;
+    
     bool CreateDeviceAndSwapChain();
     bool CreateRenderTarget();
     bool CreateShaders();
@@ -61,6 +68,7 @@ private:
     
     bool PresentD3D11Texture(const RenderTexture& texture);
     bool PresentSoftwareTexture(const RenderTexture& texture);
+    bool PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV);
     bool UpdateFrameTexture(ID3D11Texture2D* texture, bool isYUV, DXGI_FORMAT format);
     void SetupRenderState(bool isYUV);
     void DrawQuad();
