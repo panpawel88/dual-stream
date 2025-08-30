@@ -1,5 +1,6 @@
 #include "VideoValidator.h"
 #include "core/Logger.h"
+#include "core/Config.h"
 #include <iostream>
 
 extern "C" {
@@ -106,6 +107,19 @@ VideoInfo VideoValidator::GetVideoInfo(const std::string& filePath) {
     // Validate resolution
     if (info.width <= 0 || info.height <= 0) {
         info.errorMessage = "Invalid video resolution in " + filePath + ": " + std::to_string(info.width) + "x" + std::to_string(info.height);
+        avformat_close_input(&formatContext);
+        return info;
+    }
+    
+    // Check against maximum configured resolution
+    Config* config = Config::GetInstance();
+    int maxWidth = config->GetInt("video.max_resolution_width", 7680);
+    int maxHeight = config->GetInt("video.max_resolution_height", 4320);
+    
+    if (info.width > maxWidth || info.height > maxHeight) {
+        info.errorMessage = "Video resolution " + std::to_string(info.width) + "x" + std::to_string(info.height) + 
+                           " exceeds maximum supported resolution of " + std::to_string(maxWidth) + "x" + std::to_string(maxHeight) + 
+                           " in " + filePath;
         avformat_close_input(&formatContext);
         return info;
     }

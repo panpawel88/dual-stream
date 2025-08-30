@@ -31,8 +31,8 @@ void Config::LoadDefaults() {
     m_values["video.default_speed"] = "1.0";
     m_values["video.fallback_fps"] = "30.0";
     m_values["video.enable_hardware_decode"] = "true";
-    m_values["video.max_resolution_width"] = "3840";
-    m_values["video.max_resolution_height"] = "2160";
+    m_values["video.max_resolution_width"] = "7680";
+    m_values["video.max_resolution_height"] = "4320";
     
     // Window settings
     m_values["window.default_width"] = "1280";
