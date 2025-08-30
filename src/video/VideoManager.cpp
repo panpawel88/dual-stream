@@ -2,14 +2,14 @@
 #include "core/Logger.h"
 #include "core/Config.h"
 #include "rendering/IRenderer.h"
-#if USE_OPENGL_RENDERER
 #include "rendering/OpenGLRenderer.h"
-#else
 #include "rendering/D3D11Renderer.h"
-#endif
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <chrono>
+#include <memory>
 
 VideoManager::VideoManager()
     : m_initialized(false)
@@ -40,21 +40,18 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
     
     if (renderer) {
         switch (renderer->GetRendererType()) {
-#if USE_OPENGL_RENDERER
             case RendererType::OpenGL: {
                 OpenGLRenderer* glRenderer = static_cast<OpenGLRenderer*>(renderer);
                 cudaInteropAvailable = glRenderer->IsCudaInteropAvailable();
                 LOG_INFO("Using OpenGL renderer", cudaInteropAvailable ? " with CUDA interop" : " with software decoding");
                 break;
             }
-#else
             case RendererType::DirectX11: {
                 D3D11Renderer* d3d11Renderer = static_cast<D3D11Renderer*>(renderer);
                 d3dDevice = d3d11Renderer->GetDevice();
                 LOG_INFO("Using D3D11 renderer for hardware decoding");
                 break;
             }
-#endif
             default:
                 LOG_WARNING("Unknown renderer type");
                 break;

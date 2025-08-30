@@ -1,6 +1,6 @@
 #include "CudaOpenGLInterop.h"
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 
 #include "core/Logger.h"
 #include "CudaYuvConversion.h"
@@ -436,4 +436,4 @@ bool CudaOpenGLInterop::ValidateCudaArraySize(void* cudaArray, int expectedWidth
     return true;
 }
 
-#endif // USE_OPENGL_RENDERER && HAVE_CUDA
+#endif // HAVE_CUDA

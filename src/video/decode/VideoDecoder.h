@@ -27,7 +27,7 @@ struct DecodedFrame {
     int height = 0;
     int pitch = 0;  // bytes per row
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
     // CUDA hardware frame data (for OpenGL renderer with hardware decoding)
     // Use opaque handles to avoid CUDA type conflicts
     void* cudaPtr = nullptr;
@@ -57,7 +57,7 @@ struct DecodedFrame {
         } else {
             data = nullptr;
         }
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
         // Note: CUDA resources are not copyable, only reference the same data
         cudaPtr = other.cudaPtr;
         cudaPitch = other.cudaPitch;
@@ -103,8 +103,8 @@ private:
     ComPtr<ID3D11Device> m_d3dDevice;
     ComPtr<ID3D11DeviceContext> m_d3dContext;
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
-    // CUDA components for OpenGL hardware decoding (opaque handles)
+#ifdef HAVE_CUDA
+    // CUDA components for hardware decoding (opaque handles)
     void* m_cudaContext;
     bool m_cudaContextOwned;  // True if we created the context, false if shared
 #endif
@@ -123,7 +123,7 @@ private:
     bool IsHardwareFrame(AVFrame* frame) const;
     bool ExtractD3D11Texture(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture);
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
     bool CreateCudaDeviceContext();
     bool SetupCudaDecoding();
     bool ExtractCudaDevicePtr(AVFrame* frame, void*& devicePtr, size_t& pitch);

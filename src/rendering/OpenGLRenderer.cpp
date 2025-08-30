@@ -1,6 +1,9 @@
 #include "OpenGLRenderer.h"
 #include "core/Logger.h"
 #include <iostream>
+#include <string>
+#include <memory>
+#include <stdexcept>
 
 #if HAVE_CUDA
 #include "CudaOpenGLInterop.h"

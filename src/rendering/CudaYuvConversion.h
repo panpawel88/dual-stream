@@ -1,6 +1,6 @@
 #pragma once
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 
 #include <cuda_runtime.h>
 
@@ -22,4 +22,4 @@ cudaError_t convertNv12ToRgba(
 }
 #endif
 
-#endif // USE_OPENGL_RENDERER && HAVE_CUDA
+#endif // HAVE_CUDA

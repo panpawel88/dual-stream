@@ -69,11 +69,8 @@ This application was developed as a learning exercise to explore:
 mkdir build
 cd build
 
-# DirectX 11 renderer (default)
-cmake -DUSE_OPENGL_RENDERER=OFF ..
-
-# OpenGL renderer with CUDA
-cmake -DUSE_OPENGL_RENDERER=ON ..
+# Both DirectX 11 and OpenGL renderers are always available
+cmake ..
 
 cmake --build . --config Release
 ```

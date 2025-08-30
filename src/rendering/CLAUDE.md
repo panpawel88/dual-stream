@@ -49,22 +49,35 @@ enum class RendererType {
 
 ### RendererFactory
 **File:** `RendererFactory.h/cpp`
-**Purpose:** Compile-time renderer selection and creation
+**Purpose:** Runtime renderer selection and creation
 
 **Factory Logic:**
 ```cpp
-std::unique_ptr<IRenderer> RendererFactory::CreateRenderer() {
-#if USE_OPENGL_RENDERER
-    return std::make_unique<OpenGLRenderer>();
-#else
-    return std::make_unique<D3D11Renderer>();
-#endif
+std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend preference) {
+    // Try backends in order based on preference
+    std::vector<RendererBackend> backendOrder;
+    
+    switch (preference) {
+        case RendererBackend::DirectX11:
+            backendOrder = {RendererBackend::DirectX11, RendererBackend::OpenGL};
+            break;
+        case RendererBackend::OpenGL:
+            backendOrder = {RendererBackend::OpenGL, RendererBackend::DirectX11};
+            break;
+        case RendererBackend::Auto:
+        default:
+            backendOrder = {RendererBackend::DirectX11, RendererBackend::OpenGL};
+            break;
+    }
+    
+    // Try each backend and return the first successful one
 }
 ```
 
-**Compile-Time Configuration:**
-- `USE_OPENGL_RENDERER=1` → OpenGL renderer with CUDA interop support
-- `USE_OPENGL_RENDERER=0` → DirectX 11 renderer with D3D11VA acceleration
+**Runtime Configuration:**
+- Both renderers always compiled and available
+- Automatic fallback between backends based on system capabilities
+- Runtime selection via RendererBackend enum
 
 ## Texture Abstraction System
 

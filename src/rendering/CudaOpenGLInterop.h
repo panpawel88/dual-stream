@@ -1,6 +1,6 @@
 #pragma once
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#if HAVE_CUDA
 
 #include <glad/gl.h>
 #include "core/Logger.h"
@@ -138,4 +138,4 @@ private:
     CudaOpenGLInterop& operator=(const CudaOpenGLInterop&) = delete;
 };
 
-#endif // USE_OPENGL_RENDERER && HAVE_CUDA
+#endif // HAVE_CUDA

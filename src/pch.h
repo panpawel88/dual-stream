@@ -43,19 +43,15 @@ extern "C" {
 }
 
 // DirectX headers (conditional)
-#if !defined(USE_OPENGL_RENDERER) || USE_OPENGL_RENDERER == 0
-    #include <d3d11.h>
-    #include <dxgi.h>
-    #include <d3dcompiler.h>
-    #include <wrl/client.h>
-#endif
+#include <d3d11.h>
+#include <dxgi.h>
+#include <d3dcompiler.h>
+#include <wrl/client.h>
 
 // OpenGL headers (conditional)
-#if defined(USE_OPENGL_RENDERER) && USE_OPENGL_RENDERER == 1
-    #ifdef HAVE_CUDA
-        #include <cuda_runtime.h>
-        #include <cuda_gl_interop.h>
-    #endif
+#ifdef HAVE_CUDA
+    #include <cuda_runtime.h>
+    #include <cuda_gl_interop.h>
 #endif
 
 // OpenCV headers (conditional)

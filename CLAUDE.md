@@ -162,12 +162,11 @@ Switching Strategy Impact:
 ## Build Configuration
 
 ### Renderer Selection
-```cmake
-# DirectX 11 renderer (default)
-cmake -DUSE_OPENGL_RENDERER=OFF ..
+Both DirectX 11 and OpenGL renderers are now always compiled and available at runtime. No build-time configuration required.
 
-# OpenGL renderer with CUDA interop  
-cmake -DUSE_OPENGL_RENDERER=ON ..
+```cmake
+# Both renderers available - selection happens automatically at runtime
+cmake --build . --config Release
 ```
 
 ### CUDA Support

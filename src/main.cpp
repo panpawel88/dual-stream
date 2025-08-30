@@ -114,13 +114,26 @@ int main(int argc, char* argv[]) {
     window.Show();
     LOG_INFO("Window created. Press 1/2 to switch videos, F11 for fullscreen, ESC to exit");
     
-    auto renderer = RendererFactory::CreateRenderer();
-    if (!renderer->Initialize(window.GetHandle(), windowWidth, windowHeight)) {
-        LOG_ERROR("Failed to initialize ", RendererFactory::GetRendererName(), " renderer");
+    // Parse preferred renderer backend from config
+    std::string preferredBackendStr = config->GetString("rendering.preferred_backend", "auto");
+    RendererBackend preferredBackend = RendererFactory::ParseBackendString(preferredBackendStr);
+    
+    LOG_INFO("Preferred renderer backend from config: ", preferredBackendStr);
+    
+    auto renderer = RendererFactory::CreateRenderer(preferredBackend);
+    if (!renderer) {
+        LOG_ERROR("Failed to create any renderer backend");
         return 1;
     }
     
-    LOG_INFO("Initialized ", RendererFactory::GetRendererName(), " renderer");
+    if (!renderer->Initialize(window.GetHandle(), windowWidth, windowHeight)) {
+        LOG_ERROR("Failed to initialize ", RendererFactory::GetRendererName(preferredBackend), " renderer");
+        return 1;
+    }
+    
+    // Log which renderer was actually created
+    const char* actualRendererName = (renderer->GetRendererType() == RendererType::OpenGL) ? "OpenGL" : "DirectX 11";
+    LOG_INFO("Successfully initialized ", actualRendererName, " renderer");
     
     VideoManager videoManager;
     if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.get(), args.switchingAlgorithm, args.playbackSpeed)) {

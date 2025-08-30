@@ -39,7 +39,7 @@ RenderTexture TextureConverter::ConvertFrame(const DecodedFrame& frame, IRendere
         
         case RendererType::OpenGL: {
             // OpenGL renderer - check for CUDA interop first
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
             if (renderer->SupportsCudaInterop() && frame.isHardwareCuda && frame.cudaPtr) {
                 RenderTexture renderTexture;
                 renderTexture.type = TextureType::CUDA;
