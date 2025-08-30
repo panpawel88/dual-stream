@@ -42,11 +42,12 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
                 algorithmName = arg.substr(3); // Skip "-s="
             }
             
-            args.switchingAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
-            if (args.switchingAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
+            SwitchingAlgorithm parsedAlgorithm = VideoSwitchingStrategyFactory::ParseAlgorithm(algorithmName);
+            if (parsedAlgorithm == static_cast<SwitchingAlgorithm>(-1)) {
                 args.errorMessage = "Unknown switching algorithm: " + algorithmName + algorithmErrorMsg;
                 return args;
             }
+            args.switchingAlgorithm = parsedAlgorithm;
         } else if (arg.find("--trigger=") == 0 || arg.find("-t=") == 0) {
             std::string triggerName;
             if (arg.find("--trigger=") == 0) {

@@ -2,13 +2,14 @@
 
 #include <string>
 #include <vector>
+#include <optional>
 #include "video/switching/VideoSwitchingStrategy.h"
 #include "video/triggers/SwitchingTriggerFactory.h"
 
 struct VideoPlayerArgs {
     std::string video1Path;
     std::string video2Path;
-    SwitchingAlgorithm switchingAlgorithm;
+    std::optional<SwitchingAlgorithm> switchingAlgorithm;
     TriggerType triggerType;
     double playbackSpeed;
     bool valid;
@@ -16,7 +17,7 @@ struct VideoPlayerArgs {
     std::string errorMessage;
     std::string configPath;
     
-    VideoPlayerArgs() : switchingAlgorithm(SwitchingAlgorithm::IMMEDIATE), triggerType(TriggerType::KEYBOARD), playbackSpeed(1.0), valid(false), debugLogging(false) {}
+    VideoPlayerArgs() : switchingAlgorithm(std::nullopt), triggerType(TriggerType::KEYBOARD), playbackSpeed(1.0), valid(false), debugLogging(false) {}
 };
 
 class CommandLineParser {
