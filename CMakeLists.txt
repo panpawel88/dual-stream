@@ -9,6 +9,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # CUDA settings
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+set(CMAKE_CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 # Fix runtime library conflicts on Windows
 if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -19,14 +21,24 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # Explicitly set C++20 flag for MSVC C++ compiler only
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++20>)
     
-    # Build performance optimizations for MSVC
+    # Build performance optimizations for MSVC - C++ only
     add_compile_options(
-        /MP           # Enable parallel compilation
-        /bigobj       # Increase object file capacity for template-heavy code
-        $<$<CONFIG:Debug>:/Od>      # No optimization in Debug
-        $<$<CONFIG:Debug>:/Zi>      # Debug info
-        $<$<CONFIG:Release>:/O2>    # Maximum speed optimization
-        $<$<CONFIG:Release>:/GL>    # Whole program optimization
+        $<$<COMPILE_LANGUAGE:CXX>:/MP>         # Enable parallel compilation (C++ only)
+        $<$<COMPILE_LANGUAGE:CXX>:/bigobj>     # Increase object file capacity (C++ only)
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Debug>>:/Od>       # No optimization in Debug
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Debug>>:/Zi>       # Debug info
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release>>:/O2>     # Maximum speed optimization
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release>>:/GL>     # Whole program optimization
+    )
+    
+    # CUDA-specific compiler options (nvcc compatible)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/MP>          # Parallel compilation for host code
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>      # Object file capacity for host code
+        $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-Xcompiler=/Od>    # Debug no optimization
+        $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-Xcompiler=/Zi>    # Debug info
+        $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-g>                # CUDA debug info
+        $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Release>>:-Xcompiler=/O2>  # Release optimization
     )
     
     # Linker optimizations
@@ -42,15 +54,8 @@ if(WIN32)
     add_definitions(-DUNICODE -D_UNICODE)
 endif()
 
-# Renderer selection
-option(USE_OPENGL_RENDERER "Use OpenGL renderer instead of DirectX 11" OFF)
-if(USE_OPENGL_RENDERER)
-    message(STATUS "Using OpenGL renderer")
-    add_definitions(-DUSE_OPENGL_RENDERER=1)
-else()
-    message(STATUS "Using DirectX 11 renderer")
-    add_definitions(-DUSE_OPENGL_RENDERER=0)
-endif()
+# Both renderers are now always available at runtime
+message(STATUS "Both OpenGL and DirectX 11 renderers available")
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -101,21 +106,31 @@ target_link_libraries(FFmpeg INTERFACE
 )
 
 # Optional CUDA support
-find_package(CUDAToolkit QUIET)
-if(CUDAToolkit_FOUND)
-    message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
-    set(HAVE_CUDA TRUE)
-    target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=1)
-    target_link_libraries(FFmpeg INTERFACE 
-        CUDA::cuda_driver
-        CUDA::cudart
-    )
-    # Add OpenGL interop support when using OpenGL renderer
-    if(USE_OPENGL_RENDERER)
-        target_link_libraries(FFmpeg INTERFACE CUDA::cudart)
+option(ENABLE_CUDA "Enable CUDA support for OpenGL renderer acceleration" ON)
+
+if(ENABLE_CUDA)
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND)
+        message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
+        set(HAVE_CUDA TRUE)
+        
+        # Ensure CUDA uses the same runtime library as C++ on Windows
+        if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+            set(CMAKE_CUDA_RUNTIME_LIBRARY "Shared")
+        endif()
+        
+        target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=1)
+        target_link_libraries(FFmpeg INTERFACE 
+            CUDA::cuda_driver
+            CUDA::cudart
+        )
+    else()
+        message(STATUS "CUDA not found - hardware decoding will use software fallback")
+        set(HAVE_CUDA FALSE)
+        target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
     endif()
 else()
-    message(STATUS "CUDA not found - hardware decoding will use software fallback")
+    message(STATUS "CUDA support disabled by user")
     set(HAVE_CUDA FALSE)
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
 endif()
@@ -318,9 +333,8 @@ else()
     endif()
 endif()
 
-# GLAD OpenGL loader (for modern OpenGL)
-if(USE_OPENGL_RENDERER)
-    include(FetchContent)
+# GLAD OpenGL loader (for modern OpenGL - always needed for runtime switching)
+include(FetchContent)
     
     # Fetch GLAD from official repository
     message(STATUS "Fetching GLAD OpenGL loader...")
@@ -352,7 +366,6 @@ if(USE_OPENGL_RENDERER)
         
         message(STATUS "GLAD OpenGL 4.6 Core Profile loader generated successfully")
     endif()
-endif()
 
 # Windows specific libraries
 if(WIN32)
@@ -372,28 +385,29 @@ if(WIN32)
         odbccp32
     )
     
-    # Renderer-specific libraries
-    if(USE_OPENGL_RENDERER)
-        target_link_libraries(FFmpeg INTERFACE opengl32)
-    else()
-        target_link_libraries(FFmpeg INTERFACE
-            d3d11
-            dxgi
-            d3dcompiler
-        )
-    endif()
+    # Link both renderer libraries for runtime selection
+    target_link_libraries(FFmpeg INTERFACE
+        # OpenGL libraries
+        opengl32
+        # DirectX 11 libraries  
+        d3d11
+        dxgi
+        d3dcompiler
+    )
 endif()
 
-# Main executable - conditional renderer selection
-set(RENDERER_SOURCES)
-if(USE_OPENGL_RENDERER)
-    set(RENDERER_SOURCES src/rendering/OpenGLRenderer.cpp)
-    if(HAVE_CUDA)
-        list(APPEND RENDERER_SOURCES src/rendering/CudaOpenGLInterop.cpp)
-        list(APPEND RENDERER_SOURCES src/rendering/CudaYuvConversion.cu)
-    endif()
-else()
-    set(RENDERER_SOURCES src/rendering/D3D11Renderer.cpp)
+# Main executable - compile both renderers for runtime selection
+set(RENDERER_SOURCES
+    src/rendering/OpenGLRenderer.cpp
+    src/rendering/D3D11Renderer.cpp
+)
+
+# Add CUDA sources for OpenGL renderer if CUDA is available
+if(HAVE_CUDA)
+    list(APPEND RENDERER_SOURCES 
+        src/rendering/CudaOpenGLInterop.cpp
+        src/rendering/CudaYuvConversion.cu
+    )
 endif()
 
 # Camera source files (conditional compilation)
@@ -451,10 +465,21 @@ add_executable(dual_stream
     ${CAMERA_SOURCES}
 )
 
-# Enable Unity Build for faster compilation
+# Unity Build disabled due to OpenGL header conflicts with windows.h in pch.h
+# The issue: pch.h includes windows.h which includes GL/gl.h, conflicting with GLAD
 set_target_properties(dual_stream PROPERTIES
-    UNITY_BUILD ON
-    UNITY_BUILD_BATCH_SIZE 8  # Compile 8 source files together
+    UNITY_BUILD OFF
+)
+
+# Exclude OpenGL-related files from using precompiled headers to prevent header conflicts
+set_source_files_properties(
+    src/rendering/OpenGLRenderer.cpp
+    src/rendering/CudaOpenGLInterop.cpp
+    src/rendering/RendererFactory.cpp
+    src/video/VideoManager.cpp
+    src/video/decode/VideoDecoder.cpp
+    PROPERTIES
+    SKIP_PRECOMPILE_HEADERS ON
 )
 
 # Configure precompiled headers
@@ -468,13 +493,12 @@ target_link_libraries(dual_stream PRIVATE FFmpeg)
 # Add src directory to include path for absolute includes
 target_include_directories(dual_stream PRIVATE src)
 
-# Link GLAD for OpenGL renderer
-if(USE_OPENGL_RENDERER)
-    target_link_libraries(dual_stream PRIVATE glad)
-    # Link CUDA libraries if CUDA is available
-    if(HAVE_CUDA)
-        target_link_libraries(dual_stream PRIVATE CUDA::cudart)
-    endif()
+# Always link GLAD for OpenGL runtime support
+target_link_libraries(dual_stream PRIVATE glad)
+
+# Link CUDA libraries if CUDA is available (needed for OpenGL CUDA interop)
+if(HAVE_CUDA)
+    target_link_libraries(dual_stream PRIVATE CUDA::cudart)
 endif()
 
 # Link camera support libraries

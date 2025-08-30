@@ -130,15 +130,15 @@ videoManager.SetSwitchingStrategy(std::move(strategy));
 ```
 
 ### Dual Rendering Backend
-**Compile-Time Selection:** DirectX 11 or OpenGL rendering
+**Runtime Selection:** Both DirectX 11 and OpenGL renderers available
 ```cpp
-#if USE_OPENGL_RENDERER
-    // OpenGL 4.6 Core Profile with CUDA interop
-    auto renderer = std::make_unique<OpenGLRenderer>();
-#else  
-    // DirectX 11 with D3D11VA hardware acceleration
-    auto renderer = std::make_unique<D3D11Renderer>();
-#endif
+// Both renderers always compiled - runtime selection via RendererFactory
+auto renderer = RendererFactory::CreateRenderer(RendererBackend::Auto);
+
+// Available backends:
+// - DirectX 11 with D3D11VA hardware acceleration
+// - OpenGL 4.6 Core Profile with CUDA interop
+// - Automatic selection based on system capabilities
 ```
 
 ### Hardware Acceleration Pipeline
@@ -288,16 +288,11 @@ For detailed implementation information, see the individual subsystem documentat
 
 ### Renderer Selection
 ```cmake
-# CMake configuration for renderer selection
-option(USE_OPENGL_RENDERER "Use OpenGL renderer instead of DirectX 11" OFF)
+# CMake configuration - both renderers always available
+message(STATUS "Both OpenGL and DirectX 11 renderers available")
 
-if(USE_OPENGL_RENDERER)
-    add_definitions(-DUSE_OPENGL_RENDERER=1)
-    # Link OpenGL and CUDA libraries
-else()
-    add_definitions(-DUSE_OPENGL_RENDERER=0) 
-    # Link DirectX 11 libraries
-endif()
+# Always link both OpenGL/CUDA and DirectX 11 libraries
+# Runtime selection handled by RendererFactory
 ```
 
 ### Hardware Acceleration Support

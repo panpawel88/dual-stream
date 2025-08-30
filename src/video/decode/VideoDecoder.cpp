@@ -1,8 +1,9 @@
 #include "VideoDecoder.h"
 #include "core/Logger.h"
 #include <iostream>
+#include <iomanip>
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
 #include "rendering/CudaOpenGLInterop.h"
 #endif
 
@@ -10,12 +11,12 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/hwcontext_d3d11va.h>
 #include <libswscale/swscale.h>
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
 #include <libavutil/hwcontext_cuda.h>
 #endif
 }
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
 // Include CUDA headers in implementation
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -30,7 +31,7 @@ VideoDecoder::VideoDecoder()
     , m_hwDeviceContext(nullptr)
     , m_frame(nullptr)
     , m_hwFrame(nullptr)
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
     , m_cudaContext(nullptr)
     , m_cudaContextOwned(false)
 #endif
@@ -73,9 +74,9 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
     // Initialize decoder based on renderer type and hardware availability
     bool success = false;
     if (decoderInfo.type == DecoderType::NVDEC && decoderInfo.available) {
-#if USE_OPENGL_RENDERER && HAVE_CUDA
         // For OpenGL renderer, try CUDA hardware decoding only if CUDA interop is available
         if (!d3dDevice && cudaInteropAvailable) {
+#ifdef HAVE_CUDA
             LOG_INFO("Attempting CUDA hardware decoding for OpenGL renderer (CUDA interop available)");
             success = InitializeHardwareDecoder(codecParams);
             if (success) {
@@ -86,12 +87,16 @@ bool VideoDecoder::Initialize(AVCodecParameters* codecParams, const DecoderInfo&
                 success = InitializeSoftwareDecoder(codecParams);
                 m_useHardwareDecoding = false;
             }
+#else
+            LOG_INFO("CUDA not available, using software decoding");
+            success = InitializeSoftwareDecoder(codecParams);
+            m_useHardwareDecoding = false;
+#endif
         } else if (!d3dDevice && !cudaInteropAvailable) {
             LOG_INFO("CUDA interop not available for OpenGL renderer, using software decoding");
             success = InitializeSoftwareDecoder(codecParams);
             m_useHardwareDecoding = false;
         } else
-#endif
         // For D3D11 renderer or when CUDA is not available
         if (d3dDevice) {
             LOG_INFO("Attempting D3D11VA hardware decoding for D3D11 renderer");
@@ -308,12 +313,15 @@ bool VideoDecoder::InitializeSoftwareDecoder(AVCodecParameters* codecParams) {
 }
 
 bool VideoDecoder::CreateHardwareDeviceContext() {
-#if USE_OPENGL_RENDERER && HAVE_CUDA
     // For OpenGL renderer, create CUDA device context
     if (!m_d3dDevice) {
+#ifdef HAVE_CUDA
         return CreateCudaDeviceContext();
-    }
+#else
+        LOG_ERROR("CUDA not available for OpenGL renderer");
+        return false;
 #endif
+    }
     
     // For D3D11 renderer, create D3D11VA device context using the existing D3D11 device
     AVHWDeviceContext* deviceContext;
@@ -360,7 +368,7 @@ bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
         return false;
     }
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
     // For OpenGL renderer with CUDA, process CUDA hardware frames
     if (m_frame->format == AV_PIX_FMT_CUDA) {
         return ProcessCudaHardwareFrame(outFrame);
@@ -399,23 +407,23 @@ bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
 }
 
 bool VideoDecoder::ProcessSoftwareFrame(DecodedFrame& outFrame) {
-#if USE_OPENGL_RENDERER
+    // Check renderer type and handle accordingly
     // For OpenGL renderer, create software frame data
-    bool success = CreateSoftwareFrameData(m_frame, outFrame);
-    if (success) {
-        outFrame.isYUV = false; // Software frame is converted to RGB
-        outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    }
-    return success;
-#else
     // For D3D11 renderer, create texture
-    bool success = CreateTextureFromFrame(m_frame, outFrame.texture);
+    bool success = false;
+    
+    // Try OpenGL renderer first (software frame data)
+    success = CreateSoftwareFrameData(m_frame, outFrame);
+    if (!success) {
+        // Fallback to D3D11 renderer (create texture)
+        success = CreateTextureFromFrame(m_frame, outFrame.texture);
+    }
+    
     if (success) {
         outFrame.isYUV = false; // Software frame is converted to RGB
         outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
     }
     return success;
-#endif
 }
 
 bool VideoDecoder::CreateTextureFromFrame(AVFrame* frame, ComPtr<ID3D11Texture2D>& texture) {
@@ -588,7 +596,7 @@ bool VideoDecoder::IsHardwareFrame(AVFrame* frame) const {
     // Check if the frame format is a hardware pixel format
     return frame->format == AV_PIX_FMT_D3D11 ||
            frame->format == AV_PIX_FMT_DXVA2_VLD ||
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
            frame->format == AV_PIX_FMT_CUDA ||
 #endif
            frame->hw_frames_ctx != nullptr;
@@ -693,14 +701,14 @@ void VideoDecoder::Reset() {
     m_d3dDevice.Reset();
     m_d3dContext.Reset();
     
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
     // No manual CUDA context cleanup needed - Runtime API handles it
     m_cudaContext = nullptr;
     m_cudaContextOwned = false;
 #endif
 }
 
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
 
 bool VideoDecoder::CreateCudaDeviceContext() {
     // Initialize CUDA Runtime API first (for OpenGL interop compatibility)
@@ -809,7 +817,7 @@ bool VideoDecoder::ProcessCudaHardwareFrame(DecodedFrame& outFrame) {
     return true;
 }
 
-#endif // USE_OPENGL_RENDERER && HAVE_CUDA
+#endif // HAVE_CUDA
 
 // DecodedFrame implementation
 DecodedFrame::~DecodedFrame() {
@@ -817,7 +825,7 @@ DecodedFrame::~DecodedFrame() {
         delete[] data;
         data = nullptr;
     }
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
     if (cudaResource) {
         cuGraphicsUnregisterResource(static_cast<CUgraphicsResource>(cudaResource));
         cudaResource = nullptr;
@@ -832,7 +840,7 @@ DecodedFrame& DecodedFrame::operator=(const DecodedFrame& other) {
             delete[] data;
             data = nullptr;
         }
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
         if (cudaResource) {
             cuGraphicsUnregisterResource(static_cast<CUgraphicsResource>(cudaResource));
             cudaResource = nullptr;
@@ -857,7 +865,7 @@ DecodedFrame& DecodedFrame::operator=(const DecodedFrame& other) {
             memcpy(data, other.data, dataSize);
         }
         
-#if USE_OPENGL_RENDERER && HAVE_CUDA
+#ifdef HAVE_CUDA
         // Copy CUDA fields (note: graphics resource is not copyable)
         cudaPtr = other.cudaPtr;
         cudaPitch = other.cudaPitch;
