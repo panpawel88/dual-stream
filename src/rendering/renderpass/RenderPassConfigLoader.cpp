@@ -117,8 +117,25 @@ std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string
         return nullptr;
     }
     
-    // Create simple render pass (only type supported currently)
-    auto pass = std::make_unique<D3D11SimpleRenderPass>(passName);
+    // Create render pass based on pass name
+    std::unique_ptr<RenderPass> pass;
+    
+    if (passName == "passthrough" || passName == "Passthrough") {
+        pass = std::make_unique<PassthroughPass>();
+    } else if (passName == "yuv_to_rgb" || passName == "YUVToRGB") {
+        pass = std::make_unique<YUVToRGBRenderPass>();
+    } else if (passName == "motion_blur" || passName == "MotionBlur") {
+        pass = std::make_unique<MotionBlurPass>();
+    } else if (passName == "vignette" || passName == "Vignette") {
+        pass = std::make_unique<VignettePass>();
+    } else if (passName == "sharpen" || passName == "Sharpen") {
+        pass = std::make_unique<SharpenPass>();
+    } else if (passName == "bloom" || passName == "Bloom") {
+        pass = std::make_unique<BloomPass>();
+    } else {
+        LOG_WARNING("Unknown render pass type: ", passName, ", falling back to simple render pass");
+        pass = std::make_unique<D3D11SimpleRenderPass>(passName);
+    }
     
     // Initialize the pass
     if (!pass->Initialize(device, passConfig)) {
@@ -126,7 +143,7 @@ std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string
         return nullptr;
     }
     
-    return std::move(pass);
+    return pass;
 }
 
 std::vector<std::string> RenderPassConfigLoader::ParsePassChain(const std::string& passChain) {

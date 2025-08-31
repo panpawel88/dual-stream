@@ -4,6 +4,12 @@
 #include "D3D11SimpleRenderPass.h"
 #include "RenderPassPipeline.h"
 #include "RenderPassConfig.h"
+#include "passes/PassthroughPass.h"
+#include "passes/YUVToRGBRenderPass.h"
+#include "passes/MotionBlurPass.h"
+#include "passes/VignettePass.h"
+#include "passes/SharpenPass.h"
+#include "passes/BloomPass.h"
 #include <memory>
 #include <vector>
 #include <string>
