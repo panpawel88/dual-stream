@@ -1,3 +1,11 @@
+// Define NOGDI before any Windows headers to prevent OpenGL conflicts with GLAD
+#ifndef NOGDI
+#define NOGDI
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include "D3D11Renderer.h"
 #include "renderpass/RenderPassConfigLoader.h"
 #include "core/Logger.h"

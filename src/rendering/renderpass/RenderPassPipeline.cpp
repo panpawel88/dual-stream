@@ -38,18 +38,18 @@ float4 main(PS_INPUT input) : SV_TARGET {
 }
 )";
 
-RenderPassPipeline::RenderPassPipeline()
+D3D11RenderPassPipeline::D3D11RenderPassPipeline()
     : m_enabled(false)
     , m_textureWidth(0)
     , m_textureHeight(0)
     , m_textureFormat(DXGI_FORMAT_R8G8B8A8_UNORM) {
 }
 
-RenderPassPipeline::~RenderPassPipeline() {
+D3D11RenderPassPipeline::~D3D11RenderPassPipeline() {
     Cleanup();
 }
 
-bool RenderPassPipeline::Initialize(ID3D11Device* device) {
+bool D3D11RenderPassPipeline::Initialize(ID3D11Device* device) {
     m_device = device;
     
     // Create resources for direct copy (when pipeline is disabled)
@@ -62,7 +62,7 @@ bool RenderPassPipeline::Initialize(ID3D11Device* device) {
     return true;
 }
 
-void RenderPassPipeline::Cleanup() {
+void D3D11RenderPassPipeline::Cleanup() {
     // Clean up all passes
     for (auto& pass : m_passes) {
         if (pass) {
@@ -97,16 +97,25 @@ void RenderPassPipeline::Cleanup() {
     m_device.Reset();
 }
 
-void RenderPassPipeline::AddPass(std::unique_ptr<RenderPass> pass) {
+void D3D11RenderPassPipeline::AddPass(std::unique_ptr<IRenderPass> pass) {
     if (pass) {
-        m_passes.push_back(std::move(pass));
+        // For IRenderPass interface compatibility, we need to cast to D3D11RenderPass
+        auto d3d11Pass = std::unique_ptr<D3D11RenderPass>(static_cast<D3D11RenderPass*>(pass.release()));
+        m_passes.push_back(std::move(d3d11Pass));
         LOG_INFO("RenderPassPipeline: Added pass '", m_passes.back()->GetName(), "'");
     }
 }
 
-bool RenderPassPipeline::Execute(const RenderPassContext& context,
-                                ID3D11ShaderResourceView* inputSRV,
-                                ID3D11RenderTargetView* outputRTV) {
+void D3D11RenderPassPipeline::AddD3D11Pass(std::unique_ptr<D3D11RenderPass> pass) {
+    if (pass) {
+        m_passes.push_back(std::move(pass));
+        LOG_INFO("RenderPassPipeline: Added D3D11 pass '", m_passes.back()->GetName(), "'");
+    }
+}
+
+bool D3D11RenderPassPipeline::Execute(const D3D11RenderPassContext& context,
+                                     ID3D11ShaderResourceView* inputSRV,
+                                     ID3D11RenderTargetView* outputRTV) {
     if (!m_enabled || m_passes.empty()) {
         // Pipeline disabled or no passes - direct copy input to output
         return DirectCopy(context.deviceContext, inputSRV, outputRTV, 
@@ -114,7 +123,7 @@ bool RenderPassPipeline::Execute(const RenderPassContext& context,
     }
     
     // Build list of enabled passes, with dynamic YUV conversion if needed
-    std::vector<RenderPass*> enabledPasses;
+    std::vector<D3D11RenderPass*> enabledPasses;
     
     // Check if we need YUV to RGB conversion at the beginning
     bool needsYuvConversion = context.isYUV;
@@ -164,7 +173,7 @@ bool RenderPassPipeline::Execute(const RenderPassContext& context,
     ID3D11RenderTargetView* currentOutput = nullptr;
     
     for (size_t i = 0; i < enabledPasses.size(); i++) {
-        RenderPass* pass = enabledPasses[i];
+        D3D11RenderPass* pass = enabledPasses[i];
         
         // Determine output target
         if (i == enabledPasses.size() - 1) {
@@ -195,7 +204,7 @@ bool RenderPassPipeline::Execute(const RenderPassContext& context,
     return success;
 }
 
-bool RenderPassPipeline::SetPassEnabled(const std::string& passName, bool enabled) {
+bool D3D11RenderPassPipeline::SetPassEnabled(const std::string& passName, bool enabled) {
     for (auto& pass : m_passes) {
         if (pass && pass->GetName() == passName) {
             pass->SetEnabled(enabled);
@@ -208,7 +217,7 @@ bool RenderPassPipeline::SetPassEnabled(const std::string& passName, bool enable
     return false;
 }
 
-RenderPass* RenderPassPipeline::GetPass(const std::string& passName) const {
+IRenderPass* D3D11RenderPassPipeline::GetPass(const std::string& passName) const {
     for (const auto& pass : m_passes) {
         if (pass && pass->GetName() == passName) {
             return pass.get();
@@ -217,9 +226,9 @@ RenderPass* RenderPassPipeline::GetPass(const std::string& passName) const {
     return nullptr;
 }
 
-bool RenderPassPipeline::UpdatePassParameters(const std::string& passName,
-                                             const std::map<std::string, RenderPassParameter>& parameters) {
-    RenderPass* pass = GetPass(passName);
+bool D3D11RenderPassPipeline::UpdatePassParameters(const std::string& passName,
+                                               const std::map<std::string, RenderPassParameter>& parameters) {
+    IRenderPass* pass = GetPass(passName);
     if (!pass) {
         LOG_WARNING("RenderPassPipeline: Pass '", passName, "' not found for parameter update");
         return false;
@@ -230,7 +239,7 @@ bool RenderPassPipeline::UpdatePassParameters(const std::string& passName,
     return true;
 }
 
-bool RenderPassPipeline::EnsureIntermediateTextures(int width, int height) {
+bool D3D11RenderPassPipeline::EnsureIntermediateTextures(int width, int height) {
     // Check if we need to recreate textures
     if (m_textureWidth == width && m_textureHeight == height && 
         m_intermediateTexture[0] && m_intermediateTexture[1]) {
@@ -262,7 +271,7 @@ bool RenderPassPipeline::EnsureIntermediateTextures(int width, int height) {
     return true;
 }
 
-bool RenderPassPipeline::CreateIntermediateTexture(int width, int height, DXGI_FORMAT format,
+bool D3D11RenderPassPipeline::CreateIntermediateTexture(int width, int height, DXGI_FORMAT format,
                                                   ComPtr<ID3D11Texture2D>& texture,
                                                   ComPtr<ID3D11ShaderResourceView>& srv,
                                                   ComPtr<ID3D11RenderTargetView>& rtv) {
@@ -299,7 +308,7 @@ bool RenderPassPipeline::CreateIntermediateTexture(int width, int height, DXGI_F
     return SUCCEEDED(m_device->CreateRenderTargetView(texture.Get(), &rtvDesc, &rtv));
 }
 
-bool RenderPassPipeline::DirectCopy(ID3D11DeviceContext* context,
+bool D3D11RenderPassPipeline::DirectCopy(ID3D11DeviceContext* context,
                                    ID3D11ShaderResourceView* inputSRV,
                                    ID3D11RenderTargetView* outputRTV,
                                    int width, int height) {
@@ -355,7 +364,7 @@ bool RenderPassPipeline::DirectCopy(ID3D11DeviceContext* context,
     return true;
 }
 
-bool RenderPassPipeline::CreateCopyResources() {
+bool D3D11RenderPassPipeline::CreateCopyResources() {
     // Compile copy shaders
     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #ifdef _DEBUG

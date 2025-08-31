@@ -1,10 +1,9 @@
 #pragma once
 
+#include "IRenderPass.h"
+#include "RenderPassContext.h"
 #include <d3d11.h>
 #include <wrl/client.h>
-#include <string>
-#include <map>
-#include <variant>
 
 using Microsoft::WRL::ComPtr;
 
@@ -12,67 +11,33 @@ using Microsoft::WRL::ComPtr;
 class RenderPassConfig;
 
 /**
- * Parameter value types supported by render passes
+ * DirectX 11 specific render pass base class
+ * Extends the API-agnostic interface with D3D11 functionality
  */
-using RenderPassParameter = std::variant<float, int, bool, std::array<float, 2>, std::array<float, 3>, std::array<float, 4>>;
-
-/**
- * Context passed to render passes during execution
- */
-struct RenderPassContext {
-    ID3D11DeviceContext* deviceContext;
-    float deltaTime;        // Time since last frame
-    float totalTime;        // Total elapsed time
-    int frameNumber;        // Frame counter
-    int inputWidth;         // Input texture width
-    int inputHeight;        // Input texture height
-    bool isYUV;             // True if input texture is in YUV format
-    ID3D11ShaderResourceView* uvSRV;  // Second texture plane for NV12 (UV), nullptr for single-plane
-    DXGI_FORMAT textureFormat;  // Exact texture format (NV12, BGRA8, etc.)
-};
-
-/**
- * Abstract base class for all render passes.
- * Supports simple shader-based passes with extensibility for external libraries.
- */
-class RenderPass {
+class D3D11RenderPass : public IRenderPass {
 public:
-    enum class PassType {
-        Simple,         // Vertex + pixel shader pass (current implementation)
-        External        // External library pass (future extension)
-    };
+    D3D11RenderPass(const std::string& name) : IRenderPass(name) {}
+    virtual ~D3D11RenderPass() = default;
 
-    RenderPass(const std::string& name) : m_name(name), m_enabled(true) {}
-    virtual ~RenderPass() = default;
-
-    // Core interface
-    virtual PassType GetType() const = 0;
+    /**
+     * Initialize the render pass with D3D11 device
+     * @param device D3D11 device for resource creation
+     * @param config Configuration for the pass
+     * @return true on success
+     */
     virtual bool Initialize(ID3D11Device* device, const RenderPassConfig& config) = 0;
-    virtual void Cleanup() = 0;
     
     /**
      * Execute the render pass
-     * @param context Rendering context with device and timing info
+     * @param context D3D11 rendering context with device and timing info
      * @param inputSRV Input texture to process
      * @param outputRTV Output render target
      * @return true on success
      */
-    virtual bool Execute(const RenderPassContext& context,
+    virtual bool Execute(const D3D11RenderPassContext& context,
                         ID3D11ShaderResourceView* inputSRV,
                         ID3D11RenderTargetView* outputRTV) = 0;
-
-    /**
-     * Update pass parameters at runtime
-     * @param parameters Map of parameter name to value
-     */
-    virtual void UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) = 0;
-
-    // Properties
-    const std::string& GetName() const { return m_name; }
-    bool IsEnabled() const { return m_enabled; }
-    void SetEnabled(bool enabled) { m_enabled = enabled; }
-
-protected:
-    std::string m_name;
-    bool m_enabled;
 };
+
+// Type alias for backward compatibility
+using RenderPass = D3D11RenderPass;

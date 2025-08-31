@@ -29,7 +29,7 @@ size_t SharpenPass::GetConstantBufferSize() const {
     return sizeof(ConstantBufferData);
 }
 
-void SharpenPass::PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context) {
+void SharpenPass::PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context) {
     ConstantBufferData* data = reinterpret_cast<ConstantBufferData*>(buffer);
     data->sharpness = m_sharpness;
     data->radius = m_radius;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IRenderPassPipeline.h"
 #include "RenderPass.h"
 #include "D3D11SimpleRenderPass.h"
 #include "RenderPassPipeline.h"
@@ -15,8 +16,15 @@
 #include <string>
 #include <d3d11.h>
 
-// Forward declaration
+// Forward declarations
 class Config;
+class OpenGLRenderPassPipeline;
+class OpenGLRenderPass;
+
+enum class RenderAPI {
+    D3D11,
+    OpenGL
+};
 
 /**
  * Loads render pass configuration from INI files and creates render pass pipeline
@@ -24,12 +32,29 @@ class Config;
 class RenderPassConfigLoader {
 public:
     /**
-     * Load render pass configuration and create pipeline
+     * Load D3D11 render pass configuration and create pipeline
+     * @param device D3D11 device for pass initialization
+     * @param config Configuration instance to read from
+     * @return Configured D3D11 render pass pipeline or nullptr on failure
+     */
+    static std::unique_ptr<RenderPassPipeline> LoadD3D11Pipeline(ID3D11Device* device, Config* config);
+    
+    /**
+     * Load OpenGL render pass configuration and create pipeline
+     * @param config Configuration instance to read from
+     * @return Configured OpenGL render pass pipeline or nullptr on failure
+     */
+    static std::unique_ptr<OpenGLRenderPassPipeline> LoadOpenGLPipeline(Config* config);
+    
+    /**
+     * Load render pass configuration and create pipeline (legacy method)
      * @param device D3D11 device for pass initialization
      * @param config Configuration instance to read from
      * @return Configured render pass pipeline or nullptr on failure
      */
-    static std::unique_ptr<RenderPassPipeline> LoadPipeline(ID3D11Device* device, Config* config);
+    static std::unique_ptr<RenderPassPipeline> LoadPipeline(ID3D11Device* device, Config* config) {
+        return LoadD3D11Pipeline(device, config);
+    }
 
 private:
     /**
@@ -41,7 +66,7 @@ private:
     static RenderPassConfig LoadPassConfig(const std::string& passName, Config* config);
     
     /**
-     * Create a render pass from configuration
+     * Create a D3D11 render pass from configuration
      * @param passName Name of the render pass
      * @param passConfig Pass configuration
      * @param device D3D11 device for initialization
@@ -50,6 +75,15 @@ private:
     static std::unique_ptr<RenderPass> CreatePass(const std::string& passName, 
                                                  const RenderPassConfig& passConfig,
                                                  ID3D11Device* device);
+    
+    /**
+     * Create an OpenGL render pass from configuration
+     * @param passName Name of the render pass
+     * @param passConfig Pass configuration
+     * @return Created render pass or nullptr on failure
+     */
+    static std::unique_ptr<OpenGLRenderPass> CreateOpenGLPass(const std::string& passName, 
+                                                             const RenderPassConfig& passConfig);
     
     /**
      * Parse comma-separated list of pass names

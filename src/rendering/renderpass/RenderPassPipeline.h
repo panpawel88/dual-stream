@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IRenderPassPipeline.h"
 #include "RenderPass.h"
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -13,12 +14,13 @@ using Microsoft::WRL::ComPtr;
 class RenderPassConfig;
 
 /**
- * Manages a pipeline of render passes, handling texture allocation and pass chaining
+ * DirectX 11 specific render pass pipeline implementation
+ * Manages a pipeline of D3D11 render passes, handling texture allocation and pass chaining
  */
-class RenderPassPipeline {
+class D3D11RenderPassPipeline : public IRenderPassPipeline {
 public:
-    RenderPassPipeline();
-    ~RenderPassPipeline();
+    D3D11RenderPassPipeline();
+    ~D3D11RenderPassPipeline();
 
     /**
      * Initialize the pipeline with D3D11 device
@@ -27,16 +29,19 @@ public:
      */
     bool Initialize(ID3D11Device* device);
     
-    /**
-     * Cleanup all resources
-     */
-    void Cleanup();
+    // IRenderPassPipeline interface
+    void Cleanup() override;
+    void AddPass(std::unique_ptr<IRenderPass> pass) override;
+    void SetEnabled(bool enabled) override { m_enabled = enabled; }
+    bool IsEnabled() const override { return m_enabled; }
+    bool SetPassEnabled(const std::string& passName, bool enabled) override;
+    IRenderPass* GetPass(const std::string& passName) const override;
+    size_t GetPassCount() const override { return m_passes.size(); }
+    bool UpdatePassParameters(const std::string& passName, 
+                             const std::map<std::string, RenderPassParameter>& parameters) override;
     
-    /**
-     * Add a render pass to the pipeline
-     * @param pass Render pass to add (pipeline takes ownership)
-     */
-    void AddPass(std::unique_ptr<RenderPass> pass);
+    // D3D11-specific methods
+    void AddD3D11Pass(std::unique_ptr<D3D11RenderPass> pass);
     
     /**
      * Execute the entire pipeline
@@ -45,37 +50,9 @@ public:
      * @param outputRTV Final output render target
      * @return true on success
      */
-    bool Execute(const RenderPassContext& context,
+    bool Execute(const D3D11RenderPassContext& context,
                 ID3D11ShaderResourceView* inputSRV,
                 ID3D11RenderTargetView* outputRTV);
-    
-    /**
-     * Enable/disable the entire pipeline
-     * When disabled, input is passed directly to output
-     */
-    void SetEnabled(bool enabled) { m_enabled = enabled; }
-    bool IsEnabled() const { return m_enabled; }
-    
-    /**
-     * Enable/disable a specific pass by name
-     */
-    bool SetPassEnabled(const std::string& passName, bool enabled);
-    
-    /**
-     * Get pass by name
-     */
-    RenderPass* GetPass(const std::string& passName) const;
-    
-    /**
-     * Get number of passes
-     */
-    size_t GetPassCount() const { return m_passes.size(); }
-    
-    /**
-     * Update parameters for a specific pass
-     */
-    bool UpdatePassParameters(const std::string& passName, 
-                             const std::map<std::string, RenderPassParameter>& parameters);
 
 private:
     /**
@@ -101,11 +78,11 @@ private:
 
 private:
     ComPtr<ID3D11Device> m_device;
-    std::vector<std::unique_ptr<RenderPass>> m_passes;
+    std::vector<std::unique_ptr<D3D11RenderPass>> m_passes;
     bool m_enabled;
     
     // Cached YUV conversion pass for dynamic insertion
-    std::unique_ptr<RenderPass> m_yuvToRgbPass;
+    std::unique_ptr<D3D11RenderPass> m_yuvToRgbPass;
     
     // Intermediate textures for pass chaining (ping-pong buffers)
     ComPtr<ID3D11Texture2D> m_intermediateTexture[2];
@@ -129,3 +106,6 @@ private:
     
     bool CreateCopyResources();
 };
+
+// Type alias for backward compatibility
+using RenderPassPipeline = D3D11RenderPassPipeline;

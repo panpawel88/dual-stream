@@ -35,7 +35,7 @@ size_t VignettePass::GetConstantBufferSize() const {
     return sizeof(ConstantBufferData);
 }
 
-void VignettePass::PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context) {
+void VignettePass::PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context) {
     ConstantBufferData* data = reinterpret_cast<ConstantBufferData*>(buffer);
     data->intensity = m_intensity;
     data->radius = m_radius;

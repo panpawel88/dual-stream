@@ -83,7 +83,7 @@ void D3D11SimpleRenderPass::Cleanup() {
     // Note: Shared resources (geometry, samplers, render states) are managed by D3D11RenderPassResources
 }
 
-bool D3D11SimpleRenderPass::Execute(const RenderPassContext& context,
+bool D3D11SimpleRenderPass::Execute(const D3D11RenderPassContext& context,
                                    ID3D11ShaderResourceView* inputSRV,
                                    ID3D11RenderTargetView* outputRTV) {
     if (!m_enabled || !m_vertexShader || !m_pixelShader) {
@@ -260,7 +260,7 @@ bool D3D11SimpleRenderPass::UpdateConstantBuffer(ID3D11DeviceContext* context) {
     return true;
 }
 
-bool D3D11SimpleRenderPass::UpdateConstantBuffer(ID3D11DeviceContext* context, const RenderPassContext& renderContext) {
+bool D3D11SimpleRenderPass::UpdateConstantBuffer(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext) {
     if (!m_constantBuffer) {
         return false;
     }
@@ -483,6 +483,6 @@ size_t D3D11SimpleRenderPass::GetConstantBufferSize() const {
     return 0; // No constant buffer by default
 }
 
-void D3D11SimpleRenderPass::PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context) {
+void D3D11SimpleRenderPass::PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context) {
     // Default implementation does nothing
 }

@@ -24,7 +24,7 @@ protected:
     // Override virtual methods from D3D11SimpleRenderPass
     std::string GetPixelShaderSource() const override;
     size_t GetConstantBufferSize() const override;
-    void PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context) override;
+    void PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context) override;
 
 private:
     struct ConstantBufferData {

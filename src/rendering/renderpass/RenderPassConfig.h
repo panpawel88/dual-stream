@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <array>
 
 /**
  * Configuration data for a render pass parsed from INI file

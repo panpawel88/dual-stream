@@ -11,6 +11,9 @@
 class CudaOpenGLInterop;
 #endif
 
+// Forward declarations for render pass system
+class OpenGLRenderPassPipeline;
+
 class OpenGLRenderer : public IRenderer {
 public:
     OpenGLRenderer();
@@ -89,6 +92,9 @@ private:
 #endif
     
     void Reset();
+    
+    // Render pass pipeline
+    std::unique_ptr<OpenGLRenderPassPipeline> m_renderPassPipeline;
 };
 
 // Vertex structure for full-screen quad

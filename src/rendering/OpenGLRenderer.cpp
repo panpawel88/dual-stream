@@ -1,5 +1,9 @@
 #include "OpenGLRenderer.h"
 #include "core/Logger.h"
+#include "renderpass/RenderPassConfigLoader.h"
+#include "renderpass/opengl/OpenGLRenderPassContext.h"
+#include "renderpass/opengl/OpenGLRenderPassPipeline.h"
+#include "core/Config.h"
 #include <iostream>
 #include <string>
 #include <memory>
@@ -176,6 +180,15 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    // Initialize render pass pipeline
+    Config* config = Config::GetInstance();
+    m_renderPassPipeline = RenderPassConfigLoader::LoadOpenGLPipeline(config);
+    if (m_renderPassPipeline) {
+        LOG_INFO("OpenGL render pass pipeline initialized successfully");
+    } else {
+        LOG_INFO("OpenGL render pass pipeline disabled or failed to initialize");
+    }
 
     m_initialized = true;
     LOG_INFO("OpenGL renderer initialized successfully");
@@ -647,15 +660,37 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
     // Reset pixel store
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     
-    // Setup render state and draw
-    SetupRenderState(texture.isYUV);
-    DrawQuad();
-    
-    return true;
+    // Use render pass pipeline if available and enabled
+    if (m_renderPassPipeline && m_renderPassPipeline->IsEnabled()) {
+        // Create OpenGL render pass context
+        OpenGLRenderPassContext context;
+        context.deltaTime = 0.0f; // TODO: Calculate actual delta time
+        context.totalTime = 0.0f; // TODO: Calculate actual total time
+        context.frameNumber = 0;  // TODO: Track frame number
+        context.inputWidth = texture.width;
+        context.inputHeight = texture.height;
+        context.isYUV = texture.isYUV;
+        context.uvTexture = 0; // No separate UV texture for software rendering
+        context.textureFormat = GL_RGBA8;
+        context.textureInternalFormat = GL_RGBA8;
+        context.textureDataFormat = GL_RGBA;
+        context.textureDataType = GL_UNSIGNED_BYTE;
+        
+        // Execute pipeline with our texture as input and default framebuffer as output
+        return m_renderPassPipeline->Execute(context, m_texture, 0, 0);
+    } else {
+        // Direct rendering without render passes (fallback to original behavior)
+        SetupRenderState(texture.isYUV);
+        DrawQuad();
+        return true;
+    }
 }
 
 void OpenGLRenderer::Reset() {
     m_initialized = false;
+    
+    // Clean up render pass pipeline
+    m_renderPassPipeline.reset();
     
 #if HAVE_CUDA
     // Clean up CUDA interop

@@ -1,10 +1,21 @@
+// Define WIN32_LEAN_AND_MEAN and NOMINMAX to exclude OpenGL from windows.h
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "RenderPassConfigLoader.h"
 #include "core/Config.h"
 #include "core/Logger.h"
 #include <sstream>
 #include <algorithm>
 
-std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadPipeline(ID3D11Device* device, Config* config) {
+// OpenGL render pass functionality moved to RenderPassConfigLoaderOpenGL.cpp
+// to avoid GLAD header conflicts with Windows headers
+
+std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadD3D11Pipeline(ID3D11Device* device, Config* config) {
     if (!device || !config) {
         LOG_ERROR("RenderPassConfigLoader: Invalid device or config");
         return nullptr;
@@ -69,6 +80,8 @@ std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadPipeline(ID3D11D
     LOG_INFO("Render pass pipeline created with ", passCount, " passes");
     return pipeline;
 }
+
+// OpenGL methods are implemented in RenderPassConfigLoaderOpenGL.cpp
 
 RenderPassConfig RenderPassConfigLoader::LoadPassConfig(const std::string& passName, Config* config) {
     RenderPassConfig passConfig;

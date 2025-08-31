@@ -32,7 +32,7 @@ size_t BloomPass::GetConstantBufferSize() const {
     return sizeof(ConstantBufferData);
 }
 
-void BloomPass::PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context) {
+void BloomPass::PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context) {
     ConstantBufferData* data = reinterpret_cast<ConstantBufferData*>(buffer);
     data->threshold = m_threshold;
     data->intensity = m_intensity;

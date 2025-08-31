@@ -10,16 +10,16 @@ using Microsoft::WRL::ComPtr;
 /**
  * Simple render pass implementation using vertex + pixel shaders
  */
-class D3D11SimpleRenderPass : public RenderPass {
+class D3D11SimpleRenderPass : public D3D11RenderPass {
 public:
-    D3D11SimpleRenderPass(const std::string& name) : RenderPass(name) {}
+    D3D11SimpleRenderPass(const std::string& name) : D3D11RenderPass(name) {}
     virtual ~D3D11SimpleRenderPass();
 
     // RenderPass interface
     PassType GetType() const override { return PassType::Simple; }
     bool Initialize(ID3D11Device* device, const RenderPassConfig& config) override;
     void Cleanup() override;
-    bool Execute(const RenderPassContext& context,
+    bool Execute(const D3D11RenderPassContext& context,
                 ID3D11ShaderResourceView* inputSRV,
                 ID3D11RenderTargetView* outputRTV) override;
     void UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) override;
@@ -29,7 +29,7 @@ protected:
     virtual std::string GetVertexShaderSource() const;
     virtual std::string GetPixelShaderSource() const;
     virtual size_t GetConstantBufferSize() const;
-    virtual void PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context);
+    virtual void PackConstantBuffer(uint8_t* buffer, const D3D11RenderPassContext& context);
     
     // Shader loading
     bool LoadVertexShader(ID3D11Device* device, const std::string& shaderPath);
@@ -40,7 +40,7 @@ protected:
     // Constant buffer management
     bool CreateConstantBuffer(ID3D11Device* device, size_t size);
     bool UpdateConstantBuffer(ID3D11DeviceContext* context);
-    bool UpdateConstantBuffer(ID3D11DeviceContext* context, const RenderPassContext& renderContext);
+    bool UpdateConstantBuffer(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext);
     void PackParameters();
     
     // Rendering
