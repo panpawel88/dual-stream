@@ -51,14 +51,14 @@ bool D3D11SimpleRenderPass::Initialize(ID3D11Device* device, const RenderPassCon
     // Load parameters from config
     auto parameters = config.GetAllParameters();
     if (!parameters.empty()) {
-        UpdateParameters(parameters);
-        
         // Create constant buffer if we have parameters
         m_constantBufferSize = std::max(size_t(256), parameters.size() * 16); // Minimum 256 bytes
         if (!CreateConstantBuffer(device, m_constantBufferSize)) {
             LOG_ERROR("RenderPass '", m_name, "': Failed to create constant buffer");
             return false;
         }
+
+        UpdateParameters(parameters);
     }
     
     LOG_INFO("RenderPass '", m_name, "' initialized successfully");
@@ -220,18 +220,18 @@ struct PS_INPUT {
 
 float4 main(PS_INPUT input) : SV_TARGET {
     float4 result = float4(0, 0, 0, 0);
-    int samples = max(1, sampleCount);
     
-    // Simple motion blur by sampling along a direction
-    float2 blurDirection = float2(blurStrength * 0.01, 0);
+    // Use the configured blur strength and sample count
+    float2 blurDirection = float2(blurStrength * 0.01, 0); // Horizontal blur
     
-    for (int i = 0; i < samples; i++) {
-        float offset = (float(i) / float(samples - 1) - 0.5) * 2.0;
-        float2 sampleUV = input.tex + blurDirection * offset;
+    // Sample along the blur direction with proper offset distribution
+    for (int i = 0; i < sampleCount; i++) {
+        float offset = (float(i) / float(sampleCount - 1) - 0.5) * 2.0; // -1.0 to 1.0
+        float2 sampleUV = saturate(input.tex + blurDirection * offset);
         result += inputTexture.Sample(inputSampler, sampleUV);
     }
     
-    return result / float(samples);
+    return result / float(sampleCount);
 }
 )";
     } else if (shaderName == "YUVToRGB") {
@@ -350,44 +350,71 @@ void D3D11SimpleRenderPass::PackParameters() {
         return;
     }
     
-    // Simple parameter packing - just store floats and ints sequentially
-    size_t offset = 0;
-    for (const auto& pair : m_parameters) {
-        const std::string& name = pair.first;
-        const RenderPassParameter& param = pair.second;
+    // Special handling for MotionBlur shader with specific layout
+    if (m_shaderName == "MotionBlur") {
+        // MotionBlur cbuffer layout:
+        // float blurStrength;  (offset 0)
+        // int sampleCount;     (offset 4) 
+        // float2 padding;      (offset 8, total size 16 bytes)
         
-        std::visit([&](auto&& value) {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<T, float>) {
-                if (offset + sizeof(float) <= m_constantBufferSize) {
-                    memcpy(m_constantBufferData.data() + offset, &value, sizeof(float));
-                    offset += sizeof(float);
-                }
-            } else if constexpr (std::is_same_v<T, int>) {
-                if (offset + sizeof(int) <= m_constantBufferSize) {
-                    memcpy(m_constantBufferData.data() + offset, &value, sizeof(int));
-                    offset += sizeof(int);
-                }
-            } else if constexpr (std::is_same_v<T, std::array<float, 2>>) {
-                if (offset + sizeof(value) <= m_constantBufferSize) {
-                    memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
-                    offset += sizeof(value);
-                }
-            } else if constexpr (std::is_same_v<T, std::array<float, 3>>) {
-                if (offset + sizeof(value) <= m_constantBufferSize) {
-                    memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
-                    offset += sizeof(value);
-                }
-            } else if constexpr (std::is_same_v<T, std::array<float, 4>>) {
-                if (offset + sizeof(value) <= m_constantBufferSize) {
-                    memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
-                    offset += sizeof(value);
-                }
-            }
-        }, param);
+        float blurStrength = 0.02f;  // Default value
+        int sampleCount = 8;         // Default value
         
-        // Align to 16 bytes for next parameter
-        offset = ((offset + 15) / 16) * 16;
+        // Extract parameters
+        auto blurParam = m_parameters.find("blur_strength");
+        if (blurParam != m_parameters.end() && std::holds_alternative<float>(blurParam->second)) {
+            blurStrength = std::get<float>(blurParam->second);
+        }
+        
+        auto countParam = m_parameters.find("sample_count");
+        if (countParam != m_parameters.end() && std::holds_alternative<int>(countParam->second)) {
+            sampleCount = std::get<int>(countParam->second);
+        }
+        
+        // Pack according to cbuffer layout
+        memcpy(m_constantBufferData.data() + 0, &blurStrength, 4);  // float at offset 0
+        memcpy(m_constantBufferData.data() + 4, &sampleCount, 4);   // int at offset 4
+        // padding at offset 8-15 is zero-filled by default
+    } else {
+        // Generic parameter packing for other shaders
+        size_t offset = 0;
+        for (const auto& pair : m_parameters) {
+            const std::string& name = pair.first;
+            const RenderPassParameter& param = pair.second;
+            
+            std::visit([&](auto&& value) {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, float>) {
+                    if (offset + sizeof(float) <= m_constantBufferSize) {
+                        memcpy(m_constantBufferData.data() + offset, &value, sizeof(float));
+                        offset += sizeof(float);
+                    }
+                } else if constexpr (std::is_same_v<T, int>) {
+                    if (offset + sizeof(int) <= m_constantBufferSize) {
+                        memcpy(m_constantBufferData.data() + offset, &value, sizeof(int));
+                        offset += sizeof(int);
+                    }
+                } else if constexpr (std::is_same_v<T, std::array<float, 2>>) {
+                    if (offset + sizeof(value) <= m_constantBufferSize) {
+                        memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
+                        offset += sizeof(value);
+                    }
+                } else if constexpr (std::is_same_v<T, std::array<float, 3>>) {
+                    if (offset + sizeof(value) <= m_constantBufferSize) {
+                        memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
+                        offset += sizeof(value);
+                    }
+                } else if constexpr (std::is_same_v<T, std::array<float, 4>>) {
+                    if (offset + sizeof(value) <= m_constantBufferSize) {
+                        memcpy(m_constantBufferData.data() + offset, value.data(), sizeof(value));
+                        offset += sizeof(value);
+                    }
+                }
+            }, param);
+            
+            // Align to 16 bytes for next parameter
+            offset = ((offset + 15) / 16) * 16;
+        }
     }
 }
 
