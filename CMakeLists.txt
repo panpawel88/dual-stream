@@ -404,6 +404,11 @@ set(RENDERER_SOURCES
     src/rendering/renderpass/D3D11SimpleRenderPass.cpp
     src/rendering/renderpass/RenderPassPipeline.cpp
     src/rendering/renderpass/RenderPassConfigLoader.cpp
+    src/rendering/renderpass/ShaderLibrary.cpp
+    src/rendering/renderpass/D3D11RenderPassResources.cpp
+    src/rendering/renderpass/passes/SharpenPass.cpp
+    src/rendering/renderpass/passes/BloomPass.cpp
+    src/rendering/renderpass/passes/VignettePass.cpp
 )
 
 # Add CUDA sources for OpenGL renderer if CUDA is available

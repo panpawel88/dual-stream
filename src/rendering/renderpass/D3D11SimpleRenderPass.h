@@ -25,19 +25,28 @@ public:
     void UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) override;
 
 protected:
+    // Virtual methods for derived classes to override
+    virtual std::string GetVertexShaderSource() const;
+    virtual std::string GetPixelShaderSource() const;
+    virtual size_t GetConstantBufferSize() const;
+    virtual void PackConstantBuffer(uint8_t* buffer, const RenderPassContext& context);
+    
     // Shader loading
     bool LoadVertexShader(ID3D11Device* device, const std::string& shaderPath);
     bool LoadPixelShader(ID3D11Device* device, const std::string& shaderPath);
     bool LoadShadersFromResource(ID3D11Device* device, const std::string& shaderName);
+    bool LoadShadersFromSource(ID3D11Device* device);
     
     // Constant buffer management
     bool CreateConstantBuffer(ID3D11Device* device, size_t size);
     bool UpdateConstantBuffer(ID3D11DeviceContext* context);
+    bool UpdateConstantBuffer(ID3D11DeviceContext* context, const RenderPassContext& renderContext);
     void PackParameters();
     
     // Rendering
     bool CreateFullscreenQuad(ID3D11Device* device);
     void RenderFullscreenQuad(ID3D11DeviceContext* context);
+    bool InitializeSharedResources(ID3D11Device* device);
 
 protected:
     // D3D11 resources
@@ -45,12 +54,9 @@ protected:
     ComPtr<ID3D11VertexShader> m_vertexShader;
     ComPtr<ID3D11PixelShader> m_pixelShader;
     ComPtr<ID3D11InputLayout> m_inputLayout;
-    ComPtr<ID3D11Buffer> m_vertexBuffer;
-    ComPtr<ID3D11Buffer> m_indexBuffer;
     ComPtr<ID3D11Buffer> m_constantBuffer;
-    ComPtr<ID3D11SamplerState> m_samplerState;
-    ComPtr<ID3D11BlendState> m_blendState;
-    ComPtr<ID3D11RasterizerState> m_rasterizerState;
+    
+    // Note: Geometry, samplers, and render states are now shared via D3D11RenderPassResources
     
     // Parameter management
     std::map<std::string, RenderPassParameter> m_parameters;
