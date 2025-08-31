@@ -404,8 +404,21 @@ set(RENDERER_SOURCES
     src/rendering/renderpass/D3D11SimpleRenderPass.cpp
     src/rendering/renderpass/RenderPassPipeline.cpp
     src/rendering/renderpass/RenderPassConfigLoader.cpp
+    src/rendering/renderpass/RenderPassConfigLoaderOpenGL.cpp
     src/rendering/renderpass/ShaderLibrary.cpp
     src/rendering/renderpass/D3D11RenderPassResources.cpp
+    # OpenGL render pass core files
+    src/rendering/renderpass/opengl/OpenGLRenderPassPipeline.cpp
+    src/rendering/renderpass/opengl/OpenGLRenderPassResources.cpp
+    src/rendering/renderpass/opengl/OpenGLSimpleRenderPass.cpp
+    # OpenGL render pass implementations
+    src/rendering/renderpass/passes/opengl/PassthroughPass.cpp
+    src/rendering/renderpass/passes/opengl/YUVToRGBRenderPass.cpp
+    src/rendering/renderpass/passes/opengl/MotionBlurPass.cpp
+    src/rendering/renderpass/passes/opengl/VignettePass.cpp
+    src/rendering/renderpass/passes/opengl/SharpenPass.cpp
+    src/rendering/renderpass/passes/opengl/BloomPass.cpp
+    # DirectX render pass implementations
     src/rendering/renderpass/passes/SharpenPass.cpp
     src/rendering/renderpass/passes/BloomPass.cpp
     src/rendering/renderpass/passes/VignettePass.cpp
@@ -485,6 +498,18 @@ set_source_files_properties(
     src/rendering/OpenGLRenderer.cpp
     src/rendering/CudaOpenGLInterop.cpp
     src/rendering/RendererFactory.cpp
+    src/rendering/renderpass/RenderPassConfigLoaderOpenGL.cpp
+    # OpenGL render pass core files
+    src/rendering/renderpass/opengl/OpenGLRenderPassPipeline.cpp
+    src/rendering/renderpass/opengl/OpenGLRenderPassResources.cpp
+    src/rendering/renderpass/opengl/OpenGLSimpleRenderPass.cpp
+    # OpenGL render pass implementations
+    src/rendering/renderpass/passes/opengl/PassthroughPass.cpp
+    src/rendering/renderpass/passes/opengl/YUVToRGBRenderPass.cpp
+    src/rendering/renderpass/passes/opengl/MotionBlurPass.cpp
+    src/rendering/renderpass/passes/opengl/VignettePass.cpp
+    src/rendering/renderpass/passes/opengl/SharpenPass.cpp
+    src/rendering/renderpass/passes/opengl/BloomPass.cpp
     src/video/VideoManager.cpp
     src/video/decode/VideoDecoder.cpp
     PROPERTIES
