@@ -1,25 +1,17 @@
 #include "MotionBlurPass.h"
 #include "core/Logger.h"
 #include <cstring>
-#include <cmath>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 OpenGLMotionBlurPass::OpenGLMotionBlurPass() : OpenGLSimpleRenderPass("MotionBlur") {
-    m_strength = 2.0f;
-    m_angle = 0.0f;
+    m_strength = 0.02f;  // Default matching D3D11
     m_samples = 8;
 }
 
 void OpenGLMotionBlurPass::UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) {
     for (const auto& [name, value] : parameters) {
-        if (name == "strength" && std::holds_alternative<float>(value)) {
+        if (name == "blur_strength" && std::holds_alternative<float>(value)) {
             m_strength = std::get<float>(value);
-        } else if (name == "angle" && std::holds_alternative<float>(value)) {
-            m_angle = std::get<float>(value);
-        } else if (name == "samples" && std::holds_alternative<int>(value)) {
+        } else if (name == "sample_count" && std::holds_alternative<int>(value)) {
             m_samples = std::get<int>(value);
         }
     }
@@ -38,44 +30,28 @@ out vec4 FragColor;
 uniform sampler2D videoTexture;
 uniform bool isYUV;
 
-// Motion blur parameters
+// Motion blur parameters (matching D3D11 implementation)
 layout(std140, binding = 0) uniform MotionBlurData {
-    float strength;
-    float angle;
-    float directionX;
-    float directionY;
-    float texelSizeX;
-    float texelSizeY;
-    int samples;
+    float blurStrength;
+    int sampleCount;
+    vec2 padding;
 };
 
 void main()
 {
-    vec4 color = vec4(0.0);
+    vec4 result = vec4(0.0);
     
-    // Calculate blur direction vector
-    vec2 blurDirection = vec2(directionX, directionY) * strength;
-    blurDirection.x *= texelSizeX;
-    blurDirection.y *= texelSizeY;
+    // Use horizontal blur direction (matching D3D11)
+    vec2 blurDirection = vec2(blurStrength * 0.01, 0.0);
     
-    // Sample along the motion vector
-    for (int i = 0; i < samples; i++) {
-        float t = (float(i) / float(samples - 1)) - 0.5; // -0.5 to 0.5
-        vec2 sampleCoord = TexCoord + blurDirection * t;
-        
-        // Ensure we don't sample outside texture bounds
-        if (sampleCoord.x >= 0.0 && sampleCoord.x <= 1.0 && 
-            sampleCoord.y >= 0.0 && sampleCoord.y <= 1.0) {
-            color += texture(videoTexture, sampleCoord);
-        } else {
-            // Use edge pixel for out-of-bounds samples
-            vec2 clampedCoord = clamp(sampleCoord, vec2(0.0), vec2(1.0));
-            color += texture(videoTexture, clampedCoord);
-        }
+    // Sample along the blur direction with proper offset distribution
+    for (int i = 0; i < sampleCount; i++) {
+        float offset = (float(i) / float(sampleCount - 1) - 0.5) * 2.0; // -1.0 to 1.0
+        vec2 sampleUV = clamp(TexCoord + blurDirection * offset, vec2(0.0), vec2(1.0));
+        result += texture(videoTexture, sampleUV);
     }
     
-    // Average the samples
-    FragColor = color / float(samples);
+    FragColor = result / float(sampleCount);
 }
 )";
 }
@@ -87,15 +63,9 @@ size_t OpenGLMotionBlurPass::GetUniformBufferSize() const {
 void OpenGLMotionBlurPass::PackUniformBuffer(uint8_t* buffer, const OpenGLRenderPassContext& context) {
     UniformBufferData* data = reinterpret_cast<UniformBufferData*>(buffer);
     
-    // Convert angle to radians and calculate direction vector
-    float angleRad = m_angle * static_cast<float>(M_PI) / 180.0f;
-    
-    data->strength = m_strength;
-    data->angle = m_angle;
-    data->directionX = cosf(angleRad);
-    data->directionY = sinf(angleRad);
-    data->texelSizeX = 1.0f / static_cast<float>(context.inputWidth);
-    data->texelSizeY = 1.0f / static_cast<float>(context.inputHeight);
-    data->samples = m_samples;
-    data->padding = 0.0f;
+    // Pack according to uniform buffer layout (matching D3D11)
+    data->blurStrength = m_strength;
+    data->sampleCount = m_samples;
+    data->padding1 = 0.0f;
+    data->padding2 = 0.0f;
 }

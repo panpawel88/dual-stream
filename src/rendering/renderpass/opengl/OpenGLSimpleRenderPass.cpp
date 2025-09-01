@@ -144,6 +144,11 @@ bool OpenGLSimpleRenderPass::Execute(const OpenGLRenderPassContext& context,
         }
     }
     
+    // Bind uniform buffer to binding point 0 (matching shader layout)
+    if (m_uniformBuffer != 0) {
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_uniformBuffer);
+    }
+    
     // Get shared resources and render fullscreen quad
     OpenGLRenderPassResources* resources = OpenGLRenderPassResources::GetInstance();
     if (resources) {
