@@ -65,6 +65,8 @@ OpenGLRenderer::OpenGLRenderer()
     , m_hrc(nullptr)
     , m_width(0)
     , m_height(0)
+    , m_textureWidth(0)
+    , m_textureHeight(0)
     , m_texture(0)
     , m_program(0)
     , m_vertexShader(0)
@@ -99,6 +101,8 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     m_hwnd = hwnd;
     m_width = width;
     m_height = height;
+    m_textureWidth = width;   // Initially same as window
+    m_textureHeight = height;
     
     LOG_INFO("Initializing OpenGL renderer (", width, "x", height, ")");
     
@@ -581,16 +585,16 @@ void OpenGLRenderer::CreateTexture() {
     
     // Create initial texture with placeholder data (will be updated during Present)
     // Always create RGBA texture - CUDA conversion will handle YUV to RGBA
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_textureWidth, m_textureHeight, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, nullptr);
     
     // Check for OpenGL errors
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
         LOG_ERROR("OpenGL error creating texture: ", error);
         if (error == GL_OUT_OF_MEMORY) {
-            LOG_ERROR("OpenGL out of memory - texture size ", m_width, "x", m_height, " may be too large");
+            LOG_ERROR("OpenGL out of memory - texture size ", m_textureWidth, "x", m_textureHeight, " may be too large");
         } else if (error == GL_INVALID_VALUE) {
-            LOG_ERROR("Invalid texture dimensions: ", m_width, "x", m_height);
+            LOG_ERROR("Invalid texture dimensions: ", m_textureWidth, "x", m_textureHeight);
         }
     }
     
@@ -598,7 +602,7 @@ void OpenGLRenderer::CreateTexture() {
 }
 
 bool OpenGLRenderer::ResizeTextureIfNeeded(int newWidth, int newHeight) {
-    if (newWidth == m_width && newHeight == m_height) {
+    if (newWidth == m_textureWidth && newHeight == m_textureHeight) {
         return true; // No resize needed
     }
     
@@ -609,9 +613,9 @@ bool OpenGLRenderer::ResizeTextureIfNeeded(int newWidth, int newHeight) {
     }
 #endif
     
-    // Update internal dimensions
-    m_width = newWidth;
-    m_height = newHeight;
+    // Update texture dimensions only (NOT window dimensions)
+    m_textureWidth = newWidth;
+    m_textureHeight = newHeight;
     
     // Recreate the OpenGL texture with new dimensions
     if (m_texture) {
@@ -666,6 +670,14 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
         return false;
     }
     
+    // Check for dimension mismatch and resize texture if needed
+    if (texture.width != m_textureWidth || texture.height != m_textureHeight) {
+        if (!ResizeTextureIfNeeded(texture.width, texture.height)) {
+            LOG_ERROR("Failed to resize OpenGL texture to match video dimensions");
+            return false;
+        }
+    }
+    
     // Update texture with new frame data
     glBindTexture(GL_TEXTURE_2D, m_texture);
     
@@ -686,8 +698,8 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
         context.deltaTime = frameDelta.count();
         context.totalTime = m_totalTime;
         context.frameNumber = m_frameNumber;
-        context.inputWidth = texture.width;
-        context.inputHeight = texture.height;
+        context.inputWidth = m_width;
+        context.inputHeight = m_height;
         context.isYUV = texture.isYUV;
         context.uvTexture = 0; // No separate UV texture for software rendering
         context.textureFormat = GL_RGBA8;
@@ -767,6 +779,8 @@ void OpenGLRenderer::Reset() {
     m_hwnd = nullptr;
     m_width = 0;
     m_height = 0;
+    m_textureWidth = 0;
+    m_textureHeight = 0;
     m_textureUniform = -1;
     m_isYUVUniform = -1;
     m_glMajorVersion = 0;
@@ -859,7 +873,7 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
     }
     
     // Check for dimension mismatch and resize texture if needed
-    if (texture.width != m_width || texture.height != m_height) {
+    if (texture.width != m_textureWidth || texture.height != m_textureHeight) {
         if (!ResizeTextureIfNeeded(texture.width, texture.height)) {
             LOG_ERROR("Failed to resize OpenGL texture to match video dimensions");
             return false;
@@ -899,8 +913,8 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         context.deltaTime = frameDelta.count();
         context.totalTime = m_totalTime;
         context.frameNumber = m_frameNumber;
-        context.inputWidth = texture.width;
-        context.inputHeight = texture.height;
+        context.inputWidth = m_width;
+        context.inputHeight = m_height;
         context.isYUV = false; // Always false since CUDA converted YUV to RGBA
         context.uvTexture = 0; // No separate UV texture for CUDA interop
         context.textureFormat = GL_RGBA8;

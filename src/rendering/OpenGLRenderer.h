@@ -37,8 +37,10 @@ private:
     HWND m_hwnd;
     HDC m_hdc;
     HGLRC m_hrc;
-    int m_width;
-    int m_height;
+    int m_width;          // Window/renderer width
+    int m_height;         // Window/renderer height
+    int m_textureWidth;   // Texture width (video dimensions)
+    int m_textureHeight;  // Texture height (video dimensions)
     
     // OpenGL resources
     GLuint m_texture;
