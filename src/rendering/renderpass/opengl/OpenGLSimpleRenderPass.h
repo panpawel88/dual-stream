@@ -10,7 +10,9 @@
  */
 class OpenGLSimpleRenderPass : public OpenGLRenderPass {
 public:
-    OpenGLSimpleRenderPass(const std::string& name) : OpenGLRenderPass(name) {}
+    OpenGLSimpleRenderPass(const std::string& name) : OpenGLRenderPass(name), 
+        m_program(0), m_vertexShader(0), m_fragmentShader(0), m_uniformBuffer(0),
+        m_uniformBufferSize(0), m_uniformBufferDirty(false) {}
     virtual ~OpenGLSimpleRenderPass();
 
     // OpenGLRenderPass interface
