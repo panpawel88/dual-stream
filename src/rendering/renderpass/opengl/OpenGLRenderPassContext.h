@@ -13,4 +13,5 @@ struct OpenGLRenderPassContext : public RenderPassContextBase {
     GLenum textureInternalFormat;  // Internal format for texture creation
     GLenum textureDataFormat;   // GL_RGBA, GL_RG, etc.
     GLenum textureDataType;     // GL_UNSIGNED_BYTE, etc.
+    bool flipY;                 // True when rendering to FBO (compensates for coordinate system differences)
 };

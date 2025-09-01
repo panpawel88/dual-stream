@@ -708,6 +708,7 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
         context.textureInternalFormat = GL_RGBA8;
         context.textureDataFormat = GL_RGBA;
         context.textureDataType = GL_UNSIGNED_BYTE;
+        context.flipY = false; // Will be set by pipeline based on output target
         
         // Execute pipeline with our texture as input and default framebuffer as output
         return m_renderPassPipeline->Execute(context, m_texture, 0, 0);
@@ -925,6 +926,7 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         context.textureInternalFormat = GL_RGBA8;
         context.textureDataFormat = GL_RGBA;
         context.textureDataType = GL_UNSIGNED_BYTE;
+        context.flipY = false; // Will be set by pipeline based on output target
         
         // Execute pipeline with our texture as input and default framebuffer as output
         return m_renderPassPipeline->Execute(context, m_texture, 0, 0);

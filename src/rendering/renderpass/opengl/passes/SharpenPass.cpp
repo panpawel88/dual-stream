@@ -29,6 +29,7 @@ out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 uniform bool isYUV;
+uniform bool flipY;
 
 // Sharpen parameters
 layout(std140, binding = 0) uniform SharpenData {
@@ -40,14 +41,20 @@ layout(std140, binding = 0) uniform SharpenData {
 
 void main()
 {
+    // Handle Y-coordinate flipping if needed
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    
     // Sample center pixel
-    vec4 center = texture(videoTexture, TexCoord);
+    vec4 center = texture(videoTexture, texCoord);
     
     // Sample neighboring pixels for edge detection
-    vec4 top    = texture(videoTexture, TexCoord + vec2(0.0, -texelSizeY));
-    vec4 bottom = texture(videoTexture, TexCoord + vec2(0.0, texelSizeY));
-    vec4 left   = texture(videoTexture, TexCoord + vec2(-texelSizeX, 0.0));
-    vec4 right  = texture(videoTexture, TexCoord + vec2(texelSizeX, 0.0));
+    vec4 top    = texture(videoTexture, texCoord + vec2(0.0, -texelSizeY));
+    vec4 bottom = texture(videoTexture, texCoord + vec2(0.0, texelSizeY));
+    vec4 left   = texture(videoTexture, texCoord + vec2(-texelSizeX, 0.0));
+    vec4 right  = texture(videoTexture, texCoord + vec2(texelSizeX, 0.0));
     
     // Calculate edge enhancement using unsharp masking
     vec4 edges = center * 5.0 - (top + bottom + left + right);

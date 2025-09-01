@@ -139,6 +139,7 @@ bool OpenGLRenderPassPipeline::Execute(const OpenGLRenderPassContext& context,
         
         // Determine output target
         bool isLastPass = (passIndex == enabledPasses - 1);
+        bool isFirstPass = (passIndex == 0);
         if (isLastPass) {
             // Last pass renders to final output
             currentOutputFramebuffer = outputFramebuffer;
@@ -150,8 +151,13 @@ bool OpenGLRenderPassPipeline::Execute(const OpenGLRenderPassContext& context,
             currentOutputTexture = m_intermediateTexture[bufferIndex];
         }
         
+        // Flip Y coordinates when rendering to intermediate framebuffers to compensate
+        // for OpenGL coordinate system differences between FBOs and default framebuffer
+        OpenGLRenderPassContext passContext = context;
+        passContext.flipY = (currentOutputFramebuffer != 0);
+        
         // Execute pass
-        if (!pass->Execute(context, currentInputTexture, currentOutputFramebuffer, currentOutputTexture)) {
+        if (!pass->Execute(passContext, currentInputTexture, currentOutputFramebuffer, currentOutputTexture)) {
             LOG_ERROR("OpenGLRenderPassPipeline: Pass '", pass->GetName(), "' failed");
             return false;
         }
@@ -290,6 +296,12 @@ bool OpenGLRenderPassPipeline::DirectCopy(GLuint inputTexture, GLuint outputFram
         glUniform1i(textureLocation, 0);
     }
     
+    // No Y-flipping needed for direct copy (no render passes)
+    GLint flipYLocation = glGetUniformLocation(m_copyProgram, "flipY");
+    if (flipYLocation != -1) {
+        glUniform1i(flipYLocation, 0);
+    }
+    
     // Render fullscreen quad
     OpenGLRenderPassResources* resources = OpenGLRenderPassResources::GetInstance();
     if (resources) {
@@ -327,10 +339,15 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D inputTexture;
+uniform bool flipY;
 
 void main()
 {
-    FragColor = texture(inputTexture, TexCoord);
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    FragColor = texture(inputTexture, texCoord);
 }
 )";
     

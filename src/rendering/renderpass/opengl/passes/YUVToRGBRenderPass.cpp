@@ -14,16 +14,23 @@ out vec4 FragColor;
 uniform sampler2D videoTexture; // Y plane or RGB texture
 uniform sampler2D uvTexture;    // UV plane for NV12 format
 uniform bool isYUV;
+uniform bool flipY;
 
 void main()
 {
+    // Handle Y-coordinate flipping if needed
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    
     if (isYUV) {
         // YUV to RGB conversion
         // Sample Y component
-        float y = texture(videoTexture, TexCoord).r;
+        float y = texture(videoTexture, texCoord).r;
         
         // Sample UV components (for NV12 format)
-        vec2 uv = texture(uvTexture, TexCoord).rg;
+        vec2 uv = texture(uvTexture, texCoord).rg;
         float u = uv.r;
         float v = uv.g;
         
@@ -41,7 +48,7 @@ void main()
         FragColor = vec4(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), 1.0);
     } else {
         // Direct RGB passthrough
-        FragColor = texture(videoTexture, TexCoord);
+        FragColor = texture(videoTexture, texCoord);
     }
 }
 )";

@@ -142,6 +142,12 @@ bool OpenGLSimpleRenderPass::Execute(const OpenGLRenderPassContext& context,
         glUniform1i(isYUVLocation, context.isYUV ? 1 : 0);
     }
     
+    // Set Y-flip flag
+    GLint flipYLocation = glGetUniformLocation(m_program, "flipY");
+    if (flipYLocation != -1) {
+        glUniform1i(flipYLocation, context.flipY ? 1 : 0);
+    }
+    
     // Update uniform buffer if needed
     if (m_uniformBuffer != 0 && m_uniformBufferDirty) {
         if (!UpdateUniformBuffer(context)) {
@@ -213,10 +219,15 @@ out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 uniform bool isYUV;
+uniform bool flipY;
 
 void main()
 {
-    FragColor = texture(videoTexture, TexCoord);
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    FragColor = texture(videoTexture, texCoord);
 }
 )";
 }

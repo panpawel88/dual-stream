@@ -29,6 +29,7 @@ out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 uniform bool isYUV;
+uniform bool flipY;
 
 // Motion blur parameters (matching D3D11 implementation)
 layout(std140, binding = 0) uniform MotionBlurData {
@@ -39,6 +40,12 @@ layout(std140, binding = 0) uniform MotionBlurData {
 
 void main()
 {
+    // Handle Y-coordinate flipping if needed
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    
     vec4 result = vec4(0.0);
     
     // Use horizontal blur direction (matching D3D11)
@@ -47,7 +54,7 @@ void main()
     // Sample along the blur direction with proper offset distribution
     for (int i = 0; i < sampleCount; i++) {
         float offset = (float(i) / float(sampleCount - 1) - 0.5) * 2.0; // -1.0 to 1.0
-        vec2 sampleUV = clamp(TexCoord + blurDirection * offset, vec2(0.0), vec2(1.0));
+        vec2 sampleUV = clamp(texCoord + blurDirection * offset, vec2(0.0), vec2(1.0));
         result += texture(videoTexture, sampleUV);
     }
     

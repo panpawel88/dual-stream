@@ -35,6 +35,7 @@ out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 uniform bool isYUV;
+uniform bool flipY;
 
 // Bloom parameters
 layout(std140, binding = 0) uniform BloomData {
@@ -48,7 +49,11 @@ layout(std140, binding = 0) uniform BloomData {
 
 void main()
 {
+    // Handle Y-coordinate flipping if needed
     vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
     
     // Sample original pixel
     vec4 original = texture(videoTexture, texCoord);

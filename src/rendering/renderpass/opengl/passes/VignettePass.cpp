@@ -38,6 +38,7 @@ out vec4 FragColor;
 
 uniform sampler2D videoTexture;
 uniform bool isYUV;
+uniform bool flipY;
 
 // Vignette parameters
 layout(std140, binding = 0) uniform VignetteData {
@@ -51,12 +52,18 @@ layout(std140, binding = 0) uniform VignetteData {
 
 void main()
 {
+    // Handle Y-coordinate flipping if needed
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    
     // Sample the input texture
-    vec4 color = texture(videoTexture, TexCoord);
+    vec4 color = texture(videoTexture, texCoord);
     
     // Calculate distance from center with aspect ratio correction
     vec2 center = vec2(0.5 + centerX * 0.5, 0.5 + centerY * 0.5);
-    vec2 uv = TexCoord - center;
+    vec2 uv = texCoord - center;
     uv.x *= aspectRatio; // Correct for aspect ratio
     float dist = length(uv);
     
