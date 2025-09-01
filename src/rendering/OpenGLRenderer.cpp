@@ -698,8 +698,10 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
         context.deltaTime = frameDelta.count();
         context.totalTime = m_totalTime;
         context.frameNumber = m_frameNumber;
-        context.inputWidth = m_width;
-        context.inputHeight = m_height;
+        context.inputWidth = m_textureWidth;
+        context.inputHeight = m_textureHeight;
+        context.outputWidth = m_width;
+        context.outputHeight = m_height;
         context.isYUV = texture.isYUV;
         context.uvTexture = 0; // No separate UV texture for software rendering
         context.textureFormat = GL_RGBA8;
@@ -913,8 +915,10 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         context.deltaTime = frameDelta.count();
         context.totalTime = m_totalTime;
         context.frameNumber = m_frameNumber;
-        context.inputWidth = m_width;
-        context.inputHeight = m_height;
+        context.inputWidth = m_textureWidth;
+        context.inputHeight = m_textureHeight;
+        context.outputWidth = m_width;
+        context.outputHeight = m_height;
         context.isYUV = false; // Always false since CUDA converted YUV to RGBA
         context.uvTexture = 0; // No separate UV texture for CUDA interop
         context.textureFormat = GL_RGBA8;

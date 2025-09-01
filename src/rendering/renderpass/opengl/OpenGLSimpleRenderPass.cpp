@@ -106,8 +106,14 @@ bool OpenGLSimpleRenderPass::Execute(const OpenGLRenderPassContext& context,
     // Bind framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, outputFramebuffer);
     
-    // Set viewport
-    glViewport(0, 0, context.inputWidth, context.inputHeight);
+    // Set viewport based on output target
+    if (outputFramebuffer == 0) {
+        // Rendering to default framebuffer (window) - use output dimensions
+        glViewport(0, 0, context.outputWidth, context.outputHeight);
+    } else {
+        // Rendering to intermediate framebuffer - use input dimensions
+        glViewport(0, 0, context.inputWidth, context.inputHeight);
+    }
     
     // Use our shader program
     glUseProgram(m_program);

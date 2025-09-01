@@ -11,6 +11,8 @@ struct RenderPassContextBase {
     int frameNumber;        // Frame counter
     int inputWidth;         // Input texture width
     int inputHeight;        // Input texture height
+    int outputWidth;        // Output framebuffer width (window/viewport size)
+    int outputHeight;       // Output framebuffer height (window/viewport size)
     bool isYUV;             // True if input texture is in YUV format
 };
 

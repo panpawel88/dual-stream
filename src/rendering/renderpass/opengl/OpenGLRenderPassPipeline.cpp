@@ -104,7 +104,7 @@ bool OpenGLRenderPassPipeline::Execute(const OpenGLRenderPassContext& context,
     if (!m_enabled || m_passes.empty()) {
         // Pipeline disabled or no passes - direct copy
         return DirectCopy(inputTexture, outputFramebuffer, outputTexture,
-                         context.inputWidth, context.inputHeight);
+                         context.outputWidth, context.outputHeight);
     }
     
     // Ensure intermediate framebuffers are ready
@@ -124,7 +124,7 @@ bool OpenGLRenderPassPipeline::Execute(const OpenGLRenderPassContext& context,
     if (enabledPasses == 0) {
         // No enabled passes - direct copy
         return DirectCopy(inputTexture, outputFramebuffer, outputTexture,
-                         context.inputWidth, context.inputHeight);
+                         context.outputWidth, context.outputHeight);
     }
     
     GLuint currentInputTexture = inputTexture;
