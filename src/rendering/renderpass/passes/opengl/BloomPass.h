@@ -7,9 +7,10 @@
  * Enhances bright pixels to create a luminous, glowing appearance.
  * 
  * Supported parameters:
- * - threshold: Minimum brightness to trigger bloom (0.0 - 2.0, default 1.0)
+ * - threshold: Minimum brightness to trigger bloom (0.0 - 2.0, default 0.8)
  * - intensity: Bloom effect strength (0.0 - 5.0, default 1.0)
- * - blur_size: Size of the bloom blur effect (0.5 - 5.0, default 2.0)
+ * - radius: Size of the bloom blur effect (0.5 - 5.0, default 1.5)
+ * - blend_factor: Bloom blend strength (0.0 - 1.0, default 0.3)
  */
 class OpenGLBloomPass : public OpenGLSimpleRenderPass {
 public:
@@ -28,13 +29,15 @@ private:
     struct UniformBufferData {
         float threshold;
         float intensity;
-        float blurSize;
+        float radius;
+        float blendFactor;
         float texelSizeX;
         float texelSizeY;
-        float padding[3]; // Pad to 16-byte alignment
+        float padding[2]; // Pad to 32-byte alignment for std140
     };
     
     float m_threshold;
     float m_intensity;
-    float m_blurSize;
+    float m_radius;
+    float m_blendFactor;
 };
