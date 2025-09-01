@@ -1,5 +1,5 @@
 #include "D3D11SimpleRenderPass.h"
-#include "RenderPassConfig.h"
+#include "../RenderPassConfig.h"
 #include "ShaderLibrary.h"
 #include "D3D11RenderPassResources.h"
 #include "core/Logger.h"

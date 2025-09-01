@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../opengl/OpenGLSimpleRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 
 /**
  * OpenGL passthrough render pass - simply copies input to output

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../opengl/OpenGLSimpleRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 
 /**
  * OpenGL vignette render pass that darkens the edges/corners of the frame.

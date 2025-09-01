@@ -401,27 +401,28 @@ set(RENDERER_SOURCES
     src/rendering/OpenGLRenderer.cpp
     src/rendering/D3D11Renderer.cpp
     src/rendering/renderpass/RenderPassConfig.cpp
-    src/rendering/renderpass/D3D11SimpleRenderPass.cpp
     src/rendering/renderpass/RenderPassPipeline.cpp
     src/rendering/renderpass/RenderPassConfigLoader.cpp
     src/rendering/renderpass/RenderPassConfigLoaderOpenGL.cpp
-    src/rendering/renderpass/ShaderLibrary.cpp
-    src/rendering/renderpass/D3D11RenderPassResources.cpp
+    # D3D11 render pass core files
+    src/rendering/renderpass/d3d11/D3D11SimpleRenderPass.cpp
+    src/rendering/renderpass/d3d11/D3D11RenderPassResources.cpp
+    src/rendering/renderpass/d3d11/ShaderLibrary.cpp
+    # D3D11 render pass implementations
+    src/rendering/renderpass/d3d11/passes/SharpenPass.cpp
+    src/rendering/renderpass/d3d11/passes/BloomPass.cpp
+    src/rendering/renderpass/d3d11/passes/VignettePass.cpp
     # OpenGL render pass core files
     src/rendering/renderpass/opengl/OpenGLRenderPassPipeline.cpp
     src/rendering/renderpass/opengl/OpenGLRenderPassResources.cpp
     src/rendering/renderpass/opengl/OpenGLSimpleRenderPass.cpp
     # OpenGL render pass implementations
-    src/rendering/renderpass/passes/opengl/PassthroughPass.cpp
-    src/rendering/renderpass/passes/opengl/YUVToRGBRenderPass.cpp
-    src/rendering/renderpass/passes/opengl/MotionBlurPass.cpp
-    src/rendering/renderpass/passes/opengl/VignettePass.cpp
-    src/rendering/renderpass/passes/opengl/SharpenPass.cpp
-    src/rendering/renderpass/passes/opengl/BloomPass.cpp
-    # DirectX render pass implementations
-    src/rendering/renderpass/passes/SharpenPass.cpp
-    src/rendering/renderpass/passes/BloomPass.cpp
-    src/rendering/renderpass/passes/VignettePass.cpp
+    src/rendering/renderpass/opengl/passes/PassthroughPass.cpp
+    src/rendering/renderpass/opengl/passes/YUVToRGBRenderPass.cpp
+    src/rendering/renderpass/opengl/passes/MotionBlurPass.cpp
+    src/rendering/renderpass/opengl/passes/VignettePass.cpp
+    src/rendering/renderpass/opengl/passes/SharpenPass.cpp
+    src/rendering/renderpass/opengl/passes/BloomPass.cpp
 )
 
 # Add CUDA sources for OpenGL renderer if CUDA is available
@@ -504,12 +505,12 @@ set_source_files_properties(
     src/rendering/renderpass/opengl/OpenGLRenderPassResources.cpp
     src/rendering/renderpass/opengl/OpenGLSimpleRenderPass.cpp
     # OpenGL render pass implementations
-    src/rendering/renderpass/passes/opengl/PassthroughPass.cpp
-    src/rendering/renderpass/passes/opengl/YUVToRGBRenderPass.cpp
-    src/rendering/renderpass/passes/opengl/MotionBlurPass.cpp
-    src/rendering/renderpass/passes/opengl/VignettePass.cpp
-    src/rendering/renderpass/passes/opengl/SharpenPass.cpp
-    src/rendering/renderpass/passes/opengl/BloomPass.cpp
+    src/rendering/renderpass/opengl/passes/PassthroughPass.cpp
+    src/rendering/renderpass/opengl/passes/YUVToRGBRenderPass.cpp
+    src/rendering/renderpass/opengl/passes/MotionBlurPass.cpp
+    src/rendering/renderpass/opengl/passes/VignettePass.cpp
+    src/rendering/renderpass/opengl/passes/SharpenPass.cpp
+    src/rendering/renderpass/opengl/passes/BloomPass.cpp
     src/video/VideoManager.cpp
     src/video/decode/VideoDecoder.cpp
     PROPERTIES

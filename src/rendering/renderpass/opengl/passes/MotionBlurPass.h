@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../opengl/OpenGLSimpleRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 
 /**
  * OpenGL motion blur render pass that applies horizontal blur effect.

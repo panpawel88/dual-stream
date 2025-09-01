@@ -10,12 +10,12 @@
 // OpenGL includes - safe to include after GLAD in isolated file
 #include "opengl/OpenGLRenderPassPipeline.h"
 #include "opengl/OpenGLSimpleRenderPass.h"
-#include "passes/opengl/PassthroughPass.h"
-#include "passes/opengl/YUVToRGBRenderPass.h"
-#include "passes/opengl/MotionBlurPass.h"
-#include "passes/opengl/VignettePass.h"
-#include "passes/opengl/SharpenPass.h"
-#include "passes/opengl/BloomPass.h"
+#include "opengl/passes/PassthroughPass.h"
+#include "opengl/passes/YUVToRGBRenderPass.h"
+#include "opengl/passes/MotionBlurPass.h"
+#include "opengl/passes/VignettePass.h"
+#include "opengl/passes/SharpenPass.h"
+#include "opengl/passes/BloomPass.h"
 
 std::unique_ptr<OpenGLRenderPassPipeline> RenderPassConfigLoader::LoadOpenGLPipeline(Config* config) {
     if (!config) {

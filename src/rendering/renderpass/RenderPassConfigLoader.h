@@ -2,15 +2,15 @@
 
 #include "IRenderPassPipeline.h"
 #include "RenderPass.h"
-#include "D3D11SimpleRenderPass.h"
+#include "d3d11/D3D11SimpleRenderPass.h"
 #include "RenderPassPipeline.h"
 #include "RenderPassConfig.h"
-#include "passes/PassthroughPass.h"
-#include "passes/YUVToRGBRenderPass.h"
-#include "passes/MotionBlurPass.h"
-#include "passes/VignettePass.h"
-#include "passes/SharpenPass.h"
-#include "passes/BloomPass.h"
+#include "d3d11/passes/PassthroughPass.h"
+#include "d3d11/passes/YUVToRGBRenderPass.h"
+#include "d3d11/passes/MotionBlurPass.h"
+#include "d3d11/passes/VignettePass.h"
+#include "d3d11/passes/SharpenPass.h"
+#include "d3d11/passes/BloomPass.h"
 #include <memory>
 #include <vector>
 #include <string>

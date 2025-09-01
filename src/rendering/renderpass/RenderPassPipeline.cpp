@@ -1,6 +1,6 @@
 #include "RenderPassPipeline.h"
 #include "RenderPassConfig.h"
-#include "passes/YUVToRGBRenderPass.h"
+#include "d3d11/passes/YUVToRGBRenderPass.h"
 #include "core/Logger.h"
 #include <d3dcompiler.h>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../opengl/OpenGLSimpleRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 
 /**
  * OpenGL YUV to RGB conversion render pass

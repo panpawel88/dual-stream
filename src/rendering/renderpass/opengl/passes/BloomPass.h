@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../opengl/OpenGLSimpleRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 
 /**
  * OpenGL bloom render pass that creates a glow effect around bright areas.

@@ -1,5 +1,5 @@
 #include "BloomPass.h"
-#include "../ShaderLibrary.h"
+#include "rendering/renderpass/d3d11/ShaderLibrary.h"
 #include "core/Logger.h"
 #include <cstring>
 
