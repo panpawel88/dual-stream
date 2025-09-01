@@ -78,7 +78,9 @@ OpenGLRenderer::OpenGLRenderer()
     , m_glMinorVersion(0)
     , m_coreProfile(false)
     , m_debugContext(false)
-    , wglCreateContextAttribsARB(nullptr) {
+    , wglCreateContextAttribsARB(nullptr)
+    , m_frameNumber(0)
+    , m_totalTime(0.0f) {
 #if HAVE_CUDA
     m_cudaInterop = nullptr; // Will be initialized in Initialize()
     m_cudaTextureResource = nullptr;
@@ -190,6 +192,12 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
         LOG_INFO("OpenGL render pass pipeline disabled or failed to initialize");
     }
 
+    // Initialize timing for render pass effects
+    m_startTime = std::chrono::high_resolution_clock::now();
+    m_lastFrameTime = m_startTime;
+    m_frameNumber = 0;
+    m_totalTime = 0.0f;
+
     m_initialized = true;
     LOG_INFO("OpenGL renderer initialized successfully");
     return true;
@@ -203,6 +211,15 @@ bool OpenGLRenderer::Present(const RenderTexture& texture) {
     if (!m_initialized) {
         return false;
     }
+    
+    // Update frame timing for render pass effects
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto deltaTime = std::chrono::duration<float>(currentTime - m_startTime);
+    auto frameDelta = std::chrono::duration<float>(currentTime - m_lastFrameTime);
+    
+    m_totalTime = deltaTime.count();
+    m_lastFrameTime = currentTime;
+    m_frameNumber++;
     
     // Clear screen first
     glClear(GL_COLOR_BUFFER_BIT);
@@ -664,9 +681,11 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
     if (m_renderPassPipeline && m_renderPassPipeline->IsEnabled()) {
         // Create OpenGL render pass context
         OpenGLRenderPassContext context;
-        context.deltaTime = 0.0f; // TODO: Calculate actual delta time
-        context.totalTime = 0.0f; // TODO: Calculate actual total time
-        context.frameNumber = 0;  // TODO: Track frame number
+        // Use the frame delta calculated in Present() method
+        auto frameDelta = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - m_lastFrameTime);
+        context.deltaTime = frameDelta.count();
+        context.totalTime = m_totalTime;
+        context.frameNumber = m_frameNumber;
         context.inputWidth = texture.width;
         context.inputHeight = texture.height;
         context.isYUV = texture.isYUV;
@@ -755,6 +774,10 @@ void OpenGLRenderer::Reset() {
     m_coreProfile = false;
     m_debugContext = false;
     wglCreateContextAttribsARB = nullptr;
+    
+    // Reset frame timing
+    m_frameNumber = 0;
+    m_totalTime = 0.0f;
 }
 
 #if HAVE_CUDA
@@ -867,13 +890,32 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         return false;
     }
     
-    // Setup render state - texture is now RGBA after CUDA conversion
-    SetupRenderState(false); // Always false since CUDA converted YUV to RGBA
-    
-    // Draw fullscreen quad
-    DrawQuad();
-    
-    return true;
+    // Use render pass pipeline if available and enabled
+    if (m_renderPassPipeline && m_renderPassPipeline->IsEnabled()) {
+        // Create OpenGL render pass context
+        OpenGLRenderPassContext context;
+        // Use the frame delta calculated in Present() method
+        auto frameDelta = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - m_lastFrameTime);
+        context.deltaTime = frameDelta.count();
+        context.totalTime = m_totalTime;
+        context.frameNumber = m_frameNumber;
+        context.inputWidth = texture.width;
+        context.inputHeight = texture.height;
+        context.isYUV = false; // Always false since CUDA converted YUV to RGBA
+        context.uvTexture = 0; // No separate UV texture for CUDA interop
+        context.textureFormat = GL_RGBA8;
+        context.textureInternalFormat = GL_RGBA8;
+        context.textureDataFormat = GL_RGBA;
+        context.textureDataType = GL_UNSIGNED_BYTE;
+        
+        // Execute pipeline with our texture as input and default framebuffer as output
+        return m_renderPassPipeline->Execute(context, m_texture, 0, 0);
+    } else {
+        // Direct rendering without render passes (fallback to original behavior)
+        SetupRenderState(false); // Always false since CUDA converted YUV to RGBA
+        DrawQuad();
+        return true;
+    }
 }
 
 #else // HAVE_CUDA

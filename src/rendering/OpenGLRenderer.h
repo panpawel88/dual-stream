@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <glad/gl.h>
 #include <string>
+#include <chrono>
 #include "IRenderer.h"
 
 #if HAVE_CUDA
@@ -76,6 +77,12 @@ private:
     // WGL extensions for modern context creation
     typedef HGLRC (WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int*);
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+    
+    // Frame timing for render pass effects
+    int m_frameNumber;
+    float m_totalTime;
+    std::chrono::high_resolution_clock::time_point m_startTime;
+    std::chrono::high_resolution_clock::time_point m_lastFrameTime;
     
     void SetupRenderState(bool isYUV = false);
     void DrawQuad();
