@@ -2,6 +2,7 @@
 
 #include "video/decode/VideoDecoder.h"
 #include <string>
+#include <vector>
 
 enum class SwitchingAlgorithm {
     IMMEDIATE,      // Current default: seek new video to current time and resume
@@ -12,17 +13,16 @@ enum class SwitchingAlgorithm {
 // Forward declarations
 class VideoManager;
 struct VideoStream;
-enum class ActiveVideo;
 
 class VideoSwitchingStrategy {
 public:
     virtual ~VideoSwitchingStrategy() = default;
     
     // Initialize the strategy with video streams
-    virtual bool Initialize(VideoStream* streams, VideoManager* manager) = 0;
+    virtual bool Initialize(std::vector<VideoStream>* streams, VideoManager* manager) = 0;
     
     // Handle video switching request
-    virtual bool SwitchToVideo(ActiveVideo targetVideo, double currentTime) = 0;
+    virtual bool SwitchToVideo(size_t targetVideoIndex, double currentTime) = 0;
     
     // Update frame processing for the strategy
     virtual bool UpdateFrame() = 0;
@@ -40,9 +40,9 @@ public:
     virtual bool HasPendingOperations() const { return false; }
     
 protected:
-    VideoStream* m_streams = nullptr;
+    std::vector<VideoStream>* m_streams = nullptr;
     VideoManager* m_manager = nullptr;
-    ActiveVideo m_activeVideo;
+    size_t m_activeVideoIndex = 0;
 };
 
 // Factory function to create strategies

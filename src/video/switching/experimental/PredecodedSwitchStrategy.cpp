@@ -12,17 +12,17 @@ PredecodedSwitchStrategy::PredecodedSwitchStrategy()
     : m_streamsSynchronized(false)
     , m_lastSyncTime(0.0)
     , m_lastUpdateTime(0.0) {
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
 }
 
 PredecodedSwitchStrategy::~PredecodedSwitchStrategy() {
     Cleanup();
 }
 
-bool PredecodedSwitchStrategy::Initialize(VideoStream* streams, VideoManager* manager) {
+bool PredecodedSwitchStrategy::Initialize(std::vector<VideoStream>* streams, VideoManager* manager) {
     m_streams = streams;
     m_manager = manager;
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
     m_streamsSynchronized = false;
     m_lastSyncTime = 0.0;
     m_lastUpdateTime = 0.0;
@@ -31,18 +31,18 @@ bool PredecodedSwitchStrategy::Initialize(VideoStream* streams, VideoManager* ma
     return true;
 }
 
-bool PredecodedSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double currentTime) {
-    if (targetVideo == m_activeVideo) {
+bool PredecodedSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double currentTime) {
+    if (targetVideoIndex >= m_streams->size() || targetVideoIndex == m_activeVideoIndex) {
         return true;
     }
     
-    LOG_INFO("PredecodedSwitchStrategy: Instant switch to video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " at time ", currentTime);
+    LOG_INFO("PredecodedSwitchStrategy: Instant switch to video ", (targetVideoIndex + 1), " at time ", currentTime);
     
-    // Instant switch - no seeking required since both streams are predecoded
-    m_activeVideo = targetVideo;
+    // Instant switch - no seeking required since streams are predecoded
+    m_activeVideoIndex = targetVideoIndex;
     
     // Ensure the target stream has a valid frame at or near the current time
-    VideoStream& targetStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& targetStream = (*m_streams)[m_activeVideoIndex];
     
     // If the frame is too far from current time, we might need to synchronize
     if (!targetStream.currentFrame.valid || 
@@ -69,7 +69,7 @@ bool PredecodedSwitchStrategy::UpdateFrame() {
 }
 
 DecodedFrame* PredecodedSwitchStrategy::GetCurrentFrame() {
-    VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& activeStream = (*m_streams)[m_activeVideoIndex];
     if (activeStream.currentFrame.valid) {
         return &activeStream.currentFrame;
     }
@@ -90,24 +90,30 @@ bool PredecodedSwitchStrategy::PredecodeBothStreams() {
     bool stream1Success = true;
     bool stream2Success = true;
     
-    // Try to decode next frame for both streams
-    if (!DecodeNextFrame(m_streams[0])) {
-        if (m_streams[0].state == VideoState::END_OF_STREAM) {
-            if (!HandleEndOfStream(m_streams[0])) {
+    // Try to decode next frame for all streams (for now, limit to first 2 for predecoded)
+    size_t numStreams = std::min(m_streams->size(), size_t(2));
+    
+    if (numStreams > 0) {
+        if (!DecodeNextFrame((*m_streams)[0])) {
+            if ((*m_streams)[0].state == VideoState::END_OF_STREAM) {
+                if (!HandleEndOfStream((*m_streams)[0])) {
+                    stream1Success = false;
+                }
+            } else {
                 stream1Success = false;
             }
-        } else {
-            stream1Success = false;
         }
     }
     
-    if (!DecodeNextFrame(m_streams[1])) {
-        if (m_streams[1].state == VideoState::END_OF_STREAM) {
-            if (!HandleEndOfStream(m_streams[1])) {
+    if (numStreams > 1) {
+        if (!DecodeNextFrame((*m_streams)[1])) {
+            if ((*m_streams)[1].state == VideoState::END_OF_STREAM) {
+                if (!HandleEndOfStream((*m_streams)[1])) {
+                    stream2Success = false;
+                }
+            } else {
                 stream2Success = false;
             }
-        } else {
-            stream2Success = false;
         }
     }
     
@@ -116,7 +122,12 @@ bool PredecodedSwitchStrategy::PredecodeBothStreams() {
     
     if (success) {
         LOG_DEBUG("Both streams predecoded successfully");
-        LOG_DEBUG("Stream 1 time: ", m_streams[0].currentTime, ", Stream 2 time: ", m_streams[1].currentTime);
+        if (numStreams > 0) {
+            LOG_DEBUG("Stream 1 time: ", (*m_streams)[0].currentTime);
+        }
+        if (numStreams > 1) {
+            LOG_DEBUG("Stream 2 time: ", (*m_streams)[1].currentTime);
+        }
     } else {
         LOG_DEBUG("Predecoding failed - Stream 1: ", (stream1Success ? "OK" : "FAIL"), ", Stream 2: ", (stream2Success ? "OK" : "FAIL"));
     }
@@ -183,7 +194,15 @@ bool PredecodedSwitchStrategy::DecodeNextFrame(VideoStream& stream) {
 }
 
 bool PredecodedSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
-    LOG_INFO("End of stream reached for ", (&stream == &m_streams[0] ? "video 1" : "video 2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("End of stream reached for video ", (streamIndex + 1));
     
     // Calculate how much we've overshot the video duration
     double overshoot = stream.currentTime - stream.duration;
@@ -211,7 +230,15 @@ bool PredecodedSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
 }
 
 bool PredecodedSwitchStrategy::RestartVideo(VideoStream& stream) {
-    LOG_INFO("Restarting video ", (&stream == &m_streams[0] ? "1" : "2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("Restarting video ", (streamIndex + 1));
     
     // Seek back to beginning
     if (!SeekVideoStream(stream, 0.0)) {
@@ -297,9 +324,17 @@ bool PredecodedSwitchStrategy::SeekVideoStream(VideoStream& stream, double timeI
 bool PredecodedSwitchStrategy::SynchronizeStreams(double targetTime) {
     LOG_INFO("Synchronizing both streams to time: ", targetTime);
     
-    // Seek both streams to the target time
-    bool stream1Success = SeekVideoStream(m_streams[0], targetTime);
-    bool stream2Success = SeekVideoStream(m_streams[1], targetTime);
+    // Seek streams to the target time (limit to first 2 for predecoded)
+    size_t numStreams = std::min(m_streams->size(), size_t(2));
+    bool stream1Success = true;
+    bool stream2Success = true;
+    
+    if (numStreams > 0) {
+        stream1Success = SeekVideoStream((*m_streams)[0], targetTime);
+    }
+    if (numStreams > 1) {
+        stream2Success = SeekVideoStream((*m_streams)[1], targetTime);
+    }
     
     if (stream1Success && stream2Success) {
         m_streamsSynchronized = true;

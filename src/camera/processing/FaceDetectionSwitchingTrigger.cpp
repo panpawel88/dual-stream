@@ -106,12 +106,15 @@ void FaceDetectionSwitchingTrigger::Update() {
     }
 }
 
-bool FaceDetectionSwitchingTrigger::ShouldSwitchToVideo1() {
-    return m_shouldSwitchToVideo1.load();
-}
-
-bool FaceDetectionSwitchingTrigger::ShouldSwitchToVideo2() {
-    return m_shouldSwitchToVideo2.load();
+std::optional<size_t> FaceDetectionSwitchingTrigger::GetTargetVideoIndex() {
+    // As specified, face detection is limited to switching between videos 0 and 1
+    if (m_shouldSwitchToVideo1.load()) {
+        return size_t(0); // Switch to video index 0 (video 1)
+    }
+    if (m_shouldSwitchToVideo2.load()) {
+        return size_t(1); // Switch to video index 1 (video 2)
+    }
+    return std::nullopt; // No switch requested
 }
 
 FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFrame& frame) {

@@ -10,7 +10,7 @@ std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType t
             if (!config.window) {
                 return nullptr; // Keyboard trigger requires window instance
             }
-            return std::make_shared<KeyboardSwitchingTrigger>(config.window);
+            return std::make_shared<KeyboardSwitchingTrigger>(config.window, config.videoCount);
             
         case TriggerType::FACE_DETECTION: {
             auto trigger = std::make_shared<FaceDetectionSwitchingTrigger>(config.faceDetectionConfig);
@@ -20,16 +20,10 @@ std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType t
         default:
             // Default to keyboard trigger if type is unrecognized
             if (config.window) {
-                return std::make_shared<KeyboardSwitchingTrigger>(config.window);
+                return std::make_shared<KeyboardSwitchingTrigger>(config.window, config.videoCount);
             }
             return nullptr;
     }
-}
-
-std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, Window* window) {
-    TriggerConfig config;
-    config.window = window;
-    return Create(triggerType, config);
 }
 
 TriggerType SwitchingTriggerFactory::ParseTriggerType(const std::string& triggerName) {

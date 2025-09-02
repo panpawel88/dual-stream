@@ -153,3 +153,50 @@ bool VideoValidator::ValidateCompatibility(const VideoInfo& video1, const VideoI
     
     return true;
 }
+
+bool VideoValidator::ValidateCompatibility(const std::vector<VideoInfo>& videos, std::string& errorMessage) {
+    if (videos.empty()) {
+        errorMessage = "No videos to validate";
+        return false;
+    }
+    
+    // Check each video is valid
+    for (size_t i = 0; i < videos.size(); i++) {
+        if (!videos[i].valid) {
+            errorMessage = "Video " + std::to_string(i + 1) + " is invalid: " + videos[i].errorMessage;
+            return false;
+        }
+    }
+    
+    // For multiple videos, just validate they all have valid codecs and resolutions
+    // No longer require identical properties
+    LOG_INFO("Video compatibility validation passed for ", videos.size(), " videos");
+    for (size_t i = 0; i < videos.size(); i++) {
+        LOG_INFO("Video ", (i + 1), ": ", videos[i].width, "x", videos[i].height, " (", videos[i].codecName, ")");
+    }
+    
+    return true;
+}
+
+bool VideoValidator::ValidateMultipleVideos(const std::vector<std::string>& videoPaths, std::vector<VideoInfo>& videoInfos, std::string& errorMessage) {
+    if (videoPaths.empty()) {
+        errorMessage = "No video paths provided";
+        return false;
+    }
+    
+    videoInfos.clear();
+    videoInfos.reserve(videoPaths.size());
+    
+    // Get info for each video
+    for (size_t i = 0; i < videoPaths.size(); i++) {
+        VideoInfo info = GetVideoInfo(videoPaths[i]);
+        if (!info.valid) {
+            errorMessage = "Failed to get video info for video " + std::to_string(i + 1) + " (" + videoPaths[i] + "): " + info.errorMessage;
+            return false;
+        }
+        videoInfos.push_back(info);
+    }
+    
+    // Validate compatibility across all videos
+    return ValidateCompatibility(videoInfos, errorMessage);
+}

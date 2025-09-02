@@ -29,6 +29,7 @@ enum class TriggerType {
 struct TriggerConfig {
     // Keyboard trigger parameters
     Window* window = nullptr;
+    size_t videoCount = 2; // Number of videos available for switching (default 2)
     
     // Face detection trigger parameters
     FaceDetectionSwitchingTrigger::FaceDetectionConfig faceDetectionConfig;
@@ -49,15 +50,7 @@ public:
      * @return Shared pointer to the created trigger, or nullptr if creation failed
      */
     static std::shared_ptr<ISwitchingTrigger> Create(TriggerType triggerType, const TriggerConfig& config = TriggerConfig());
-    
-    /**
-     * Create a switching trigger of the specified type (legacy method).
-     * @param triggerType The type of trigger to create
-     * @param window Window instance for input handling (required for KEYBOARD type)
-     * @return Shared pointer to the created trigger, or nullptr if creation failed
-     */
-    static std::shared_ptr<ISwitchingTrigger> Create(TriggerType triggerType, Window* window);
-    
+
     /**
      * Parse trigger type from string name.
      * @param triggerName String representation of trigger type

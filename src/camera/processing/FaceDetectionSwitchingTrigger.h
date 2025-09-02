@@ -97,8 +97,7 @@ public:
     
     // ISwitchingTrigger interface implementation
     void Update() override;
-    bool ShouldSwitchToVideo1() override;
-    bool ShouldSwitchToVideo2() override;
+    std::optional<size_t> GetTargetVideoIndex() override;
     void Reset() override;
     std::string GetName() const override;
 

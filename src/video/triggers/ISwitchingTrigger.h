@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 /**
  * Interface for video switching trigger strategies.
@@ -11,16 +12,10 @@ public:
     virtual ~ISwitchingTrigger() = default;
     
     /**
-     * Check if a switch to video 1 should be triggered.
-     * @return true if video should switch to video 1
+     * Check if a video switch should be triggered and get the target video index.
+     * @return Optional containing the target video index (0-based) if a switch should occur, std::nullopt otherwise
      */
-    virtual bool ShouldSwitchToVideo1() = 0;
-    
-    /**
-     * Check if a switch to video 2 should be triggered.
-     * @return true if video should switch to video 2
-     */
-    virtual bool ShouldSwitchToVideo2() = 0;
+    virtual std::optional<size_t> GetTargetVideoIndex() = 0;
     
     /**
      * Update trigger state. Called each frame to maintain trigger logic.

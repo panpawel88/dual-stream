@@ -7,8 +7,8 @@
 VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
     VideoPlayerArgs args;
     
-    if (argc < 3) {
-        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> <video2.mp4> [options]";
+    if (argc < 2) {
+        args.errorMessage = "Usage: " + std::string(argv[0]) + " <video1.mp4> [video2.mp4 video3.mp4 ...] [options]";
         args.errorMessage += "\nOptions:";
         args.errorMessage += "\n  --config=<path>                Configuration file path (default: config/default.ini)";
         args.errorMessage += "\n  --debug, -d                    Enable debug logging";
@@ -19,15 +19,33 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
         return args;
     }
     
-    args.video1Path = argv[1];
-    args.video2Path = argv[2];
+    // Parse video file arguments first (everything before options starting with --)
+    int firstOptionIndex = argc; // Default to end if no options found
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg.substr(0, 2) == "--" || arg.substr(0, 1) == "-") {
+            firstOptionIndex = i;
+            break;
+        }
+    }
+    
+    // Collect video paths
+    for (int i = 1; i < firstOptionIndex; i++) {
+        args.videoPaths.push_back(argv[i]);
+    }
+    
+    // Validate we have at least one video
+    if (args.videoPaths.empty()) {
+        args.errorMessage = "At least one video file must be specified";
+        return args;
+    }
     
     // Parse optional arguments
     const std::string algorithmErrorMsg = "\nAvailable algorithms: immediate, predecoded, keyframe-sync";
     const std::string triggerErrorMsg = "\nAvailable trigger types: keyboard, face, face_detection";
     const std::string speedErrorMsg = "\nSupported speeds: 0.05, 0.1, 0.2, 0.5, 1.0";
     
-    for (int i = 3; i < argc; i++) {
+    for (int i = firstOptionIndex; i < argc; i++) {
         std::string arg = argv[i];
         
         if (arg == "--debug" || arg == "-d") {
@@ -78,26 +96,19 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
         }
     }
     
-    // Check if files exist
-    if (!FileExists(args.video1Path)) {
-        args.errorMessage = "Video file 1 does not exist: " + args.video1Path;
-        return args;
-    }
-    
-    if (!FileExists(args.video2Path)) {
-        args.errorMessage = "Video file 2 does not exist: " + args.video2Path;
-        return args;
-    }
-    
-    // Check file extensions
-    if (!HasValidExtension(args.video1Path)) {
-        args.errorMessage = "Video file 1 must be an MP4 file: " + args.video1Path;
-        return args;
-    }
-    
-    if (!HasValidExtension(args.video2Path)) {
-        args.errorMessage = "Video file 2 must be an MP4 file: " + args.video2Path;
-        return args;
+    // Check if all video files exist and have valid extensions
+    for (size_t i = 0; i < args.videoPaths.size(); i++) {
+        const std::string& videoPath = args.videoPaths[i];
+        
+        if (!FileExists(videoPath)) {
+            args.errorMessage = "Video file " + std::to_string(i + 1) + " does not exist: " + videoPath;
+            return args;
+        }
+        
+        if (!HasValidExtension(videoPath)) {
+            args.errorMessage = "Video file " + std::to_string(i + 1) + " must be an MP4 file: " + videoPath;
+            return args;
+        }
     }
     
     args.valid = true;

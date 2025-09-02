@@ -8,35 +8,35 @@ extern "C" {
 }
 
 ImmediateSwitchStrategy::ImmediateSwitchStrategy() {
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
 }
 
 ImmediateSwitchStrategy::~ImmediateSwitchStrategy() {
     Cleanup();
 }
 
-bool ImmediateSwitchStrategy::Initialize(VideoStream* streams, VideoManager* manager) {
+bool ImmediateSwitchStrategy::Initialize(std::vector<VideoStream>* streams, VideoManager* manager) {
     m_streams = streams;
     m_manager = manager;
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
     
     LOG_INFO("ImmediateSwitchStrategy initialized");
     return true;
 }
 
-bool ImmediateSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double currentTime) {
-    if (targetVideo == m_activeVideo) {
+bool ImmediateSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double currentTime) {
+    if (targetVideoIndex >= m_streams->size() || targetVideoIndex == m_activeVideoIndex) {
         return true;
     }
     
-    ActiveVideo previousVideo = m_activeVideo;
+    size_t previousVideoIndex = m_activeVideoIndex;
     
-    LOG_INFO("ImmediateSwitchStrategy: Switching to video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " at time ", currentTime);
+    LOG_INFO("ImmediateSwitchStrategy: Switching to video ", (targetVideoIndex + 1), " at time ", currentTime);
     
     // Switch active video first
-    m_activeVideo = targetVideo;
+    m_activeVideoIndex = targetVideoIndex;
     
-    VideoStream& newActiveStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& newActiveStream = (*m_streams)[m_activeVideoIndex];
     
     // Handle looping if current time exceeds new video's duration
     double targetTime = currentTime;
@@ -49,7 +49,7 @@ bool ImmediateSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double curr
     // Seek the new active video to the synchronized time
     if (!SeekVideoStream(newActiveStream, targetTime)) {
         LOG_ERROR("Failed to synchronize new active stream to time ", targetTime);
-        m_activeVideo = previousVideo; // Revert
+        m_activeVideoIndex = previousVideoIndex; // Revert
         return false;
     }
     
@@ -57,13 +57,13 @@ bool ImmediateSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double curr
     newActiveStream.currentTime = targetTime;
     newActiveStream.state = VideoState::PLAYING;
     
-    LOG_INFO("Successfully synchronized video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " to time ", targetTime);
+    LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to time ", targetTime);
     
     return true;
 }
 
 bool ImmediateSwitchStrategy::UpdateFrame() {
-    VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& activeStream = (*m_streams)[m_activeVideoIndex];
     
     if (!ProcessVideoFrame(activeStream)) {
         // Check if we reached end of stream
@@ -82,7 +82,7 @@ bool ImmediateSwitchStrategy::UpdateFrame() {
 }
 
 DecodedFrame* ImmediateSwitchStrategy::GetCurrentFrame() {
-    VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& activeStream = (*m_streams)[m_activeVideoIndex];
     if (activeStream.currentFrame.valid) {
         return &activeStream.currentFrame;
     }
@@ -99,7 +99,7 @@ std::string ImmediateSwitchStrategy::GetName() const {
 }
 
 bool ImmediateSwitchStrategy::ProcessVideoFrame(VideoStream& stream) {
-    LOG_DEBUG("Processing video frame for ", (m_activeVideo == ActiveVideo::VIDEO_1 ? "video 1" : "video 2"));
+    LOG_DEBUG("Processing video frame for video ", (m_activeVideoIndex + 1));
     
     // Try to decode next frame
     if (!DecodeNextFrame(stream)) {
@@ -238,7 +238,15 @@ bool ImmediateSwitchStrategy::SeekVideoStream(VideoStream& stream, double timeIn
 }
 
 bool ImmediateSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
-    LOG_INFO("End of stream reached for ", (&stream == &m_streams[0] ? "video 1" : "video 2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("End of stream reached for video ", (streamIndex + 1));
     
     // Calculate how much we've overshot the video duration
     double overshoot = stream.currentTime - stream.duration;
@@ -263,7 +271,15 @@ bool ImmediateSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
 }
 
 bool ImmediateSwitchStrategy::RestartVideo(VideoStream& stream) {
-    LOG_INFO("Restarting video ", (&stream == &m_streams[0] ? "1" : "2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("Restarting video ", (streamIndex + 1));
     
     // Seek back to beginning
     if (!SeekVideoStream(stream, 0.0)) {

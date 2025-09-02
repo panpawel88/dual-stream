@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 struct VideoInfo {
     int width;
@@ -20,6 +21,8 @@ public:
     static void Cleanup();
     static VideoInfo GetVideoInfo(const std::string& filePath);
     static bool ValidateCompatibility(const VideoInfo& video1, const VideoInfo& video2, std::string& errorMessage);
+    static bool ValidateCompatibility(const std::vector<VideoInfo>& videos, std::string& errorMessage);
+    static bool ValidateMultipleVideos(const std::vector<std::string>& videoPaths, std::vector<VideoInfo>& videoInfos, std::string& errorMessage);
     
 private:
     static bool s_initialized;

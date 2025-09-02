@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <chrono>
+#include <vector>
 #include "demux/VideoDemuxer.h"
 #include "decode/VideoDecoder.h"
 #include "decode/HardwareDecoder.h"
@@ -24,10 +25,6 @@ enum class VideoState {
     END_OF_STREAM
 };
 
-enum class ActiveVideo {
-    VIDEO_1 = 0,
-    VIDEO_2 = 1
-};
 
 struct VideoStream {
     VideoDemuxer demuxer;
@@ -46,7 +43,7 @@ public:
     VideoManager();
     ~VideoManager();
     
-    bool Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
+    bool Initialize(const std::vector<std::string>& videoPaths, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm = SwitchingAlgorithm::IMMEDIATE, double playbackSpeed = 1.0);
     bool SetSwitchingTrigger(std::shared_ptr<ISwitchingTrigger> trigger);
     void Cleanup();
     
@@ -54,7 +51,7 @@ public:
     bool Play();
     bool Pause();
     bool Stop();
-    bool SwitchToVideo(ActiveVideo video);
+    bool SwitchToVideo(size_t videoIndex);
     
     // Frame processing
     bool UpdateFrame();
@@ -67,7 +64,8 @@ public:
     
     // Status
     VideoState GetState() const { return m_state; }
-    ActiveVideo GetActiveVideo() const { return m_activeVideo; }
+    size_t GetActiveVideoIndex() const { return m_activeVideoIndex; }
+    size_t GetVideoCount() const { return m_videos.size(); }
     bool IsInitialized() const { return m_initialized; }
     
     // Frame timing
@@ -81,9 +79,9 @@ public:
 private:
     bool m_initialized;
     VideoState m_state;
-    ActiveVideo m_activeVideo;
+    size_t m_activeVideoIndex;
     
-    VideoStream m_videos[2];
+    std::vector<VideoStream> m_videos;
     
     // Switching strategy
     std::unique_ptr<VideoSwitchingStrategy> m_switchingStrategy;

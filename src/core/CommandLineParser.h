@@ -7,8 +7,7 @@
 #include "video/triggers/SwitchingTriggerFactory.h"
 
 struct VideoPlayerArgs {
-    std::string video1Path;
-    std::string video2Path;
+    std::vector<std::string> videoPaths;
     std::optional<SwitchingAlgorithm> switchingAlgorithm;
     TriggerType triggerType;
     double playbackSpeed;

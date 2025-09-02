@@ -8,8 +8,8 @@ public:
     ImmediateSwitchStrategy();
     ~ImmediateSwitchStrategy() override;
     
-    bool Initialize(VideoStream* streams, VideoManager* manager) override;
-    bool SwitchToVideo(ActiveVideo targetVideo, double currentTime) override;
+    bool Initialize(std::vector<VideoStream>* streams, VideoManager* manager) override;
+    bool SwitchToVideo(size_t targetVideoIndex, double currentTime) override;
     bool UpdateFrame() override;
     DecodedFrame* GetCurrentFrame() override;
     void Cleanup() override;

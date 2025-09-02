@@ -14,20 +14,21 @@ public:
     /**
      * Construct keyboard trigger with window for input handling.
      * @param window Pointer to window instance for reading key states
+     * @param videoCount Number of videos available for switching (1-10)
      */
-    explicit KeyboardSwitchingTrigger(Window* window);
+    KeyboardSwitchingTrigger(Window* window, size_t videoCount);
     
     ~KeyboardSwitchingTrigger() override = default;
     
     // ISwitchingTrigger implementation
-    bool ShouldSwitchToVideo1() override;
-    bool ShouldSwitchToVideo2() override;
+    std::optional<size_t> GetTargetVideoIndex() override;
     void Update() override;
     void Reset() override;
     std::string GetName() const override;
 
 private:
     Window* m_window;
-    bool m_key1Triggered;
-    bool m_key2Triggered;
+    size_t m_videoCount;
+    size_t m_triggeredVideoIndex;
+    bool m_keyTriggered;
 };

@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
         config->SetDouble("video.default_speed", args.playbackSpeed);
     }
     
-    LOG_INFO("DualStream Video Player v2.0.0");
+    LOG_INFO("MultiVideo Player v3.0.0");
     
     FFmpegInitializer ffmpegInit;
     if (!ffmpegInit.Initialize()) {
@@ -78,23 +78,30 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    LOG_INFO("Video 1: ", args.video1Path);
-    LOG_INFO("Video 2: ", args.video2Path);
+    // Log all video paths
+    LOG_INFO("Loading ", args.videoPaths.size(), " video file(s):");
+    for (size_t i = 0; i < args.videoPaths.size(); i++) {
+        LOG_INFO("Video ", (i + 1), ": ", args.videoPaths[i]);
+    }
     LOG_INFO("Switching Algorithm: ", VideoSwitchingStrategyFactory::GetAlgorithmName(finalAlgorithm));
     LOG_INFO("Switching Trigger: ", SwitchingTriggerFactory::GetTriggerTypeName(args.triggerType));
     LOG_INFO("Playback Speed: ", args.playbackSpeed, "x");
     
-    VideoInfo video1Info = VideoValidator::GetVideoInfo(args.video1Path);
-    VideoInfo video2Info = VideoValidator::GetVideoInfo(args.video2Path);
-    
+    // Validate all videos
+    std::vector<VideoInfo> videoInfos;
     std::string compatibilityError;
-    if (!VideoValidator::ValidateCompatibility(video1Info, video2Info, compatibilityError)) {
+    if (!VideoValidator::ValidateMultipleVideos(args.videoPaths, videoInfos, compatibilityError)) {
         LOG_ERROR("Error: ", compatibilityError);
         return 1;
     }
     
-    int maxVideoWidth = std::max(video1Info.width, video2Info.width);
-    int maxVideoHeight = std::max(video1Info.height, video2Info.height);
+    // Find maximum video dimensions
+    int maxVideoWidth = 0;
+    int maxVideoHeight = 0;
+    for (const auto& info : videoInfos) {
+        maxVideoWidth = std::max(maxVideoWidth, info.width);
+        maxVideoHeight = std::max(maxVideoHeight, info.height);
+    }
     
     // Get default window size from configuration
     int defaultWidth = config->GetInt("window.default_width", 1280);
@@ -117,13 +124,22 @@ int main(int argc, char* argv[]) {
              ", config default: ", defaultWidth, "x", defaultHeight, ")");
     
     Window window;
-    if (!window.Create("DualStream Video Player", windowWidth, windowHeight)) {
+    std::string windowTitle = "MultiVideo Player";
+    if (args.videoPaths.size() > 1) {
+        windowTitle += " (1 of " + std::to_string(args.videoPaths.size()) + ")";
+    }
+    
+    if (!window.Create(windowTitle, windowWidth, windowHeight)) {
         LOG_ERROR("Failed to create window");
         return 1;
     }
     
     window.Show();
-    LOG_INFO("Window created. Press 1/2 to switch videos, F11 for fullscreen, ESC to exit");
+    if (args.videoPaths.size() == 1) {
+        LOG_INFO("Window created. Press F11 for fullscreen, ESC to exit (single video mode)");
+    } else {
+        LOG_INFO("Window created. Press 1-", args.videoPaths.size(), " to switch videos, F11 for fullscreen, ESC to exit");
+    }
     
     // Parse preferred renderer backend from config
     std::string preferredBackendStr = config->GetString("rendering.preferred_backend", "auto");
@@ -147,7 +163,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Successfully initialized ", actualRendererName, " renderer");
     
     VideoManager videoManager;
-    if (!videoManager.Initialize(args.video1Path, args.video2Path, renderer.get(), finalAlgorithm, args.playbackSpeed)) {
+    if (!videoManager.Initialize(args.videoPaths, renderer.get(), finalAlgorithm, args.playbackSpeed)) {
         LOG_ERROR("Failed to initialize video manager");
         return 1;
     }
@@ -172,6 +188,7 @@ int main(int argc, char* argv[]) {
     // Create trigger configuration
     TriggerConfig triggerConfig;
     triggerConfig.window = &window;
+    triggerConfig.videoCount = args.videoPaths.size();
     triggerConfig.faceDetectionConfig = FaceDetectionSwitchingTrigger::CreateConfigFromGlobal();
     
     auto switchingTrigger = SwitchingTriggerFactory::Create(args.triggerType, triggerConfig);

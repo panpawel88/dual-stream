@@ -14,7 +14,7 @@
 VideoManager::VideoManager()
     : m_initialized(false)
     , m_state(VideoState::STOPPED)
-    , m_activeVideo(ActiveVideo::VIDEO_1)
+    , m_activeVideoIndex(0)
     , m_pausedTime(0.0)
     , m_frameInterval(1.0 / Config::GetInstance()->GetInt("rendering.target_fps", 60))
     , m_playbackSpeed(Config::GetInstance()->GetDouble("video.default_speed", 1.0)) {
@@ -24,12 +24,17 @@ VideoManager::~VideoManager() {
     Cleanup();
 }
 
-bool VideoManager::Initialize(const std::string& video1Path, const std::string& video2Path, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed) {
+bool VideoManager::Initialize(const std::vector<std::string>& videoPaths, IRenderer* renderer, SwitchingAlgorithm switchingAlgorithm, double playbackSpeed) {
     if (m_initialized) {
         Cleanup();
     }
     
-    LOG_INFO("Initializing VideoManager...");
+    LOG_INFO("Initializing VideoManager with ", videoPaths.size(), " video(s)...");
+    
+    if (videoPaths.empty()) {
+        LOG_ERROR("No video paths provided");
+        return false;
+    }
     
     m_playbackSpeed = playbackSpeed;
     LOG_INFO("Playback speed set to: ", m_playbackSpeed, "x");
@@ -58,16 +63,14 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         }
     }
     
-    if (!InitializeVideoStream(m_videos[0], video1Path, d3dDevice, cudaInteropAvailable)) {
-        LOG_ERROR("Failed to initialize video stream 1");
-        Cleanup();
-        return false;
-    }
-    
-    if (!InitializeVideoStream(m_videos[1], video2Path, d3dDevice, cudaInteropAvailable)) {
-        LOG_ERROR("Failed to initialize video stream 2");
-        Cleanup();
-        return false;
+    // Initialize video streams
+    m_videos.resize(videoPaths.size());
+    for (size_t i = 0; i < videoPaths.size(); i++) {
+        if (!InitializeVideoStream(m_videos[i], videoPaths[i], d3dDevice, cudaInteropAvailable)) {
+            LOG_ERROR("Failed to initialize video stream ", (i + 1));
+            Cleanup();
+            return false;
+        }
     }
     
     if (!ValidateStreams()) {
@@ -95,7 +98,7 @@ bool VideoManager::Initialize(const std::string& video1Path, const std::string& 
         return false;
     }
     
-    if (!m_switchingStrategy->Initialize(m_videos, this)) {
+    if (!m_switchingStrategy->Initialize(&m_videos, this)) {
         LOG_ERROR("Failed to initialize switching strategy");
         Cleanup();
         return false;
@@ -180,17 +183,17 @@ bool VideoManager::Stop() {
     return true;
 }
 
-bool VideoManager::SwitchToVideo(ActiveVideo video) {
-    if (!m_initialized || !m_switchingStrategy) {
+bool VideoManager::SwitchToVideo(size_t videoIndex) {
+    if (!m_initialized || !m_switchingStrategy || videoIndex >= m_videos.size()) {
         return false;
     }
     
     double currentTime = GetCurrentTime();
     
     // Delegate switching to the strategy
-    bool result = m_switchingStrategy->SwitchToVideo(video, currentTime);
+    bool result = m_switchingStrategy->SwitchToVideo(videoIndex, currentTime);
     if (result) {
-        m_activeVideo = video;
+        m_activeVideoIndex = videoIndex;
     }
     
     return result;
@@ -259,7 +262,7 @@ double VideoManager::GetDuration() const {
         return 0.0;
     }
     
-    return m_videos[static_cast<int>(m_activeVideo)].duration;
+    return m_videos[m_activeVideoIndex].duration;
 }
 
 bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string& filePath, ID3D11Device* d3dDevice, bool cudaInteropAvailable) {
@@ -356,16 +359,10 @@ bool VideoManager::ProcessSwitchingTriggers() {
     
     bool switched = false;
     
-    if (m_switchingTrigger->ShouldSwitchToVideo1()) {
-        LOG_INFO("Trigger initiated switch to video 1");
-        if (SwitchToVideo(ActiveVideo::VIDEO_1)) {
-            switched = true;
-        }
-    }
-    
-    if (m_switchingTrigger->ShouldSwitchToVideo2()) {
-        LOG_INFO("Trigger initiated switch to video 2");
-        if (SwitchToVideo(ActiveVideo::VIDEO_2)) {
+    std::optional<size_t> targetVideoIndex = m_switchingTrigger->GetTargetVideoIndex();
+    if (targetVideoIndex.has_value()) {
+        LOG_INFO("Trigger initiated switch to video ", (targetVideoIndex.value() + 1));
+        if (SwitchToVideo(targetVideoIndex.value())) {
             switched = true;
         }
     }

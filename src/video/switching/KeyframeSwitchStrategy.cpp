@@ -11,17 +11,17 @@ KeyframeSwitchStrategy::KeyframeSwitchStrategy()
     : m_lastKeyframeTime(0.0)
     , m_keyframeDetected(false)
     , m_switchInProgress(false) {
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
 }
 
 KeyframeSwitchStrategy::~KeyframeSwitchStrategy() {
     Cleanup();
 }
 
-bool KeyframeSwitchStrategy::Initialize(VideoStream* streams, VideoManager* manager) {
+bool KeyframeSwitchStrategy::Initialize(std::vector<VideoStream>* streams, VideoManager* manager) {
     m_streams = streams;
     m_manager = manager;
-    m_activeVideo = ActiveVideo::VIDEO_1;
+    m_activeVideoIndex = 0;
     m_pendingSwitch.pending = false;
     m_lastKeyframeTime = 0.0;
     m_keyframeDetected = false;
@@ -32,15 +32,15 @@ bool KeyframeSwitchStrategy::Initialize(VideoStream* streams, VideoManager* mana
     return true;
 }
 
-bool KeyframeSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double currentTime) {
-    if (targetVideo == m_activeVideo) {
+bool KeyframeSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double currentTime) {
+    if (targetVideoIndex >= m_streams->size() || targetVideoIndex == m_activeVideoIndex) {
         return true;
     }
     
-    LOG_INFO("KeyframeSwitchStrategy: Queueing switch to video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " at time ", currentTime);
+    LOG_INFO("KeyframeSwitchStrategy: Queueing switch to video ", (targetVideoIndex + 1), " at time ", currentTime);
     
     // Queue the switch request - it will be executed at the next keyframe
-    m_pendingSwitch.targetVideo = targetVideo;
+    m_pendingSwitch.targetVideoIndex = targetVideoIndex;
     m_pendingSwitch.requestTime = currentTime;
     m_pendingSwitch.pending = true;
     
@@ -49,7 +49,7 @@ bool KeyframeSwitchStrategy::SwitchToVideo(ActiveVideo targetVideo, double curre
 }
 
 bool KeyframeSwitchStrategy::UpdateFrame() {
-    VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& activeStream = (*m_streams)[m_activeVideoIndex];
     
     // Reset keyframe detection at the beginning of each frame update
     m_keyframeDetected = false;
@@ -94,7 +94,7 @@ DecodedFrame* KeyframeSwitchStrategy::GetCurrentFrame() {
         return nullptr;
     }
     
-    VideoStream& activeStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& activeStream = (*m_streams)[m_activeVideoIndex];
     if (activeStream.currentFrame.valid) {
         return &activeStream.currentFrame;
     }
@@ -117,7 +117,7 @@ bool KeyframeSwitchStrategy::HasPendingOperations() const {
 }
 
 bool KeyframeSwitchStrategy::ProcessVideoFrame(VideoStream& stream) {
-    LOG_DEBUG("Processing video frame for ", (m_activeVideo == ActiveVideo::VIDEO_1 ? "video 1" : "video 2"));
+    LOG_DEBUG("Processing video frame for video ", (m_activeVideoIndex + 1));
     
     // Try to decode next frame
     if (!DecodeNextFrame(stream)) {
@@ -218,7 +218,7 @@ bool KeyframeSwitchStrategy::CheckAndExecutePendingSwitch(VideoStream& stream) {
     if (m_keyframeDetected) {
         LOG_INFO("Executing pending switch at keyframe (time: ", m_lastKeyframeTime, ")");
         
-        if (ExecuteSwitch(m_pendingSwitch.targetVideo, m_lastKeyframeTime)) {
+        if (ExecuteSwitch(m_pendingSwitch.targetVideoIndex, m_lastKeyframeTime)) {
             m_pendingSwitch.pending = false;
             m_keyframeDetected = false;
             LOG_INFO("Keyframe-synchronized switch completed successfully");
@@ -232,22 +232,22 @@ bool KeyframeSwitchStrategy::CheckAndExecutePendingSwitch(VideoStream& stream) {
     return false;
 }
 
-bool KeyframeSwitchStrategy::ExecuteSwitch(ActiveVideo targetVideo, double currentTime) {
-    ActiveVideo previousVideo = m_activeVideo;
+bool KeyframeSwitchStrategy::ExecuteSwitch(size_t targetVideoIndex, double currentTime) {
+    size_t previousVideoIndex = m_activeVideoIndex;
     
-    LOG_INFO("Executing switch to video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " at keyframe time ", currentTime);
+    LOG_INFO("Executing switch to video ", (targetVideoIndex + 1), " at keyframe time ", currentTime);
     
     // Mark switch as in progress to prevent stale frame rendering
     m_switchInProgress = true;
     
     // Immediately invalidate current frame from previous video to prevent artifacts
-    VideoStream& previousStream = m_streams[static_cast<int>(previousVideo)];
+    VideoStream& previousStream = (*m_streams)[previousVideoIndex];
     previousStream.currentFrame.valid = false;
     
     // Switch active video
-    m_activeVideo = targetVideo;
+    m_activeVideoIndex = targetVideoIndex;
     
-    VideoStream& newActiveStream = m_streams[static_cast<int>(m_activeVideo)];
+    VideoStream& newActiveStream = (*m_streams)[m_activeVideoIndex];
     
     // Handle looping if current time exceeds video duration
     double targetTime = currentTime;
@@ -261,7 +261,7 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(ActiveVideo targetVideo, double curre
     // Since we're switching at a keyframe, the target video should have a keyframe at the same timestamp
     if (!SeekVideoStream(newActiveStream, targetTime)) {
         LOG_ERROR("Failed to synchronize new active stream to keyframe time ", targetTime);
-        m_activeVideo = previousVideo; // Revert
+        m_activeVideoIndex = previousVideoIndex; // Revert
         previousStream.currentFrame.valid = true; // Restore previous frame validity
         m_switchInProgress = false;
         return false;
@@ -270,7 +270,7 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(ActiveVideo targetVideo, double curre
     // Decode at least one frame to ensure we have a valid frame ready before completing the switch
     if (!DecodeNextFrame(newActiveStream) || !newActiveStream.currentFrame.valid) {
         LOG_ERROR("Failed to decode valid frame after seek for new active video");
-        m_activeVideo = previousVideo; // Revert
+        m_activeVideoIndex = previousVideoIndex; // Revert
         previousStream.currentFrame.valid = true; // Restore previous frame validity
         m_switchInProgress = false;
         return false;
@@ -282,14 +282,22 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(ActiveVideo targetVideo, double curre
     // Switch completed successfully - clear switch in progress flag
     m_switchInProgress = false;
     
-    LOG_INFO("Successfully synchronized video ", (targetVideo == ActiveVideo::VIDEO_1 ? "1" : "2"), " to keyframe time ", newActiveStream.currentTime);
+    LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to keyframe time ", newActiveStream.currentTime);
     
     return true;
 }
 
 
 bool KeyframeSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
-    LOG_INFO("End of stream reached for ", (&stream == &m_streams[0] ? "video 1" : "video 2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("End of stream reached for video ", (streamIndex + 1));
     
     // Calculate how much we've overshot the video duration
     double overshoot = stream.currentTime - stream.duration;
@@ -320,7 +328,15 @@ bool KeyframeSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
 }
 
 bool KeyframeSwitchStrategy::RestartVideo(VideoStream& stream) {
-    LOG_INFO("Restarting video ", (&stream == &m_streams[0] ? "1" : "2"));
+    // Find which video this stream is
+    size_t streamIndex = 0;
+    for (size_t i = 0; i < m_streams->size(); i++) {
+        if (&stream == &(*m_streams)[i]) {
+            streamIndex = i;
+            break;
+        }
+    }
+    LOG_INFO("Restarting video ", (streamIndex + 1));
     
     // Seek back to beginning
     if (!SeekVideoStream(stream, 0.0)) {
