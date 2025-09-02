@@ -561,6 +561,12 @@ target_compile_definitions(dual_stream PRIVATE NOTIFY_RENDER_OUTSIDE_MAIN_WINDOW
 target_sources(dual_stream PRIVATE
     src/ui/ImGuiManager.cpp
     src/ui/NotificationManager.cpp
+    src/ui/UIRegistry.cpp
+    src/ui/GlobalInputHandler.cpp
+    src/ui/OverlayManager.cpp
+    src/rendering/OverlayRenderPass.cpp
+    src/rendering/D3D11OverlayRenderPass.cpp
+    src/rendering/OpenGLOverlayRenderPass.cpp
 )
 
 # Always link GLAD for OpenGL runtime support
