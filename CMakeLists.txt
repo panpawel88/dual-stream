@@ -554,6 +554,9 @@ target_sources(dual_stream PRIVATE ${IMGUI_SOURCES})
 target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/backends)
 target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/fonts)
 
+# Configure ImGui-Notify to render outside main window
+target_compile_definitions(dual_stream PRIVATE NOTIFY_RENDER_OUTSIDE_MAIN_WINDOW=false)
+
 # Add overlay system source files
 target_sources(dual_stream PRIVATE
     src/ui/ImGuiManager.cpp
