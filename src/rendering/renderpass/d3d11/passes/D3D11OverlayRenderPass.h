@@ -1,7 +1,7 @@
 #pragma once
-#include "OverlayRenderPass.h"
-#include "renderpass/RenderPass.h"
-#include "renderpass/RenderPassContext.h"
+#include "../../OverlayRenderPass.h"
+#include "../../RenderPass.h"
+#include "../../RenderPassContext.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 

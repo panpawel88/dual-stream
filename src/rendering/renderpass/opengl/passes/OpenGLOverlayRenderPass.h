@@ -1,8 +1,8 @@
 #pragma once
-#include "OverlayRenderPass.h"
-#include "renderpass/opengl/OpenGLRenderPass.h"
-#include "renderpass/opengl/OpenGLRenderPassContext.h"
-#include "OpenGLHeaders.h"
+#include "../../OverlayRenderPass.h"
+#include "../OpenGLRenderPass.h"
+#include "../OpenGLRenderPassContext.h"
+#include "../../../OpenGLHeaders.h"
 
 class OpenGLOverlayRenderPass : public OverlayRenderPass, public OpenGLRenderPass {
 public:

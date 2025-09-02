@@ -1,8 +1,8 @@
 #include "OverlayRenderPass.h"
-#include "../ui/ImGuiManager.h"
-#include "../ui/UIRegistry.h"
-#include "../ui/NotificationManager.h"
-#include "../core/Logger.h"
+#include "../../ui/ImGuiManager.h"
+#include "../../ui/UIRegistry.h"
+#include "../../ui/NotificationManager.h"
+#include "../../core/Logger.h"
 
 OverlayRenderPass::OverlayRenderPass()
     : IRenderPass("Overlay")

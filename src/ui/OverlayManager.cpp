@@ -1,5 +1,5 @@
 #include "OverlayManager.h"
-#include "../rendering/OverlayRenderPass.h"
+#include "../rendering/renderpass/OverlayRenderPass.h"
 
 OverlayManager& OverlayManager::GetInstance() {
     static OverlayManager instance;

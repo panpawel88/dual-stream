@@ -564,9 +564,9 @@ target_sources(dual_stream PRIVATE
     src/ui/UIRegistry.cpp
     src/ui/GlobalInputHandler.cpp
     src/ui/OverlayManager.cpp
-    src/rendering/OverlayRenderPass.cpp
-    src/rendering/D3D11OverlayRenderPass.cpp
-    src/rendering/OpenGLOverlayRenderPass.cpp
+    src/rendering/renderpass/OverlayRenderPass.cpp
+    src/rendering/renderpass/d3d11/passes/D3D11OverlayRenderPass.cpp
+    src/rendering/renderpass/opengl/passes/OpenGLOverlayRenderPass.cpp
 )
 
 # Always link GLAD for OpenGL runtime support

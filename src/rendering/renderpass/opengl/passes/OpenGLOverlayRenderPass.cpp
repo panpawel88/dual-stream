@@ -1,10 +1,10 @@
 #include "OpenGLOverlayRenderPass.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
-#include "../ui/ImGuiManager.h"
-#include "../ui/UIRegistry.h"
-#include "../ui/NotificationManager.h"
-#include "../core/Logger.h"
+#include "../../../../ui/ImGuiManager.h"
+#include "../../../../ui/UIRegistry.h"
+#include "../../../../ui/NotificationManager.h"
+#include "../../../../core/Logger.h"
 
 OpenGLOverlayRenderPass::OpenGLOverlayRenderPass() 
     : OverlayRenderPass(), OpenGLRenderPass("Overlay") {

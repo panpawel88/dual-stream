@@ -1,10 +1,10 @@
 #include "D3D11OverlayRenderPass.h"
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
-#include "../ui/ImGuiManager.h"
-#include "../ui/UIRegistry.h"
-#include "../ui/NotificationManager.h"
-#include "../core/Logger.h"
+#include "../../../../ui/ImGuiManager.h"
+#include "../../../../ui/UIRegistry.h"
+#include "../../../../ui/NotificationManager.h"
+#include "../../../../core/Logger.h"
 
 D3D11OverlayRenderPass::D3D11OverlayRenderPass() 
     : OverlayRenderPass(), D3D11RenderPass("Overlay") {

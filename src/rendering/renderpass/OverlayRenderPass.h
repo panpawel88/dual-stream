@@ -1,5 +1,5 @@
 #pragma once
-#include "renderpass/IRenderPass.h"
+#include "IRenderPass.h"
 #include <memory>
 #include <atomic>
 
