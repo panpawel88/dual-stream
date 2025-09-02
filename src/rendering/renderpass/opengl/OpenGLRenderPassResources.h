@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glad/gl.h>
+#include "../../OpenGLHeaders.h"
 
 /**
  * Shared OpenGL resources for render passes

@@ -1,7 +1,7 @@
 // Separate compilation unit for OpenGL render pass loading to avoid header conflicts
 // This file handles all OpenGL-specific render pass creation
 
-#include <glad/gl.h>  // Include GLAD first in this isolated file
+#include "../OpenGLHeaders.h"  // Use centralized OpenGL headers
 
 #include "RenderPassConfigLoader.h"
 #include "core/Config.h"

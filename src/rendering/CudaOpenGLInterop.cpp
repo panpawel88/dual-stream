@@ -1,3 +1,6 @@
+// Include centralized OpenGL headers first to avoid conflicts
+#include "OpenGLHeaders.h"
+
 #include "CudaOpenGLInterop.h"
 
 #if HAVE_CUDA
@@ -6,7 +9,7 @@
 #include "CudaYuvConversion.h"
 #include <iostream>
 
-// Include CUDA headers and redefine types
+// Include CUDA headers after GLAD
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>

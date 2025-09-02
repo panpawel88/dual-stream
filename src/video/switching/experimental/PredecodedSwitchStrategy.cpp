@@ -1,4 +1,5 @@
 #include "PredecodedSwitchStrategy.h"
+#include "ui/ToastManager.h"
 #include "core/Logger.h"
 #include <algorithm>
 #include <cmath>
@@ -53,6 +54,9 @@ bool PredecodedSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double cur
             return false;
         }
     }
+    
+    // Notify toast system about strategy switch completion
+    ToastManager::GetInstance().ShowStrategyEvent("Predecoded switch", static_cast<int>(targetVideoIndex), "switched to");
     
     LOG_INFO("Instant switch completed successfully");
     return true;

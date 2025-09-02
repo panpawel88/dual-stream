@@ -1,7 +1,7 @@
 #pragma once
 
 #include <windows.h>
-#include <glad/gl.h>
+#include "OpenGLHeaders.h"
 #include <string>
 #include <chrono>
 #include "IRenderer.h"
@@ -11,6 +11,9 @@
 // Forward declarations
 class CudaOpenGLInterop;
 #endif
+
+// Forward declarations
+class IToastRenderer;
 
 // Forward declarations for render pass system
 class OpenGLRenderPassPipeline;

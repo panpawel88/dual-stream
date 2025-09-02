@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../RenderPassContext.h"
-#include <glad/gl.h>
+#include "../../OpenGLHeaders.h"
 
 /**
  * OpenGL specific render pass context

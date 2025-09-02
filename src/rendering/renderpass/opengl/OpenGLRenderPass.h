@@ -2,7 +2,7 @@
 
 #include "../IRenderPass.h"
 #include "OpenGLRenderPassContext.h"
-#include <glad/gl.h>
+#include "../../OpenGLHeaders.h"
 
 // Forward declarations
 class RenderPassConfig;

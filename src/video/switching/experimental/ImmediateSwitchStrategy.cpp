@@ -1,4 +1,5 @@
 #include "ImmediateSwitchStrategy.h"
+#include "ui/ToastManager.h"
 #include "core/Logger.h"
 #include <algorithm>
 #include <cmath>
@@ -56,6 +57,9 @@ bool ImmediateSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double curr
     // Update the stream's current time
     newActiveStream.currentTime = targetTime;
     newActiveStream.state = VideoState::PLAYING;
+    
+    // Notify toast system about strategy switch completion
+    ToastManager::GetInstance().ShowStrategyEvent("Immediate switch", static_cast<int>(targetVideoIndex), "switched to");
     
     LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to time ", targetTime);
     

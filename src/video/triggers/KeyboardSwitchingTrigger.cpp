@@ -1,5 +1,6 @@
 #include "KeyboardSwitchingTrigger.h"
 #include "ui/Window.h"
+#include "ui/ToastManager.h"
 
 KeyboardSwitchingTrigger::KeyboardSwitchingTrigger(Window* window, size_t videoCount)
     : m_window(window), m_videoCount(videoCount), m_triggeredVideoIndex(0), m_keyTriggered(false) {
@@ -24,6 +25,9 @@ void KeyboardSwitchingTrigger::Update() {
             if (videoIndex < m_videoCount) {
                 m_triggeredVideoIndex = videoIndex;
                 m_keyTriggered = true;
+                
+                // Notify toast system about trigger event
+                ToastManager::GetInstance().ShowTriggerEvent("Keyboard", static_cast<int>(videoIndex));
             }
             break;
         }
@@ -34,6 +38,9 @@ void KeyboardSwitchingTrigger::Update() {
         if (9 < m_videoCount) {
             m_triggeredVideoIndex = 9;
             m_keyTriggered = true;
+            
+            // Notify toast system about trigger event
+            ToastManager::GetInstance().ShowTriggerEvent("Keyboard", static_cast<int>(m_triggeredVideoIndex));
         }
     }
 }

@@ -3,9 +3,6 @@
 #include <iostream>
 #include <iomanip>
 
-#ifdef HAVE_CUDA
-#include "rendering/CudaOpenGLInterop.h"
-#endif
 
 extern "C" {
 #include <libavutil/imgutils.h>

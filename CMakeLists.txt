@@ -467,6 +467,9 @@ add_executable(dual_stream
     src/pch.cpp  # Precompiled header source
     src/main.cpp
     src/ui/Window.cpp
+    src/ui/ToastManager.cpp
+    src/rendering/D3D11ToastRenderer.cpp
+    src/rendering/OpenGLToastRenderer.cpp
     src/core/CommandLineParser.cpp
     src/video/VideoValidator.cpp
     src/video/decode/HardwareDecoder.cpp
@@ -497,6 +500,7 @@ set_target_properties(dual_stream PROPERTIES
 # Exclude OpenGL-related files from using precompiled headers to prevent header conflicts
 set_source_files_properties(
     src/rendering/OpenGLRenderer.cpp
+    src/rendering/OpenGLToastRenderer.cpp
     src/rendering/CudaOpenGLInterop.cpp
     src/rendering/RendererFactory.cpp
     src/rendering/renderpass/RenderPassConfigLoaderOpenGL.cpp

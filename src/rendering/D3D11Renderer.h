@@ -7,6 +7,9 @@
 #include "renderpass/RenderPassPipeline.h"
 #include <memory>
 
+// Forward declarations
+class IToastRenderer;
+
 using Microsoft::WRL::ComPtr;
 
 class D3D11Renderer : public IRenderer {

@@ -2,8 +2,10 @@
 
 #if HAVE_CUDA
 
-#include <glad/gl.h>
 #include "core/Logger.h"
+
+// Forward declarations to avoid including OpenGL headers in header
+typedef unsigned int GLuint;
 
 // Use opaque handles for CUDA types to avoid header conflicts
 // All CUDA types are represented as void* in headers

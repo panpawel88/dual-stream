@@ -48,10 +48,10 @@ extern "C" {
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
-// OpenGL headers (conditional)
+// CUDA headers (conditional) - OpenGL interop moved to specific files to avoid conflicts
 #ifdef HAVE_CUDA
     #include <cuda_runtime.h>
-    #include <cuda_gl_interop.h>
+    // Note: cuda_gl_interop.h moved to CudaOpenGLInterop.cpp to avoid GLAD conflicts
 #endif
 
 // OpenCV headers (conditional)
