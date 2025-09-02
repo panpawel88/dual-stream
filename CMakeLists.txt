@@ -135,6 +135,22 @@ else()
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
 endif()
 
+# ImGui Configuration (using git submodule)
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+# ImGui-Notify Configuration (using git submodule) - Header-only library
+set(IMGUI_NOTIFY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui-notify")
+
 # Camera support configuration
 option(ENABLE_CAMERA_SUPPORT "Enable camera capture support" ON)
 if(ENABLE_CAMERA_SUPPORT)
@@ -467,9 +483,6 @@ add_executable(dual_stream
     src/pch.cpp  # Precompiled header source
     src/main.cpp
     src/ui/Window.cpp
-    src/ui/ToastManager.cpp
-    src/rendering/D3D11ToastRenderer.cpp
-    src/rendering/OpenGLToastRenderer.cpp
     src/core/CommandLineParser.cpp
     src/video/VideoValidator.cpp
     src/video/decode/HardwareDecoder.cpp
@@ -531,6 +544,21 @@ target_link_libraries(dual_stream PRIVATE FFmpeg)
 
 # Add src directory to include path for absolute includes
 target_include_directories(dual_stream PRIVATE src)
+
+# Add ImGui include directories and sources
+target_include_directories(dual_stream PRIVATE ${IMGUI_DIR})
+target_include_directories(dual_stream PRIVATE ${IMGUI_DIR}/backends)
+target_sources(dual_stream PRIVATE ${IMGUI_SOURCES})
+
+# Add ImGui-Notify include directory (header-only library)
+target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/backends)
+target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/fonts)
+
+# Add overlay system source files
+target_sources(dual_stream PRIVATE
+    src/ui/ImGuiManager.cpp
+    src/ui/NotificationManager.cpp
+)
 
 # Always link GLAD for OpenGL runtime support
 target_link_libraries(dual_stream PRIVATE glad)

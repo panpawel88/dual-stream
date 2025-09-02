@@ -1,6 +1,4 @@
 #include "OpenGLRenderer.h"
-#include "OpenGLToastRenderer.h"
-#include "ui/ToastManager.h"
 #include "core/Logger.h"
 #include "renderpass/RenderPassConfigLoader.h"
 #include "renderpass/opengl/OpenGLRenderPassContext.h"
@@ -266,12 +264,6 @@ bool OpenGLRenderer::Present(const RenderTexture& texture) {
             break;
     }
     
-    // Render toast notifications on top
-    ToastManager& toastManager = ToastManager::GetInstance();
-    if (toastManager.IsEnabled()) {
-        toastManager.Update();
-        toastManager.Render();
-    }
     
     // Always swap buffers, even for failed renders (shows black screen)
     SwapBuffers(m_hdc);

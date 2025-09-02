@@ -7,8 +7,6 @@
 #include "renderpass/RenderPassPipeline.h"
 #include <memory>
 
-// Forward declarations
-class IToastRenderer;
 
 using Microsoft::WRL::ComPtr;
 

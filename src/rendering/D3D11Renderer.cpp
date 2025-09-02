@@ -8,8 +8,6 @@
 
 #include "D3D11Renderer.h"
 #include "renderpass/RenderPassConfigLoader.h"
-#include "D3D11ToastRenderer.h"
-#include "ui/ToastManager.h"
 #include "core/Logger.h"
 #include "core/Config.h"
 #include <iostream>
@@ -243,12 +241,6 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
         }
     }
     
-    // Render toast notifications on top
-    ToastManager& toastManager = ToastManager::GetInstance();
-    if (toastManager.IsEnabled()) {
-        toastManager.Update();
-        toastManager.Render();
-    }
     
     // Always present, even for failed renders (shows black screen)
     HRESULT hr = m_swapChain->Present(1, 0); // VSync enabled

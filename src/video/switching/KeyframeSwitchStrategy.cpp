@@ -1,5 +1,4 @@
 #include "KeyframeSwitchStrategy.h"
-#include "ui/ToastManager.h"
 #include "core/Logger.h"
 #include <algorithm>
 #include <cmath>
@@ -44,9 +43,6 @@ bool KeyframeSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double curre
     m_pendingSwitch.targetVideoIndex = targetVideoIndex;
     m_pendingSwitch.requestTime = currentTime;
     m_pendingSwitch.pending = true;
-    
-    // Notify toast system about keyframe scheduling
-    ToastManager::GetInstance().ShowKeyframeScheduled(static_cast<int>(targetVideoIndex));
     
     LOG_INFO("Switch request queued, waiting for next synchronized keyframe");
     return true;
@@ -285,15 +281,11 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(size_t targetVideoIndex, double curre
     
     // Switch completed successfully - clear switch in progress flag
     m_switchInProgress = false;
-    
-    // Notify toast system about keyframe completion
-    ToastManager::GetInstance().ShowKeyframeCompleted(static_cast<int>(targetVideoIndex));
-    
+
     LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to keyframe time ", newActiveStream.currentTime);
     
     return true;
 }
-
 
 bool KeyframeSwitchStrategy::HandleEndOfStream(VideoStream& stream) {
     // Find which video this stream is

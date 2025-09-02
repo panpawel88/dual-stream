@@ -18,17 +18,12 @@
 #include "video/triggers/SwitchingTriggerFactory.h"
 #include "camera/CameraManager.h"
 #include "camera/processing/FaceDetectionSwitchingTrigger.h"
-#include "ui/ToastManager.h"
-#include "rendering/IToastRenderer.h"
-#include "rendering/D3D11ToastRenderer.h"
 #include "rendering/D3D11Renderer.h"
 #include "core/Logger.h"
 
 #include "core/FFmpegInitializer.h"
 #include "core/Config.h"
 
-// Include OpenGL toast renderer after other includes to avoid header conflicts
-#include "rendering/OpenGLToastRenderer.h"
 
 int main(int argc, char* argv[]) {
     VideoPlayerArgs args = CommandLineParser::Parse(argc, argv);
@@ -170,26 +165,6 @@ int main(int argc, char* argv[]) {
     const char* actualRendererName = (renderer->GetRendererType() == RendererType::OpenGL) ? "OpenGL" : "DirectX 11";
     LOG_INFO("Successfully initialized ", actualRendererName, " renderer");
     
-    // Initialize toast system
-    ToastManager& toastManager = ToastManager::GetInstance();
-    toastManager.Initialize();
-    
-    if (toastManager.IsEnabled()) {
-        // Create appropriate toast renderer based on the graphics backend
-        std::unique_ptr<IToastRenderer> toastRenderer;
-        
-        if (renderer->GetRendererType() == RendererType::DirectX11) {
-            auto d3d11Renderer = static_cast<D3D11Renderer*>(renderer.get());
-            toastRenderer = std::make_unique<D3D11ToastRenderer>(d3d11Renderer->GetDevice(), d3d11Renderer->GetContext());
-        } else if (renderer->GetRendererType() == RendererType::OpenGL) {
-            toastRenderer = std::make_unique<OpenGLToastRenderer>();
-        }
-        
-        if (toastRenderer) {
-            toastManager.SetRenderer(std::move(toastRenderer));
-            LOG_INFO("Toast system initialized with ", actualRendererName, " renderer");
-        }
-    }
     
     VideoManager videoManager;
     if (!videoManager.Initialize(args.videoPaths, renderer.get(), finalAlgorithm, args.playbackSpeed)) {

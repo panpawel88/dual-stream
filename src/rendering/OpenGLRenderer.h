@@ -12,8 +12,6 @@
 class CudaOpenGLInterop;
 #endif
 
-// Forward declarations
-class IToastRenderer;
 
 // Forward declarations for render pass system
 class OpenGLRenderPassPipeline;
