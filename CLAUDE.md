@@ -166,7 +166,35 @@ Switching Strategy Impact:
 - **vcpkg:** Package manager for C++ libraries
 - **Visual Studio 2022:** For Windows builds
 
-### Building with vcpkg
+### Quick Start - Using Build Scripts
+
+The project includes automated build scripts for easy development:
+
+#### **Standard Build**
+```bash
+# On Windows, run batch files through cmd
+cmd //c build.bat           # Release build with smart CMake detection
+```
+
+#### **Build Options**
+```bash
+cmd //c build.bat --debug   # Debug build with symbols
+cmd //c build.bat --clean   # Clean build directory and rebuild
+cmd //c build.bat --cmake   # Force CMake reconfiguration
+```
+
+#### **Clean Reset**
+```bash
+cmd //c clean.bat          # Remove all build artifacts
+```
+
+### Build Script Features
+- **Smart CMake Detection:** Only runs CMake configuration when needed for fast incremental builds
+- **Automatic vcpkg Integration:** Reads toolchain path from `.env.local` file
+- **Build Performance:** ~10 seconds for incremental builds, ~3 minutes for clean builds
+- **Cross-Configuration:** Supports both Release and Debug builds
+
+### Manual Build (Alternative)
 ```cmake
 # Configure with vcpkg toolchain (use your local vcpkg path)
 # Note: Store your local vcpkg path in .env.local file (see .env.local for machine-specific configuration)
@@ -176,7 +204,11 @@ cmake -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/
 cmake --build . --config Release
 ```
 
-**Note:** Local development paths (like vcpkg toolchain file) should be stored in `.env.local` which is gitignored. Check this file for machine-specific configuration.
+### Configuration Files
+- **`.env.local`:** Contains machine-specific vcpkg toolchain path (gitignored)
+  ```
+  VCPKG_TOOLCHAIN_FILE=C:\Users\user\.vcpkg-clion\vcpkg\scripts\buildsystems\vcpkg.cmake
+  ```
 
 ### Renderer Selection
 Both DirectX 11 and OpenGL renderers are now always compiled and available at runtime. No build-time configuration required.
