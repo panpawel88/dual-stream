@@ -189,7 +189,7 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
 
     // Initialize render pass pipeline
     Config* config = Config::GetInstance();
-    m_renderPassPipeline = RenderPassConfigLoader::LoadOpenGLPipeline(config);
+    m_renderPassPipeline = RenderPassConfigLoader::LoadOpenGLPipeline(config, m_hwnd);
     if (m_renderPassPipeline) {
         LOG_INFO("OpenGL render pass pipeline initialized successfully");
     } else {

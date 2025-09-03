@@ -6,6 +6,7 @@
 #include "RenderPassConfigLoader.h"
 #include "core/Config.h"
 #include "core/Logger.h"
+#include "ui/OverlayManager.h"
 
 // OpenGL includes - safe to include after GLAD in isolated file
 #include "opengl/OpenGLRenderPassPipeline.h"
@@ -16,8 +17,9 @@
 #include "opengl/passes/VignettePass.h"
 #include "opengl/passes/SharpenPass.h"
 #include "opengl/passes/BloomPass.h"
+#include "opengl/passes/OpenGLOverlayRenderPass.h"
 
-std::unique_ptr<OpenGLRenderPassPipeline> RenderPassConfigLoader::LoadOpenGLPipeline(Config* config) {
+std::unique_ptr<OpenGLRenderPassPipeline> RenderPassConfigLoader::LoadOpenGLPipeline(Config* config, void* hwnd) {
     if (!config) {
         LOG_ERROR("RenderPassConfigLoader: Invalid config");
         return nullptr;
@@ -60,7 +62,7 @@ std::unique_ptr<OpenGLRenderPassPipeline> RenderPassConfigLoader::LoadOpenGLPipe
         RenderPassConfig passConfig = RenderPassConfigLoader::LoadPassConfig(passName, config);
         
         // Create pass
-        auto pass = RenderPassConfigLoader::CreateOpenGLPass(passName, passConfig);
+        auto pass = RenderPassConfigLoader::CreateOpenGLPass(passName, passConfig, hwnd);
         if (pass) {
             pipeline->AddOpenGLPass(std::move(pass));
             passCount++;
@@ -84,7 +86,8 @@ std::unique_ptr<OpenGLRenderPassPipeline> RenderPassConfigLoader::LoadOpenGLPipe
 }
 
 std::unique_ptr<OpenGLRenderPass> RenderPassConfigLoader::CreateOpenGLPass(const std::string& passName,
-                                                                          const RenderPassConfig& passConfig) {
+                                                                          const RenderPassConfig& passConfig,
+                                                                          void* hwnd) {
     // Check if pass is enabled
     if (!passConfig.GetBool("enabled", true)) {
         LOG_INFO("OpenGL render pass ", passName, " is disabled");
@@ -106,15 +109,39 @@ std::unique_ptr<OpenGLRenderPass> RenderPassConfigLoader::CreateOpenGLPass(const
         pass = std::make_unique<OpenGLSharpenPass>();
     } else if (passName == "bloom" || passName == "Bloom") {
         pass = std::make_unique<OpenGLBloomPass>();
+    } else if (passName == "overlay" || passName == "Overlay") {
+        pass = std::make_unique<OpenGLOverlayRenderPass>();
     } else {
         LOG_WARNING("Unknown OpenGL render pass type: ", passName, ", falling back to simple render pass");
         pass = std::make_unique<OpenGLSimpleRenderPass>(passName);
     }
     
-    // Initialize the pass
-    if (!pass->Initialize(passConfig)) {
+    // Initialize the pass  
+    bool initSuccess = false;
+    if (passName == "overlay" || passName == "Overlay") {
+        // For overlay passes, use the special initialize method that takes HWND
+        auto overlayPass = dynamic_cast<OpenGLOverlayRenderPass*>(pass.get());
+        if (overlayPass) {
+            initSuccess = overlayPass->InitializeWithHWND(passConfig, hwnd);
+        } else {
+            initSuccess = pass->Initialize(passConfig);
+        }
+    } else {
+        initSuccess = pass->Initialize(passConfig);
+    }
+    
+    if (!initSuccess) {
         LOG_ERROR("Failed to initialize OpenGL render pass: ", passName);
         return nullptr;
+    }
+    
+    // Hook up overlay render pass with OverlayManager
+    if (passName == "overlay" || passName == "Overlay") {
+        auto overlayPass = dynamic_cast<OverlayRenderPass*>(pass.get());
+        if (overlayPass) {
+            OverlayManager::GetInstance().SetOverlayRenderPass(overlayPass);
+            LOG_INFO("Connected OpenGL overlay render pass to OverlayManager");
+        }
     }
     
     return pass;

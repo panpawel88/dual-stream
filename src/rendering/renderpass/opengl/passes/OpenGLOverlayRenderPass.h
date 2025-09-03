@@ -1,25 +1,28 @@
 #pragma once
 #include "../../OverlayRenderPass.h"
-#include "../OpenGLRenderPass.h"
+#include "../OpenGLSimpleRenderPass.h"
 #include "../OpenGLRenderPassContext.h"
 #include "../../../OpenGLHeaders.h"
 
-class OpenGLOverlayRenderPass : public OverlayRenderPass, public OpenGLRenderPass {
+class OpenGLOverlayRenderPass : public OverlayRenderPass, public OpenGLSimpleRenderPass {
 public:
     OpenGLOverlayRenderPass();
     ~OpenGLOverlayRenderPass() override;
     
-    // OpenGLRenderPass interface - OpenGL specific
+    // OpenGLSimpleRenderPass interface
     bool Initialize(const RenderPassConfig& config) override;
+    bool InitializeWithHWND(const RenderPassConfig& config, void* hwnd);
     bool Execute(const OpenGLRenderPassContext& context,
                 GLuint inputTexture,
                 GLuint outputFramebuffer,
                 GLuint outputTexture = 0) override;
-    void Cleanup() override;
+    void UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) override;
+    
+    // Shader source for passthrough functionality
+    std::string GetFragmentShaderSource() const override;
     
     // IRenderPass interface
     PassType GetType() const override { return PassType::Simple; }
-    void UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) override;
     
 protected:
     // OverlayRenderPass abstract methods - OpenGL implementations
@@ -29,11 +32,5 @@ protected:
     void EndImGuiFrame() override;
     
 private:
-    // Passthrough rendering resources
-    GLuint m_shaderProgram = 0;
-    GLuint m_vao = 0;
-    GLuint m_vbo = 0;
-    
-    bool InitializePassthroughShader();
-    void CleanupPassthroughShader();
+    // No additional private members needed - OpenGLSimpleRenderPass handles shaders
 };

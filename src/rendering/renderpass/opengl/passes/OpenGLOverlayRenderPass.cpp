@@ -7,24 +7,29 @@
 #include "../../../../core/Logger.h"
 
 OpenGLOverlayRenderPass::OpenGLOverlayRenderPass() 
-    : OverlayRenderPass(), OpenGLRenderPass("Overlay") {
+    : OverlayRenderPass(), OpenGLSimpleRenderPass("Overlay") {
 }
 
 OpenGLOverlayRenderPass::~OpenGLOverlayRenderPass() = default;
 
 bool OpenGLOverlayRenderPass::Initialize(const RenderPassConfig& config) {
-    // Get window size from config (we'll need to handle this properly)
-    int width = 1920; // TODO: Get from config
-    int height = 1080; // TODO: Get from config
-    
-    // Call base class common initialization
-    if (!InitializeCommon(width, height, nullptr)) {
+    return InitializeWithHWND(config, nullptr);
+}
+
+bool OpenGLOverlayRenderPass::InitializeWithHWND(const RenderPassConfig& config, void* hwnd) {
+    // First call the parent class initialization to set up shaders
+    if (!OpenGLSimpleRenderPass::Initialize(config)) {
+        Logger::GetInstance().Error("Failed to initialize OpenGLSimpleRenderPass for overlay");
         return false;
     }
     
-    // Initialize passthrough shader
-    if (!InitializePassthroughShader()) {
-        Logger::GetInstance().Error("Failed to initialize passthrough shader for overlay");
+    // Get window size from config
+    int width = 1920; // TODO: Get from config
+    int height = 1080; // TODO: Get from config
+    
+    // Then call the overlay common initialization with hwnd
+    if (!InitializeCommon(width, height, hwnd)) {
+        Logger::GetInstance().Error("Failed to initialize OverlayRenderPass common for overlay");
         return false;
     }
     
@@ -44,6 +49,30 @@ void OpenGLOverlayRenderPass::EndImGuiFrame() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
+std::string OpenGLOverlayRenderPass::GetFragmentShaderSource() const {
+    return R"(
+#version 460 core
+
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform sampler2D videoTexture;
+uniform bool isYUV;
+uniform bool flipY;
+
+void main()
+{
+    // Handle Y-coordinate flipping if needed
+    vec2 texCoord = TexCoord;
+    if (flipY) {
+        texCoord.y = 1.0 - texCoord.y;
+    }
+    // Simple passthrough - copy input to output
+    FragColor = texture(videoTexture, texCoord);
+}
+)";
+}
+
 bool OpenGLOverlayRenderPass::Execute(const OpenGLRenderPassContext& context,
                                      GLuint inputTexture,
                                      GLuint outputFramebuffer,
@@ -52,14 +81,16 @@ bool OpenGLOverlayRenderPass::Execute(const OpenGLRenderPassContext& context,
         return false;
     }
     
-    // Bind output framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, outputFramebuffer);
-    glViewport(0, 0, context.outputWidth, context.outputHeight);
+    // First, call parent class Execute to render the passthrough (video content)
+    if (!OpenGLSimpleRenderPass::Execute(context, inputTexture, outputFramebuffer, outputTexture)) {
+        Logger::GetInstance().Error("OpenGLOverlayRenderPass: Failed to execute passthrough rendering");
+        return false;
+    }
     
-    // First, copy input texture to output (passthrough)
-    // TODO: Implement passthrough rendering using m_shaderProgram
-    
-    // Then render ImGui overlay (visibility handled in RenderImGuiContent)
+    // Then render ImGui overlay on top with proper blending
+    // The framebuffer is already bound by parent class
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     RenderImGuiContent();
     
     return true;
@@ -69,34 +100,11 @@ void OpenGLOverlayRenderPass::CleanupImGuiBackend() {
     ImGui_ImplOpenGL3_Shutdown();
 }
 
-bool OpenGLOverlayRenderPass::InitializePassthroughShader() {
-    // TODO: Implement passthrough shader creation
-    // Similar to existing OpenGL render passes
-    return true;
-}
-
-void OpenGLOverlayRenderPass::CleanupPassthroughShader() {
-    if (m_shaderProgram) {
-        glDeleteProgram(m_shaderProgram);
-        m_shaderProgram = 0;
-    }
-    if (m_vao) {
-        glDeleteVertexArrays(1, &m_vao);
-        m_vao = 0;
-    }
-    if (m_vbo) {
-        glDeleteBuffers(1, &m_vbo);
-        m_vbo = 0;
-    }
-}
-
-void OpenGLOverlayRenderPass::Cleanup() {
-    OverlayRenderPass::Cleanup();
-    CleanupPassthroughShader();
-}
-
 void OpenGLOverlayRenderPass::UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) {
-    // Handle overlay-specific parameters
+    // First call parent class to handle standard render pass parameters
+    OpenGLSimpleRenderPass::UpdateParameters(parameters);
+    
+    // Then handle overlay-specific parameters
     for (const auto& param : parameters) {
         const std::string& name = param.first;
         const RenderPassParameter& value = param.second;

@@ -43,9 +43,10 @@ public:
     /**
      * Load OpenGL render pass configuration and create pipeline
      * @param config Configuration instance to read from
+     * @param hwnd Window handle for ImGui initialization (optional)
      * @return Configured OpenGL render pass pipeline or nullptr on failure
      */
-    static std::unique_ptr<OpenGLRenderPassPipeline> LoadOpenGLPipeline(Config* config);
+    static std::unique_ptr<OpenGLRenderPassPipeline> LoadOpenGLPipeline(Config* config, void* hwnd = nullptr);
     
     /**
      * Load render pass configuration and create pipeline (legacy method)
@@ -82,10 +83,12 @@ private:
      * Create an OpenGL render pass from configuration
      * @param passName Name of the render pass
      * @param passConfig Pass configuration
+     * @param hwnd Window handle for ImGui initialization (optional)
      * @return Created render pass or nullptr on failure
      */
     static std::unique_ptr<OpenGLRenderPass> CreateOpenGLPass(const std::string& passName, 
-                                                             const RenderPassConfig& passConfig);
+                                                             const RenderPassConfig& passConfig,
+                                                             void* hwnd = nullptr);
     
     /**
      * Parse comma-separated list of pass names
