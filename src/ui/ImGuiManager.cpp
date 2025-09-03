@@ -2,6 +2,10 @@
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "../core/Logger.h"
+#include <windows.h>
+
+// Forward declaration for ImGui Win32 message handler
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 ImGuiManager& ImGuiManager::GetInstance() {
     static ImGuiManager instance;
@@ -70,4 +74,17 @@ void ImGuiManager::Shutdown() {
     ImGui::DestroyContext(m_context);
     m_context = nullptr;
     m_initialized = false;
+}
+
+bool ImGuiManager::ProcessWindowMessage(void* hwnd, unsigned int msg, unsigned long long wParam, long long lParam) {
+    if (!m_initialized) {
+        return false;
+    }
+    
+    // Forward the message to ImGui's Win32 handler
+    // Returns true if ImGui handled/consumed the message
+    LRESULT result = ImGui_ImplWin32_WndProcHandler(static_cast<HWND>(hwnd), msg, 
+                                                   static_cast<WPARAM>(wParam), 
+                                                   static_cast<LPARAM>(lParam));
+    return result != 0;
 }

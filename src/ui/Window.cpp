@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "ImGuiManager.h"
 #include "core/Logger.h"
 #include <iostream>
 #include <string>
@@ -154,6 +155,17 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 }
 
 LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    // First, forward the message to ImGui if it's initialized
+    ImGuiManager& imgui = ImGuiManager::GetInstance();
+    if (imgui.IsInitialized()) {
+        bool imguiHandled = imgui.ProcessWindowMessage(hwnd, uMsg, wParam, lParam);
+        if (imguiHandled) {
+            // ImGui consumed the message, don't process it further
+            return 0;
+        }
+    }
+    
+    // Process the message normally if ImGui didn't handle it
     switch (uMsg) {
         case WM_CLOSE:
             m_shouldClose = true;
