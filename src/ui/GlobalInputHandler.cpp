@@ -1,4 +1,5 @@
 #include "GlobalInputHandler.h"
+#include "Window.h"
 #include "OverlayManager.h"
 #include "NotificationManager.h"
 #include "../core/Logger.h"
@@ -48,11 +49,20 @@ void GlobalInputHandler::RegisterOverlayToggle(int keyCode) {
     });
 }
 
-void GlobalInputHandler::RegisterFullscreenToggle(int keyCode) {
-    RegisterKeyBinding(keyCode, []() {
-        // TODO: Add fullscreen toggle functionality
-        // This would integrate with the Window class
-        Logger::GetInstance().Info("Fullscreen toggle requested (not yet implemented)");
-        NotificationManager::GetInstance().ShowInfo("Fullscreen", "Toggle requested");
+void GlobalInputHandler::RegisterFullscreenToggle(int keyCode, Window* window) {
+    RegisterKeyBinding(keyCode, [window]() {
+        if (window) {
+            bool wasFullscreen = window->IsFullscreen();
+            window->ToggleFullscreen();
+            bool isFullscreen = window->IsFullscreen();
+            
+            NotificationManager::GetInstance().ShowInfo("Fullscreen", 
+                isFullscreen ? "Fullscreen enabled" : "Fullscreen disabled");
+            
+            Logger::GetInstance().Info("Fullscreen toggled: ", 
+                isFullscreen ? "enabled" : "disabled");
+        } else {
+            Logger::GetInstance().Error("Cannot toggle fullscreen: Window reference is null");
+        }
     });
 }

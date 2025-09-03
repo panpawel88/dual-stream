@@ -167,10 +167,6 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
             if (wParam == VK_ESCAPE) {
                 m_shouldClose = true;
             }
-            
-            if (wParam == VK_F11) {
-                ToggleFullscreen();
-            }
             return 0;
             
         case WM_PAINT: {

@@ -170,6 +170,10 @@ int main(int argc, char* argv[]) {
     GlobalInputHandler::GetInstance().RegisterOverlayToggle(VK_INSERT);
     LOG_INFO("Registered overlay toggle on Insert key");
     
+    // Register fullscreen toggle (F11 key)
+    GlobalInputHandler::GetInstance().RegisterFullscreenToggle(VK_F11, &window);
+    LOG_INFO("Registered fullscreen toggle on F11 key");
+    
     
     VideoManager videoManager;
     if (!videoManager.Initialize(args.videoPaths, renderer.get(), finalAlgorithm, args.playbackSpeed)) {

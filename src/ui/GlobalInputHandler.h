@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <functional>
 
+class Window; // Forward declaration
+
 /**
  * Global input handler for application-wide keyboard shortcuts.
  * Independent of video switching triggers and always active.
@@ -21,7 +23,7 @@ public:
     
     // Predefined system shortcuts
     void RegisterOverlayToggle(int keyCode = VK_INSERT);
-    void RegisterFullscreenToggle(int keyCode = VK_F11);
+    void RegisterFullscreenToggle(int keyCode, Window* window);
     
 private:
     GlobalInputHandler() = default;
