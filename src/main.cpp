@@ -19,6 +19,7 @@
 #include "camera/CameraManager.h"
 #include "camera/processing/FaceDetectionSwitchingTrigger.h"
 #include "rendering/D3D11Renderer.h"
+#include "ui/GlobalInputHandler.h"
 #include "core/Logger.h"
 
 #include "core/FFmpegInitializer.h"
@@ -165,6 +166,10 @@ int main(int argc, char* argv[]) {
     const char* actualRendererName = (renderer->GetRendererType() == RendererType::OpenGL) ? "OpenGL" : "DirectX 11";
     LOG_INFO("Successfully initialized ", actualRendererName, " renderer");
     
+    // Initialize global input handler and register overlay toggle (Insert key)
+    GlobalInputHandler::GetInstance().RegisterOverlayToggle(VK_INSERT);
+    LOG_INFO("Registered overlay toggle on Insert key");
+    
     
     VideoManager videoManager;
     if (!videoManager.Initialize(args.videoPaths, renderer.get(), finalAlgorithm, args.playbackSpeed)) {
@@ -248,6 +253,9 @@ int main(int argc, char* argv[]) {
         }
         videoManager.UpdateSwitchingTrigger();
         videoManager.ProcessSwitchingTriggers();
+        
+        // Update global input handler for overlay toggle and other global shortcuts
+        GlobalInputHandler::GetInstance().Update();
         
         // Update video frames only when needed (based on video frame rate)
         if (videoManager.ShouldUpdateFrame()) {

@@ -44,7 +44,7 @@ void GlobalInputHandler::RegisterOverlayToggle(int keyCode) {
         NotificationManager::GetInstance().ShowInfo("Overlay", 
             isVisible ? "Overlay enabled" : "Overlay disabled");
 
-        Logger::GetInstance().Info("Overlay toggled: {}", isVisible ? "enabled" : "disabled");
+        Logger::GetInstance().Info("Overlay toggled: ", isVisible ? "enabled" : "disabled");
     });
 }
 

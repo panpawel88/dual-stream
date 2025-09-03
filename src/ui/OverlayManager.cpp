@@ -6,7 +6,7 @@ OverlayManager& OverlayManager::GetInstance() {
     return instance;
 }
 
-void OverlayManager::SetOverlayRenderPass(std::shared_ptr<OverlayRenderPass> overlayPass) {
+void OverlayManager::SetOverlayRenderPass(OverlayRenderPass* overlayPass) {
     m_overlayPass = overlayPass;
 }
 

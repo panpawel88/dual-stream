@@ -9,6 +9,7 @@
 #include "RenderPassConfigLoader.h"
 #include "core/Config.h"
 #include "core/Logger.h"
+#include "ui/OverlayManager.h"
 #include <sstream>
 #include <algorithm>
 
@@ -156,6 +157,17 @@ std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string
     if (!pass->Initialize(device, passConfig)) {
         LOG_ERROR("Failed to initialize render pass: ", passName);
         return nullptr;
+    }
+    
+    // Hook up overlay render pass with OverlayManager
+    if (passName == "overlay" || passName == "Overlay") {
+        auto overlayPass = dynamic_cast<OverlayRenderPass*>(pass.get());
+        if (overlayPass) {
+            OverlayManager::GetInstance().SetOverlayRenderPass(overlayPass);
+            LOG_INFO("Connected overlay render pass to OverlayManager");
+        } else {
+            LOG_WARNING("Failed to cast overlay render pass for OverlayManager connection");
+        }
     }
     
     return pass;
