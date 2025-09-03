@@ -59,10 +59,8 @@ bool OpenGLOverlayRenderPass::Execute(const OpenGLRenderPassContext& context,
     // First, copy input texture to output (passthrough)
     // TODO: Implement passthrough rendering using m_shaderProgram
     
-    // Then render ImGui overlay if visible
-    if (m_visible) {
-        RenderImGuiContent();
-    }
+    // Then render ImGui overlay (visibility handled in RenderImGuiContent)
+    RenderImGuiContent();
     
     return true;
 }
@@ -98,6 +96,21 @@ void OpenGLOverlayRenderPass::Cleanup() {
 }
 
 void OpenGLOverlayRenderPass::UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) {
-    // Handle overlay-specific parameters if any
-    // For now, overlay doesn't have configurable parameters
+    // Handle overlay-specific parameters
+    for (const auto& param : parameters) {
+        const std::string& name = param.first;
+        const RenderPassParameter& value = param.second;
+        
+        if (name == "show_ui_registry") {
+            if (std::holds_alternative<bool>(value)) {
+                SetUIRegistryVisible(std::get<bool>(value));
+                LOG_INFO("Overlay: UI Registry visibility set to ", std::get<bool>(value));
+            }
+        } else if (name == "show_notifications") {
+            if (std::holds_alternative<bool>(value)) {
+                SetNotificationsVisible(std::get<bool>(value));
+                LOG_INFO("Overlay: Notifications visibility set to ", std::get<bool>(value));
+            }
+        }
+    }
 }

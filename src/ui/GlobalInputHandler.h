@@ -22,7 +22,7 @@ public:
     void Update();
     
     // Predefined system shortcuts
-    void RegisterOverlayToggle(int keyCode = VK_INSERT);
+    void RegisterOverlayToggle(int keyCode = VK_INSERT);  // Toggles UI Registry visibility
     void RegisterFullscreenToggle(int keyCode, Window* window);
     
 private:

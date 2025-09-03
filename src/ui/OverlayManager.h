@@ -8,9 +8,13 @@ public:
     static OverlayManager& GetInstance();
     
     void SetOverlayRenderPass(OverlayRenderPass* overlayPass);
-    void ToggleOverlay();
-    void SetOverlayVisible(bool visible);
-    bool IsOverlayVisible() const;
+    void ToggleUIRegistry();
+    void SetUIRegistryVisible(bool visible);
+    bool IsUIRegistryVisible() const;
+    
+    void ToggleNotifications();
+    void SetNotificationsVisible(bool visible);
+    bool IsNotificationsVisible() const;
     
 private:
     OverlayManager() = default;

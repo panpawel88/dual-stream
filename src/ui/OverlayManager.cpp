@@ -10,18 +10,34 @@ void OverlayManager::SetOverlayRenderPass(OverlayRenderPass* overlayPass) {
     m_overlayPass = overlayPass;
 }
 
-void OverlayManager::ToggleOverlay() {
+void OverlayManager::ToggleUIRegistry() {
     if (m_overlayPass) {
-        m_overlayPass->ToggleVisibility();
+        m_overlayPass->ToggleUIRegistryVisibility();
     }
 }
 
-void OverlayManager::SetOverlayVisible(bool visible) {
+void OverlayManager::SetUIRegistryVisible(bool visible) {
     if (m_overlayPass) {
-        m_overlayPass->SetVisible(visible);
+        m_overlayPass->SetUIRegistryVisible(visible);
     }
 }
 
-bool OverlayManager::IsOverlayVisible() const {
-    return m_overlayPass ? m_overlayPass->IsVisible() : false;
+bool OverlayManager::IsUIRegistryVisible() const {
+    return m_overlayPass ? m_overlayPass->IsUIRegistryVisible() : false;
+}
+
+void OverlayManager::ToggleNotifications() {
+    if (m_overlayPass) {
+        m_overlayPass->ToggleNotificationsVisibility();
+    }
+}
+
+void OverlayManager::SetNotificationsVisible(bool visible) {
+    if (m_overlayPass) {
+        m_overlayPass->SetNotificationsVisible(visible);
+    }
+}
+
+bool OverlayManager::IsNotificationsVisible() const {
+    return m_overlayPass ? m_overlayPass->IsNotificationsVisible() : false;
 }

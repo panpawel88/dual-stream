@@ -34,7 +34,13 @@ bool OverlayRenderPass::InitializeCommon(int width, int height, void* hwnd) {
 }
 
 void OverlayRenderPass::RenderImGuiContent() {
-    if (!m_initialized || !m_visible) {
+    if (!m_initialized) {
+        return;
+    }
+    
+    // Check if any components are visible
+    bool hasVisibleComponents = m_uiRegistryVisible || m_notificationsVisible;
+    if (!hasVisibleComponents) {
         return;
     }
     
@@ -44,11 +50,15 @@ void OverlayRenderPass::RenderImGuiContent() {
     // Start the ImGui frame
     ImGuiManager::GetInstance().NewFrame();
     
-    // Render UI registry content
-    UIRegistry::GetInstance().RenderUI();
+    // Render UI registry content if enabled
+    if (m_uiRegistryVisible) {
+        UIRegistry::GetInstance().RenderUI();
+    }
     
-    // Render notifications
-    NotificationManager::GetInstance().Update();
+    // Render notifications if enabled
+    if (m_notificationsVisible) {
+        NotificationManager::GetInstance().Update();
+    }
     
     // End the ImGui frame
     ImGuiManager::GetInstance().Render();

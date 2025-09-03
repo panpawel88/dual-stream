@@ -16,10 +16,14 @@ public:
     // Common IRenderPass interface - derived classes must implement these
     void Cleanup() override;
     
-    // Overlay-specific methods
-    void SetVisible(bool visible) { m_visible = visible; }
-    bool IsVisible() const { return m_visible; }
-    void ToggleVisibility() { m_visible = !m_visible; }
+    // Individual component visibility controls
+    void SetUIRegistryVisible(bool visible) { m_uiRegistryVisible = visible; }
+    bool IsUIRegistryVisible() const { return m_uiRegistryVisible; }
+    void ToggleUIRegistryVisibility() { m_uiRegistryVisible = !m_uiRegistryVisible; }
+    
+    void SetNotificationsVisible(bool visible) { m_notificationsVisible = visible; }
+    bool IsNotificationsVisible() const { return m_notificationsVisible; }
+    void ToggleNotificationsVisibility() { m_notificationsVisible = !m_notificationsVisible; }
     
 protected:
     // Common initialization logic (called by derived classes)
@@ -35,7 +39,8 @@ protected:
     virtual void EndImGuiFrame() = 0;
     
     // Common state
-    std::atomic<bool> m_visible{false};
+    std::atomic<bool> m_uiRegistryVisible{false};     // UI panels disabled by default
+    std::atomic<bool> m_notificationsVisible{true};   // Notifications enabled by default
     bool m_initialized = false;
     int m_width = 0;
     int m_height = 0;

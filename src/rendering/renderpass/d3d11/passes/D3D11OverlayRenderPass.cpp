@@ -129,14 +129,12 @@ bool D3D11OverlayRenderPass::Execute(const D3D11RenderPassContext& context,
         context.deviceContext->PSSetShaderResources(0, 1, &nullSRV);
     }
     
-    // Then render ImGui overlay if visible
-    if (m_visible) {
-        // Set blend state for alpha blending with ImGui
-        float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        context.deviceContext->OMSetBlendState(m_blendState.Get(), blendFactor, 0xFFFFFFFF);
-        
-        RenderImGuiContent();
-    }
+    // Then render ImGui overlay (visibility handled in RenderImGuiContent)
+    // Set blend state for alpha blending with ImGui
+    float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    context.deviceContext->OMSetBlendState(m_blendState.Get(), blendFactor, 0xFFFFFFFF);
+    
+    RenderImGuiContent();
     
     return true;
 }
@@ -155,8 +153,23 @@ void D3D11OverlayRenderPass::Cleanup() {
 }
 
 void D3D11OverlayRenderPass::UpdateParameters(const std::map<std::string, RenderPassParameter>& parameters) {
-    // Handle overlay-specific parameters if any
-    // For now, overlay doesn't have configurable parameters
+    // Handle overlay-specific parameters
+    for (const auto& param : parameters) {
+        const std::string& name = param.first;
+        const RenderPassParameter& value = param.second;
+        
+        if (name == "show_ui_registry") {
+            if (std::holds_alternative<bool>(value)) {
+                SetUIRegistryVisible(std::get<bool>(value));
+                LOG_INFO("Overlay: UI Registry visibility set to ", std::get<bool>(value));
+            }
+        } else if (name == "show_notifications") {
+            if (std::holds_alternative<bool>(value)) {
+                SetNotificationsVisible(std::get<bool>(value));
+                LOG_INFO("Overlay: Notifications visibility set to ", std::get<bool>(value));
+            }
+        }
+    }
 }
 
 bool D3D11OverlayRenderPass::InitializePassthroughShaders() {

@@ -38,14 +38,14 @@ void GlobalInputHandler::Update() {
 
 void GlobalInputHandler::RegisterOverlayToggle(int keyCode) {
     RegisterKeyBinding(keyCode, []() {
-        OverlayManager::GetInstance().ToggleOverlay();
+        OverlayManager::GetInstance().ToggleUIRegistry();
         
         // Show notification
-        bool isVisible = OverlayManager::GetInstance().IsOverlayVisible();
-        NotificationManager::GetInstance().ShowInfo("Overlay", 
-            isVisible ? "Overlay enabled" : "Overlay disabled");
+        bool isVisible = OverlayManager::GetInstance().IsUIRegistryVisible();
+        NotificationManager::GetInstance().ShowInfo("UI Registry", 
+            isVisible ? "UI Registry enabled" : "UI Registry disabled");
 
-        Logger::GetInstance().Info("Overlay toggled: ", isVisible ? "enabled" : "disabled");
+        Logger::GetInstance().Info("UI Registry toggled: ", isVisible ? "enabled" : "disabled");
     });
 }
 
