@@ -3,6 +3,7 @@
 #include "../../ui/UIRegistry.h"
 #include "../../ui/NotificationManager.h"
 #include "../../core/Logger.h"
+#include "imgui.h"
 
 OverlayRenderPass::OverlayRenderPass()
     : IRenderPass("Overlay")
@@ -71,5 +72,19 @@ void OverlayRenderPass::Cleanup() {
     if (m_initialized) {
         CleanupImGuiBackend();
         m_initialized = false;
+    }
+}
+
+void OverlayRenderPass::DrawUI() {
+    if (ImGui::CollapsingHeader("Visibility Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool uiRegistryVisible = m_uiRegistryVisible.load();
+        if (ImGui::Checkbox("Show UI Registry", &uiRegistryVisible)) {
+            SetUIRegistryVisible(uiRegistryVisible);
+        }
+        
+        bool notificationsVisible = m_notificationsVisible.load();
+        if (ImGui::Checkbox("Show Notifications", &notificationsVisible)) {
+            SetNotificationsVisible(notificationsVisible);
+        }
     }
 }

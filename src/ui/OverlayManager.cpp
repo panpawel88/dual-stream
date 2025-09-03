@@ -1,5 +1,6 @@
 #include "OverlayManager.h"
 #include "../rendering/renderpass/OverlayRenderPass.h"
+#include "UIRegistry.h"
 
 OverlayManager& OverlayManager::GetInstance() {
     static OverlayManager instance;
@@ -7,7 +8,15 @@ OverlayManager& OverlayManager::GetInstance() {
 }
 
 void OverlayManager::SetOverlayRenderPass(OverlayRenderPass* overlayPass) {
+    if (m_overlayPass) {
+        UIRegistry::GetInstance().UnregisterDrawable(m_overlayPass);
+    }
+    
     m_overlayPass = overlayPass;
+    
+    if (m_overlayPass) {
+        UIRegistry::GetInstance().RegisterDrawable(m_overlayPass);
+    }
 }
 
 void OverlayManager::ToggleUIRegistry() {

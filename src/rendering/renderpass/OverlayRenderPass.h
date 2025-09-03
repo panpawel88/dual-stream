@@ -1,5 +1,6 @@
 #pragma once
 #include "IRenderPass.h"
+#include "../../ui/IUIDrawable.h"
 #include <memory>
 #include <atomic>
 
@@ -8,7 +9,7 @@
  * Provides common overlay functionality while leaving rendering implementation
  * to derived classes for specific graphics APIs.
  */
-class OverlayRenderPass : public IRenderPass {
+class OverlayRenderPass : public IRenderPass, public IUIDrawable {
 public:
     OverlayRenderPass();
     ~OverlayRenderPass() override;
@@ -24,6 +25,11 @@ public:
     void SetNotificationsVisible(bool visible) { m_notificationsVisible = visible; }
     bool IsNotificationsVisible() const { return m_notificationsVisible; }
     void ToggleNotificationsVisibility() { m_notificationsVisible = !m_notificationsVisible; }
+    
+    // IUIDrawable interface
+    void DrawUI() override;
+    std::string GetUIName() const override { return "Overlay Controls"; }
+    std::string GetUICategory() const override { return "Render Passes"; }
     
 protected:
     // Common initialization logic (called by derived classes)
