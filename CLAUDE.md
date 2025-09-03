@@ -15,21 +15,27 @@ The application has evolved far beyond its original requirements into a comprehe
 - **Advanced Switching:** Multiple switching algorithms with different performance characteristics
 
 ### Rendering System  
-- **Dual Backend Support:** DirectX 11 or OpenGL (compile-time selection)
+- **Dual Backend Support:** DirectX 11 or OpenGL with runtime selection
 - **Hardware Acceleration:** D3D11VA (DirectX) or CUDA interop (OpenGL)
 - **Format Support:** Direct YUV rendering with hardware color conversion
+- **Post-Processing Pipeline:** Comprehensive render pass system with multiple effects
+- **ImGui Integration:** Seamless overlay rendering for debug UI and notifications
 
 ### User Interface
-- **Resizable Windows:** Dynamic window sizing with renderer adjustment
+- **Advanced Window Management:** Resizable windows with dynamic renderer adjustment
 - **Fullscreen Support:** F11 toggle with state preservation  
-- **Multi-Monitor Aware:** Window size limited by display resolution
-- **Input System:** Extensible trigger framework
+- **ImGui Integration:** Comprehensive overlay system with debug UI and notifications
+- **Global Input Handling:** Centralized input processing for UI and application hotkeys
+- **Component Registry System:** Dynamic UI component registration and management
+- **Toast Notifications:** Non-intrusive user feedback system
 
 ### Advanced Configuration
 - **Command Line Interface:** Rich parameter support for all features
 - **Multiple Algorithms:** Immediate, predecoded, and keyframe-synchronized switching
 - **Playback Speed Control:** Variable speed playback (0.1x to 10x)
 - **Debug Logging:** Comprehensive logging with configurable verbosity
+- **Post-Processing Pipeline:** Configurable render pass chain with multiple effects
+- **Camera Integration:** Face detection-based automatic video switching
 
 ## Architecture Overview
 
@@ -222,15 +228,30 @@ Both DirectX 11 and OpenGL renderers are now always compiled and available at ru
 
 Each directory contains detailed technical documentation:
 
+### Core Architecture
 - **[src/CLAUDE.md](src/CLAUDE.md)** - Complete source code architecture overview
 - **[src/core/CLAUDE.md](src/core/CLAUDE.md)** - Foundation services and utilities
-- **[src/ui/CLAUDE.md](src/ui/CLAUDE.md)** - Window management and input handling
+- **[src/ui/CLAUDE.md](src/ui/CLAUDE.md)** - Comprehensive UI system with ImGui integration
+
+### Video Processing
 - **[src/video/CLAUDE.md](src/video/CLAUDE.md)** - Video processing system overview  
 - **[src/video/demux/CLAUDE.md](src/video/demux/CLAUDE.md)** - Container parsing implementation
 - **[src/video/decode/CLAUDE.md](src/video/decode/CLAUDE.md)** - Hardware decoding system
 - **[src/video/switching/CLAUDE.md](src/video/switching/CLAUDE.md)** - Video switching strategies
 - **[src/video/triggers/CLAUDE.md](src/video/triggers/CLAUDE.md)** - Input trigger system
-- **[src/rendering/CLAUDE.md](src/rendering/CLAUDE.md)** - Multi-backend rendering system
+
+### Camera System
+- **[src/camera/CLAUDE.md](src/camera/CLAUDE.md)** - Complete camera system with computer vision integration
+- **[src/camera/sources/CLAUDE.md](src/camera/sources/CLAUDE.md)** - Camera source abstraction and implementations
+- **[src/camera/processing/CLAUDE.md](src/camera/processing/CLAUDE.md)** - Multi-threaded frame processing and CV integration
+
+### Rendering System
+- **[src/rendering/CLAUDE.md](src/rendering/CLAUDE.md)** - Multi-backend rendering with comprehensive render pass system
+- **[src/rendering/renderpass/CLAUDE.md](src/rendering/renderpass/CLAUDE.md)** - Render pass pipeline system architecture
+- **[src/rendering/renderpass/d3d11/CLAUDE.md](src/rendering/renderpass/d3d11/CLAUDE.md)** - DirectX 11 render pass implementation
+- **[src/rendering/renderpass/d3d11/passes/CLAUDE.md](src/rendering/renderpass/d3d11/passes/CLAUDE.md)** - DirectX 11 effect implementations
+- **[src/rendering/renderpass/opengl/CLAUDE.md](src/rendering/renderpass/opengl/CLAUDE.md)** - OpenGL render pass implementation with CUDA interop
+- **[src/rendering/renderpass/opengl/passes/CLAUDE.md](src/rendering/renderpass/opengl/passes/CLAUDE.md)** - OpenGL effect implementations
 
 ## Development Status
 

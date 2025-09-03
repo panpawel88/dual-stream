@@ -1,14 +1,26 @@
 # User Interface System
 
-This directory implements the window management and user input handling system, providing a flexible Win32-based interface with modern features like fullscreen support and dynamic resizing.
+This directory implements a comprehensive user interface system combining Win32 window management with ImGui-based overlay functionality for modern UI elements, notifications, and debug information.
 
 ## Architecture Overview
 
-The UI system centers around a single `Window` class that encapsulates all Win32 window management, input handling, and display control functionality.
+The UI system has evolved from a single window class into a multi-component architecture:
 
-## Core Component
+```
+src/ui/
+├── Window.h/cpp                   # Core Win32 window management  
+├── ImGuiManager.h/cpp              # ImGui context and rendering management
+├── OverlayManager.h/cpp            # Overlay visibility and coordination
+├── GlobalInputHandler.h/cpp        # Centralized input processing
+├── UIRegistry.h/cpp                # UI component registration system
+├── NotificationManager.h/cpp       # Toast notification system
+├── IUIDrawable.h                   # Interface for UI components
+└── CLAUDE.md                       # This documentation
+```
 
-### Window Class
+## Core Components
+
+### Window Class (Foundation)
 **File:** `Window.h/cpp`
 **Purpose:** Complete Win32 window management with modern features
 
@@ -18,6 +30,56 @@ The UI system centers around a single `Window` class that encapsulates all Win32
 - **Input Handling:** Keyboard input with edge detection and state management
 - **Message Processing:** Win32 message loop integration
 - **HWND Access:** Direct window handle access for renderer integration
+
+### ImGui Integration
+**File:** `ImGuiManager.h/cpp`
+**Purpose:** ImGui context management and rendering coordination
+
+**Key Features:**
+- **Singleton Pattern:** Global ImGui context management
+- **Platform Integration:** Win32 and renderer backend setup
+- **Frame Management:** ImGui frame lifecycle (NewFrame/Render)
+- **Input Processing:** Win32 message integration for ImGui
+- **Context Safety:** Proper ImGui initialization and shutdown
+
+### Overlay Management
+**File:** `OverlayManager.h/cpp` 
+**Purpose:** Coordinates visibility and rendering of overlay UI elements
+
+**Key Features:**
+- **UI Registry Integration:** Manages debug/config UI visibility
+- **Notification System:** Controls toast notification display
+- **Render Pass Coordination:** Integrates with overlay render passes
+- **Global State:** Centralized overlay visibility control
+
+### Global Input Handling
+**File:** `GlobalInputHandler.h/cpp`
+**Purpose:** Centralized input processing for UI and application hotkeys
+
+**Key Features:**
+- **Hotkey Processing:** Global application shortcuts (F1, F2, etc.)
+- **UI Toggle Control:** Keyboard shortcuts for overlay management
+- **Input Coordination:** Manages input between Win32 and ImGui systems
+
+### Component Registration System
+**File:** `UIRegistry.h/cpp`, `IUIDrawable.h`
+**Purpose:** Registration and management system for UI components
+
+**Key Features:**
+- **Component Registration:** Dynamic UI component registration
+- **Draw Interface:** Standardized rendering interface for UI elements
+- **Lifecycle Management:** Automatic UI component cleanup
+- **Debug UI:** Runtime UI component inspection and control
+
+### Notification System
+**File:** `NotificationManager.h/cpp`
+**Purpose:** Toast notification system for user feedback
+
+**Key Features:**
+- **Toast Notifications:** Non-intrusive user notifications
+- **Priority System:** Different notification levels and styling
+- **Auto-dismiss:** Configurable timeout and dismiss behavior
+- **ImGui Integration:** Seamless rendering within overlay system
 
 ## Window Management Features
 
@@ -34,9 +96,13 @@ public:
     int GetWidth() const { return m_width; }
     int GetHeight() const { return m_height; }
     
+    // Input processing integration
+    bool ProcessMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    
     // Applications can detect size changes for renderer adjustment
     if (currentWidth != lastWindowWidth || currentHeight != lastWindowHeight) {
         renderer->Resize(currentWidth, currentHeight);
+        ImGuiManager::GetInstance().HandleResize(currentWidth, currentHeight);
     }
 };
 ```
@@ -368,4 +434,89 @@ while (window.ProcessMessages()) {
 }
 ```
 
-This UI system provides a robust, modern window management foundation with comprehensive input handling and seamless integration with the video processing and rendering systems.
+## Integration with Overlay Rendering
+
+### Render Pass Integration
+**Connection:** UI system integrates with overlay render passes for seamless rendering
+
+```cpp
+// OverlayManager coordinates with render passes
+OverlayManager::SetOverlayRenderPass(overlayRenderPass);
+
+// Render pass calls UI system for overlay content
+class OverlayRenderPass {
+    void RenderOverlays() {
+        ImGuiManager::GetInstance().NewFrame();
+        
+        if (OverlayManager::GetInstance().IsUIRegistryVisible()) {
+            UIRegistry::GetInstance().DrawDebugUI();
+        }
+        
+        if (OverlayManager::GetInstance().IsNotificationsVisible()) {
+            NotificationManager::GetInstance().DrawNotifications();
+        }
+        
+        ImGuiManager::GetInstance().Render();
+    }
+};
+```
+
+### Input Flow Architecture
+```
+Win32 Messages → Window::HandleMessage() → GlobalInputHandler
+     │
+     └─────────────────────────────────┤
+                                    │
+                 ┌─────────────────────────────────┘
+                 │
+                 ├─ ImGuiManager::ProcessWindowMessage()  # ImGui input
+                 ├─ OverlayManager toggle hotkeys (F1, F2) # UI control
+                 └─ Application input (1, 2, ESC, F11)      # Video control
+```
+
+## Modern UI Features
+
+### Debug UI System
+**Runtime Configuration:** Live editing of application parameters
+- **Component Registry:** All registered UI components accessible via F1
+- **Parameter Editing:** Real-time modification of render pass parameters
+- **Performance Monitoring:** Frame timing and resource usage display
+- **System Status:** Video decoder status, renderer information
+
+### Toast Notification System
+**User Feedback:** Non-intrusive status and error notifications
+- **Success Notifications:** Configuration changes, mode switches
+- **Error Notifications:** File loading errors, hardware failures
+- **Info Notifications:** Feature toggles, status updates
+- **Auto-dismiss:** Configurable timeout with manual dismiss option
+
+### Overlay Management
+**Seamless Integration:** Overlay UI elements that don't interfere with video content
+- **Render Pass Integration:** Overlays rendered as final pass in pipeline
+- **Transparency Support:** Alpha blending with video content
+- **Input Passthrough:** UI input doesn't interfere with video controls
+- **Performance Optimized:** Zero overhead when overlays are hidden
+
+## Configuration and Hotkeys
+
+### Input Mappings
+```
+Application Controls:
+│── 1, 2 Keys     ─ Video switching
+│── F11 Key      ─ Fullscreen toggle  
+│── ESC Key      ─ Exit application
+│
+UI Controls:
+│── F1 Key       ─ Toggle debug UI registry
+│── F2 Key       ─ Toggle notifications
+└── Mouse/Keys   ─ ImGui interaction when overlay active
+```
+
+### ImGui Theme Integration
+**Visual Design:** Modern, minimal UI that complements video content
+- **Dark Theme:** Non-distracting dark color scheme
+- **Transparency:** Semi-transparent backgrounds for video visibility
+- **Minimal Chrome:** Clean, minimal window decorations
+- **Video-First:** UI never obscures important video content
+
+This evolved UI system provides a comprehensive modern interface combining robust Win32 window management with advanced ImGui-based overlay functionality for debugging, configuration, and user feedback while maintaining seamless integration with the video processing and rendering systems.

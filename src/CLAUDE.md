@@ -272,7 +272,7 @@ For detailed implementation information, see the individual subsystem documentat
 - **[core/CLAUDE.md](core/CLAUDE.md)** - Foundation services (logging, CLI parsing, FFmpeg init)
 
 ### User Interface  
-- **[ui/CLAUDE.md](ui/CLAUDE.md)** - Window management, input handling, fullscreen support
+- **[ui/CLAUDE.md](ui/CLAUDE.md)** - Comprehensive UI system with Win32 window management, ImGui overlay integration, global input handling, and notification system
 
 ### Video Processing Pipeline
 - **[video/CLAUDE.md](video/CLAUDE.md)** - Complete video system overview
@@ -281,8 +281,13 @@ For detailed implementation information, see the individual subsystem documentat
 - **[video/switching/CLAUDE.md](video/switching/CLAUDE.md)** - Video switching strategies
 - **[video/triggers/CLAUDE.md](video/triggers/CLAUDE.md)** - Input handling and switching triggers
 
+### Camera System (Computer Vision Integration)
+- **[camera/CLAUDE.md](camera/CLAUDE.md)** - Complete camera system overview with face detection integration
+- **[camera/sources/CLAUDE.md](camera/sources/CLAUDE.md)** - Camera source abstraction with OpenCV and RealSense support
+- **[camera/processing/CLAUDE.md](camera/processing/CLAUDE.md)** - Multi-threaded frame processing and computer vision integration
+
 ### Rendering System
-- **[rendering/CLAUDE.md](rendering/CLAUDE.md)** - Multi-backend rendering with hardware acceleration
+- **[rendering/CLAUDE.md](rendering/CLAUDE.md)** - Multi-backend rendering with hardware acceleration, comprehensive render pass system, and ImGui overlay integration
 
 ## Build Configuration
 

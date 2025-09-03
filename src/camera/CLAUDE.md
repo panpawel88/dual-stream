@@ -14,11 +14,13 @@ src/camera/
 │   ├── ICameraSource.h                  # Abstract camera interface
 │   ├── CameraSourceFactory.h/cpp        # Factory pattern for camera creation
 │   ├── OpenCVCameraSource.h/cpp         # OpenCV VideoCapture implementation
-│   └── RealSenseCameraSource.h/cpp      # Intel RealSense implementation
+│   ├── RealSenseCameraSource.h/cpp      # Intel RealSense implementation
+│   └── CLAUDE.md                        # Camera source system documentation
 ├── processing/                          # Frame processing and delivery
 │   ├── ICameraFrameListener.h           # Interface for frame consumers
 │   ├── CameraFramePublisher.h/cpp       # Multi-threaded frame distribution
-│   └── FaceDetectionSwitchingTrigger.h  # Example CV processing integration
+│   ├── FaceDetectionSwitchingTrigger.h/cpp # Example CV processing integration
+│   └── CLAUDE.md                        # Frame processing system documentation
 └── CLAUDE.md                           # This documentation
 ```
 
@@ -285,5 +287,15 @@ add_definitions(-DHAVE_REALSENSE=1)   # If RealSense found
 - **Thread Safety:** All operations protected by appropriate mutexes
 - **Resource Cleanup:** RAII patterns ensure proper cleanup
 - **Graceful Degradation:** System continues operating with reduced features
+
+## Detailed Component Documentation
+
+For comprehensive technical information about each camera subsystem:
+
+### Camera Source System
+- **[sources/CLAUDE.md](sources/CLAUDE.md)** - Camera source abstraction, device enumeration, OpenCV and RealSense implementations
+
+### Frame Processing System  
+- **[processing/CLAUDE.md](processing/CLAUDE.md)** - Multi-threaded frame distribution, computer vision integration, face detection switching
 
 This camera system provides a robust foundation for computer vision integration while maintaining consistency with the existing video player architecture and protecting the main rendering thread performance.

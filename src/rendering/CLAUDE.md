@@ -8,15 +8,45 @@ The rendering system uses a clean abstraction pattern to support multiple graphi
 
 ```
 src/rendering/
-├── IRenderer.h              # Abstract renderer interface
-├── RendererFactory.h/cpp    # Factory for renderer creation
-├── RenderTexture.h          # Generic texture abstraction
-├── TextureConverter.h/cpp   # Frame-to-texture conversion
-├── D3D11Renderer.h/cpp      # DirectX 11 implementation
-├── OpenGLRenderer.h/cpp     # OpenGL implementation
-├── CudaOpenGLInterop.h/cpp  # CUDA-OpenGL interoperability
-├── CudaYuvConversion.cu/h   # CUDA YUV processing kernels
-└── (Additional renderer components...)
+├── IRenderer.h                     # Abstract renderer interface
+├── RendererFactory.h/cpp           # Factory for renderer creation
+├── RenderTexture.h                 # Generic texture abstraction
+├── TextureConverter.h/cpp          # Frame-to-texture conversion
+├── D3D11Renderer.h/cpp             # DirectX 11 implementation  
+├── OpenGLRenderer.h/cpp            # OpenGL implementation
+├── CudaOpenGLInterop.h/cpp         # CUDA-OpenGL interoperability
+├── CudaYuvConversion.cu/h          # CUDA YUV processing kernels
+├── renderpass/                     # Comprehensive render pass system
+│   ├── IRenderPass.h               # Render pass interface
+│   ├── RenderPassPipeline.h/cpp    # Pipeline management and execution
+│   ├── RenderPassConfig.h/cpp      # Configuration system integration
+│   ├── OverlayRenderPass.h/cpp     # ImGui overlay rendering
+│   ├── d3d11/                      # DirectX 11 render passes
+│   │   ├── D3D11SimpleRenderPass.h/cpp      # Simple shader-based passes
+│   │   ├── D3D11RenderPassResources.h/cpp   # Resource management
+│   │   ├── ShaderLibrary.h/cpp              # Built-in shader library
+│   │   └── passes/                          # Effect implementations
+│   │       ├── YUVToRGBRenderPass.h         # YUV color conversion
+│   │       ├── PassthroughPass.h            # Direct texture copy
+│   │       ├── MotionBlurPass.h             # Motion blur effect
+│   │       ├── BloomPass.h/cpp              # Bloom lighting effect
+│   │       ├── SharpenPass.h/cpp            # Image sharpening
+│   │       ├── VignettePass.h/cpp           # Vignette darkening
+│   │       └── D3D11OverlayRenderPass.h/cpp # ImGui overlay integration
+│   ├── opengl/                     # OpenGL render passes
+│   │   ├── OpenGLSimpleRenderPass.h/cpp     # OpenGL shader passes
+│   │   ├── OpenGLRenderPassResources.h/cpp  # OpenGL resource management
+│   │   ├── OpenGLRenderPassPipeline.h/cpp   # OpenGL pipeline management
+│   │   └── passes/                          # OpenGL effect implementations
+│   │       ├── YUVToRGBRenderPass.h/cpp     # OpenGL YUV conversion
+│   │       ├── PassthroughPass.h/cpp        # OpenGL passthrough
+│   │       ├── MotionBlurPass.h/cpp         # OpenGL motion blur
+│   │       ├── BloomPass.h/cpp              # OpenGL bloom effect
+│   │       ├── SharpenPass.h/cpp            # OpenGL sharpening
+│   │       ├── VignettePass.h/cpp           # OpenGL vignette
+│   │       └── OpenGLOverlayRenderPass.h/cpp # OpenGL ImGui overlays
+│   └── CLAUDE.md                   # Render pass system documentation
+└── CLAUDE.md                       # This documentation
 ```
 
 ## Core Abstraction Layer
@@ -308,7 +338,7 @@ renderer->Present(renderTexture);
 
 ### Frame Flow Integration
 ```cpp
-// Main application rendering loop
+// Enhanced rendering pipeline with render passes and overlays
 DecodedFrame* currentFrame = videoManager.GetCurrentFrame();
 
 // Convert video frame to render texture
@@ -319,21 +349,99 @@ if (currentFrame && currentFrame->valid) {
     renderTexture = TextureConverter::CreateNullTexture(); // Black frame
 }
 
-// Present to screen
-renderer->Present(renderTexture);
+// Present through render pass pipeline (includes post-processing and overlays)
+renderer->Present(renderTexture);  // Now includes full pipeline processing
+```
+
+### Enhanced Rendering Pipeline
+```
+Video Frame → TextureConverter → RenderTexture
+     ↓
+IRenderer::Present()
+     ↓
+Render Pass Pipeline:
+├── YUV to RGB Conversion (if needed)
+├── Post-Processing Effects Chain
+│   ├── Bloom Pass
+│   ├── Sharpen Pass 
+│   ├── Motion Blur Pass
+│   └── Vignette Pass
+├── ImGui Overlay Rendering
+│   ├── Debug UI Components
+│   ├── Notification System
+│   └── Performance Overlays
+└── Present to Swapchain
 ```
 
 ### Window Management Integration
 ```cpp
-// Dynamic window resizing support
+// Enhanced window resizing with render pass and overlay support
 if (currentWidth != lastWindowWidth || currentHeight != lastWindowHeight) {
     if (!renderer->Resize(currentWidth, currentHeight)) {
         LOG_ERROR("Failed to resize renderer");
         break; // Critical rendering error
     }
+    
+    // Update ImGui for overlay rendering
+    ImGuiManager::GetInstance().HandleResize(currentWidth, currentHeight);
+    
     lastWindowWidth = currentWidth;
     lastWindowHeight = currentHeight;
 }
 ```
 
-This rendering system provides a robust, high-performance foundation for video display with automatic hardware acceleration and graceful software fallback across multiple graphics APIs.
+## Advanced Render Pass System
+
+### Comprehensive Post-Processing Pipeline
+**Major Architecture Enhancement:** The rendering system now includes a sophisticated render pass architecture supporting multiple post-processing effects with both DirectX 11 and OpenGL implementations.
+
+**Available Effects:**
+- **YUV to RGB Conversion:** Hardware-accelerated color space conversion
+- **Passthrough:** Direct texture copy for testing and fallback
+- **Motion Blur:** Directional blur effects with configurable intensity  
+- **Bloom:** HDR lighting bloom effects with threshold control
+- **Sharpen:** Image sharpening with adjustable strength
+- **Vignette:** Subtle darkening effects around edges
+- **ImGui Overlay:** Seamless UI overlay rendering integration
+
+### Dual-Backend Render Pass Support
+**Complete Parity:** All render passes implemented for both graphics APIs
+- **DirectX 11 Passes:** Full HLSL shader implementations with constant buffer management
+- **OpenGL Passes:** Complete GLSL shader implementations with uniform management
+- **Automatic Selection:** Render passes automatically use appropriate backend
+- **Resource Management:** Backend-specific resource pools and lifecycle management
+
+### Configuration-Driven Pipeline
+**INI Integration:** All render passes configurable via existing INI system
+```ini
+[rendering]
+enable_render_passes = true
+render_pass_chain = bloom, sharpen, vignette
+
+[render_pass.bloom]
+enabled = true
+threshold = 0.8
+intensity = 1.2
+
+[render_pass.sharpen] 
+enabled = true
+strength = 0.5
+```
+
+### ImGui Overlay Integration
+**Seamless UI Rendering:** Advanced overlay system with full UI capabilities
+- **Debug UI:** Runtime configuration and performance monitoring
+- **Notification System:** Toast notifications with configurable styling
+- **Component Registry:** Dynamic UI component registration and management
+- **Input Integration:** Full mouse and keyboard support within overlays
+
+### Performance Optimization
+**Zero-Overhead Design:** Render passes add no performance cost when disabled
+- **Lazy Allocation:** Resources created only when passes are enabled
+- **Ping-Pong Texturing:** Efficient intermediate texture management
+- **Resource Pooling:** Automatic texture reuse and memory management
+- **Bypass Support:** Direct passthrough when pipeline is disabled
+
+For detailed information about the render pass system, see **[renderpass/CLAUDE.md](renderpass/CLAUDE.md)**
+
+This enhanced rendering system provides a robust, high-performance foundation for video display with automatic hardware acceleration, graceful software fallback, comprehensive post-processing effects, and modern UI overlay capabilities across multiple graphics APIs.

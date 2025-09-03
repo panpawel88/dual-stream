@@ -341,4 +341,16 @@ enabled = true
 shader = Passthrough
 ```
 
+## Detailed Implementation Documentation
+
+For comprehensive technical information about each render pass backend:
+
+### DirectX 11 Implementation
+- **[d3d11/CLAUDE.md](d3d11/CLAUDE.md)** - DirectX 11 render pass implementation with HLSL shaders and resource management
+- **[d3d11/passes/CLAUDE.md](d3d11/passes/CLAUDE.md)** - Individual DirectX 11 effect implementations and HLSL shader details
+
+### OpenGL Implementation  
+- **[opengl/CLAUDE.md](opengl/CLAUDE.md)** - OpenGL render pass implementation with GLSL shaders and CUDA interoperability
+- **[opengl/passes/CLAUDE.md](opengl/passes/CLAUDE.md)** - Individual OpenGL effect implementations and GLSL shader details
+
 This render pass system provides a solid foundation for advanced post-processing effects while maintaining the performance and reliability of the existing video player architecture.
