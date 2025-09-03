@@ -11,13 +11,13 @@ OverlayRenderPass::OverlayRenderPass()
 
 OverlayRenderPass::~OverlayRenderPass() = default;
 
-bool OverlayRenderPass::InitializeCommon(int width, int height) {
+bool OverlayRenderPass::InitializeCommon(int width, int height, void* hwnd) {
     m_width = width;
     m_height = height;
     
     // Initialize ImGui if not already done
     ImGuiManager& imgui = ImGuiManager::GetInstance();
-    if (!imgui.Initialize()) {
+    if (!imgui.Initialize(hwnd)) {
         Logger::GetInstance().Error("Failed to initialize ImGui for overlay");
         return false;
     }

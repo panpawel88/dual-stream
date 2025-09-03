@@ -8,7 +8,7 @@ ImGuiManager& ImGuiManager::GetInstance() {
     return instance;
 }
 
-bool ImGuiManager::Initialize() {
+bool ImGuiManager::Initialize(void* hwnd) {
     if (m_initialized) {
         return true;
     }
@@ -31,6 +31,16 @@ bool ImGuiManager::Initialize() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     // Note: Docking requires ImGui docking branch, not available in standard release
     // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    
+    // Initialize Win32 platform backend if hwnd is provided
+    if (hwnd) {
+        if (!ImGui_ImplWin32_Init(hwnd)) {
+            LOG_ERROR("Failed to initialize ImGui Win32 backend");
+            ImGui::DestroyContext(m_context);
+            m_context = nullptr;
+            return false;
+        }
+    }
     
     m_initialized = true;
     LOG_INFO("ImGui initialized successfully");

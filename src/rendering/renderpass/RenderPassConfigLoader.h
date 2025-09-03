@@ -38,7 +38,7 @@ public:
      * @param config Configuration instance to read from
      * @return Configured D3D11 render pass pipeline or nullptr on failure
      */
-    static std::unique_ptr<RenderPassPipeline> LoadD3D11Pipeline(ID3D11Device* device, Config* config);
+    static std::unique_ptr<RenderPassPipeline> LoadD3D11Pipeline(ID3D11Device* device, Config* config, void* hwnd = nullptr);
     
     /**
      * Load OpenGL render pass configuration and create pipeline
@@ -53,8 +53,8 @@ public:
      * @param config Configuration instance to read from
      * @return Configured render pass pipeline or nullptr on failure
      */
-    static std::unique_ptr<RenderPassPipeline> LoadPipeline(ID3D11Device* device, Config* config) {
-        return LoadD3D11Pipeline(device, config);
+    static std::unique_ptr<RenderPassPipeline> LoadPipeline(ID3D11Device* device, Config* config, void* hwnd = nullptr) {
+        return LoadD3D11Pipeline(device, config, hwnd);
     }
 
 private:
@@ -75,7 +75,8 @@ private:
      */
     static std::unique_ptr<RenderPass> CreatePass(const std::string& passName, 
                                                  const RenderPassConfig& passConfig,
-                                                 ID3D11Device* device);
+                                                 ID3D11Device* device,
+                                                 void* hwnd = nullptr);
     
     /**
      * Create an OpenGL render pass from configuration

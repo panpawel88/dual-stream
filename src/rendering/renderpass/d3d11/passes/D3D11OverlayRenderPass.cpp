@@ -17,6 +17,10 @@ D3D11OverlayRenderPass::D3D11OverlayRenderPass()
 D3D11OverlayRenderPass::~D3D11OverlayRenderPass() = default;
 
 bool D3D11OverlayRenderPass::Initialize(ID3D11Device* device, const RenderPassConfig& config) {
+    return Initialize(device, config, nullptr);
+}
+
+bool D3D11OverlayRenderPass::Initialize(ID3D11Device* device, const RenderPassConfig& config, void* hwnd) {
     m_device = device;
     m_device->GetImmediateContext(m_context.GetAddressOf());
     
@@ -25,8 +29,8 @@ bool D3D11OverlayRenderPass::Initialize(ID3D11Device* device, const RenderPassCo
     int width = 1920;  // Will be updated when rendering based on context
     int height = 1080; // Will be updated when rendering based on context
     
-    // Call base class common initialization
-    if (!InitializeCommon(width, height)) {
+    // Call base class common initialization with hwnd
+    if (!InitializeCommon(width, height, hwnd)) {
         return false;
     }
     

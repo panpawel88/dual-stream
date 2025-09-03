@@ -23,7 +23,7 @@ public:
     
 protected:
     // Common initialization logic (called by derived classes)
-    bool InitializeCommon(int width, int height);
+    bool InitializeCommon(int width, int height, void* hwnd = nullptr);
     
     // ImGui rendering logic (called by derived classes)
     void RenderImGuiContent();

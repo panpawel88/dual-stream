@@ -13,6 +13,7 @@ public:
     
     // D3D11RenderPass interface - DirectX 11 specific
     bool Initialize(ID3D11Device* device, const RenderPassConfig& config) override;
+    bool Initialize(ID3D11Device* device, const RenderPassConfig& config, void* hwnd);
     bool Execute(const D3D11RenderPassContext& context,
                 ID3D11ShaderResourceView* inputSRV,
                 ID3D11RenderTargetView* outputRTV) override;

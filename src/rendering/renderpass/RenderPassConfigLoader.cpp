@@ -16,7 +16,7 @@
 // OpenGL render pass functionality moved to RenderPassConfigLoaderOpenGL.cpp
 // to avoid GLAD header conflicts with Windows headers
 
-std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadD3D11Pipeline(ID3D11Device* device, Config* config) {
+std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadD3D11Pipeline(ID3D11Device* device, Config* config, void* hwnd) {
     if (!device || !config) {
         LOG_ERROR("RenderPassConfigLoader: Invalid device or config");
         return nullptr;
@@ -59,7 +59,7 @@ std::unique_ptr<RenderPassPipeline> RenderPassConfigLoader::LoadD3D11Pipeline(ID
         RenderPassConfig passConfig = LoadPassConfig(passName, config);
         
         // Create pass
-        auto pass = CreatePass(passName, passConfig, device);
+        auto pass = CreatePass(passName, passConfig, device, hwnd);
         if (pass) {
             pipeline->AddPass(std::move(pass));
             passCount++;
@@ -124,7 +124,8 @@ RenderPassConfig RenderPassConfigLoader::LoadPassConfig(const std::string& passN
 
 std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string& passName,
                                                               const RenderPassConfig& passConfig,
-                                                              ID3D11Device* device) {
+                                                              ID3D11Device* device,
+                                                              void* hwnd) {
     // Check if pass is enabled
     if (!passConfig.GetBool("enabled", true)) {
         LOG_INFO("Render pass ", passName, " is disabled");
@@ -154,7 +155,20 @@ std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string
     }
     
     // Initialize the pass
-    if (!pass->Initialize(device, passConfig)) {
+    bool initSuccess = false;
+    if (passName == "overlay" || passName == "Overlay") {
+        // For overlay passes, use the special initialize method that takes HWND
+        auto overlayPass = dynamic_cast<D3D11OverlayRenderPass*>(pass.get());
+        if (overlayPass && hwnd) {
+            initSuccess = overlayPass->Initialize(device, passConfig, hwnd);
+        } else {
+            initSuccess = pass->Initialize(device, passConfig);
+        }
+    } else {
+        initSuccess = pass->Initialize(device, passConfig);
+    }
+    
+    if (!initSuccess) {
         LOG_ERROR("Failed to initialize render pass: ", passName);
         return nullptr;
     }

@@ -143,7 +143,7 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
     
     // Initialize render pass pipeline
     Config* config = Config::GetInstance();
-    m_renderPassPipeline = RenderPassConfigLoader::LoadPipeline(m_device.Get(), config);
+    m_renderPassPipeline = RenderPassConfigLoader::LoadPipeline(m_device.Get(), config, m_hwnd);
     if (m_renderPassPipeline) {
         LOG_INFO("D3D11 render pass pipeline initialized successfully");
     } else {

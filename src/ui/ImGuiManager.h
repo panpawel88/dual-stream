@@ -7,7 +7,7 @@ class ImGuiManager {
 public:
     static ImGuiManager& GetInstance();
     
-    bool Initialize();
+    bool Initialize(void* hwnd = nullptr);
     void Shutdown();
     
     void NewFrame();

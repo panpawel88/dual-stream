@@ -18,7 +18,7 @@ bool OpenGLOverlayRenderPass::Initialize(const RenderPassConfig& config) {
     int height = 1080; // TODO: Get from config
     
     // Call base class common initialization
-    if (!InitializeCommon(width, height)) {
+    if (!InitializeCommon(width, height, nullptr)) {
         return false;
     }
     
