@@ -1,5 +1,6 @@
 #include "KeyframeSwitchStrategy.h"
 #include "core/Logger.h"
+#include "ui/NotificationManager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -283,6 +284,12 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(size_t targetVideoIndex, double curre
     m_switchInProgress = false;
 
     LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to keyframe time ", newActiveStream.currentTime);
+    
+    // Show notification for successful switch
+    NotificationManager::GetInstance().ShowSuccess(
+        "Video Switch", 
+        "Switched to Video " + std::to_string(targetVideoIndex + 1)
+    );
     
     return true;
 }

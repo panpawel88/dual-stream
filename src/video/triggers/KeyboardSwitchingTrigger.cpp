@@ -1,5 +1,6 @@
 #include "KeyboardSwitchingTrigger.h"
 #include "ui/Window.h"
+#include "ui/NotificationManager.h"
 
 KeyboardSwitchingTrigger::KeyboardSwitchingTrigger(Window* window, size_t videoCount)
     : m_window(window), m_videoCount(videoCount), m_triggeredVideoIndex(0), m_keyTriggered(false) {
@@ -25,6 +26,11 @@ void KeyboardSwitchingTrigger::Update() {
                 m_triggeredVideoIndex = videoIndex;
                 m_keyTriggered = true;
                 
+                // Show notification for key press
+                NotificationManager::GetInstance().ShowInfo(
+                    "Key Pressed", 
+                    "Video " + std::to_string(videoIndex + 1) + " requested"
+                );
             }
             break;
         }
@@ -36,6 +42,11 @@ void KeyboardSwitchingTrigger::Update() {
             m_triggeredVideoIndex = 9;
             m_keyTriggered = true;
             
+            // Show notification for key press
+            NotificationManager::GetInstance().ShowInfo(
+                "Key Pressed", 
+                "Video 10 requested"
+            );
         }
     }
 }
