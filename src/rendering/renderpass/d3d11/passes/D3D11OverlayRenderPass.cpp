@@ -72,10 +72,10 @@ bool D3D11OverlayRenderPass::Execute(const D3D11RenderPassContext& context,
     // Set render target
     context.deviceContext->OMSetRenderTargets(1, &outputRTV, nullptr);
     
-    // Set viewport
+    // Set viewport to output dimensions (window size)
     D3D11_VIEWPORT viewport = {};
-    viewport.Width = static_cast<float>(context.inputWidth);
-    viewport.Height = static_cast<float>(context.inputHeight);
+    viewport.Width = static_cast<float>(context.outputWidth);
+    viewport.Height = static_cast<float>(context.outputHeight);
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
     context.deviceContext->RSSetViewports(1, &viewport);
@@ -101,10 +101,25 @@ bool D3D11OverlayRenderPass::Execute(const D3D11RenderPassContext& context,
         // Render fullscreen quad using shared resources
         auto& sharedResources = D3D11RenderPassResources::GetInstance();
         
-        // Set vertex buffer (use shared geometry)
-        ID3D11Buffer* vertexBuffer = sharedResources.GetFullscreenQuadVertexBuffer();
+        // Set vertex buffer with texture coordinate adjustment if needed
+        bool needsAdjustment = context.isOriginalTexture && 
+                              (context.textureWidth > context.inputWidth || 
+                               context.textureHeight > context.inputHeight);
+                               
+        ID3D11Buffer* vertexBuffer = nullptr;
+        UINT stride = 0;
+        
+        if (needsAdjustment) {
+            // Create adjusted vertex buffer for padded textures
+            vertexBuffer = CreateAdjustedVertexBuffer(context);
+            stride = 5 * sizeof(float); // Position (3) + TexCoord (2)
+        } else {
+            // Use shared geometry for standard textures
+            vertexBuffer = sharedResources.GetFullscreenQuadVertexBuffer();
+            stride = sharedResources.GetFullscreenQuadVertexStride();
+        }
+        
         if (vertexBuffer) {
-            UINT stride = sharedResources.GetFullscreenQuadVertexStride();
             UINT offset = 0;
             context.deviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
         }
@@ -123,6 +138,11 @@ bool D3D11OverlayRenderPass::Execute(const D3D11RenderPassContext& context,
         
         // Draw
         context.deviceContext->DrawIndexed(sharedResources.GetFullscreenQuadIndexCount(), 0, 0);
+        
+        // Release adjusted vertex buffer if we created one
+        if (needsAdjustment && vertexBuffer) {
+            vertexBuffer->Release();
+        }
         
         // Unbind resources
         ID3D11ShaderResourceView* nullSRV = nullptr;
@@ -292,4 +312,40 @@ HRESULT D3D11OverlayRenderPass::CompileShaderFromString(const std::string& shade
     }
     
     return hr;
+}
+
+ID3D11Buffer* D3D11OverlayRenderPass::CreateAdjustedVertexBuffer(const D3D11RenderPassContext& context) {
+    // Calculate texture coordinate adjustment
+    float texCoordU = static_cast<float>(context.inputWidth) / static_cast<float>(context.textureWidth);
+    float texCoordV = static_cast<float>(context.inputHeight) / static_cast<float>(context.textureHeight);
+    
+    // Create adjusted vertices for this frame
+    float adjustedVertices[] = {
+        // Position (x, y, z)    // TexCoord (u, v) - adjusted for content area
+        -1.0f, -1.0f, 0.0f,      0.0f, texCoordV,      // Bottom-left
+         1.0f, -1.0f, 0.0f,      texCoordU, texCoordV,  // Bottom-right
+         1.0f,  1.0f, 0.0f,      texCoordU, 0.0f,      // Top-right
+        -1.0f,  1.0f, 0.0f,      0.0f, 0.0f            // Top-left
+    };
+    
+    // Create vertex buffer
+    D3D11_BUFFER_DESC desc = {};
+    desc.ByteWidth = sizeof(adjustedVertices);
+    desc.Usage = D3D11_USAGE_IMMUTABLE;
+    desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    desc.CPUAccessFlags = 0;
+    
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = adjustedVertices;
+    
+    ComPtr<ID3D11Buffer> buffer;
+    HRESULT hr = m_device->CreateBuffer(&desc, &initData, &buffer);
+    if (FAILED(hr)) {
+        Logger::GetInstance().Error("Failed to create adjusted vertex buffer for overlay pass");
+        return nullptr;
+    }
+    
+    // Return raw pointer - caller manages lifetime
+    buffer->AddRef();
+    return buffer.Get();
 }

@@ -71,6 +71,7 @@ bool D3D11SimpleRenderPass::Initialize(ID3D11Device* device, const RenderPassCon
 }
 
 void D3D11SimpleRenderPass::Cleanup() {
+    m_adjustedVertexBuffer.Reset();
     m_constantBuffer.Reset();
     m_inputLayout.Reset();
     m_pixelShader.Reset();
@@ -95,10 +96,33 @@ bool D3D11SimpleRenderPass::Execute(const D3D11RenderPassContext& context,
     // Set render target
     deviceContext->OMSetRenderTargets(1, &outputRTV, nullptr);
     
-    // Set viewport
+    // Set viewport size based on render target - query the actual render target dimensions
     D3D11_VIEWPORT viewport = {};
-    viewport.Width = static_cast<float>(context.inputWidth);
-    viewport.Height = static_cast<float>(context.inputHeight);
+    
+    // Get render target description to determine if we're rendering to final output or intermediate texture
+    ID3D11Resource* renderTargetResource = nullptr;
+    outputRTV->GetResource(&renderTargetResource);
+    
+    ID3D11Texture2D* renderTargetTexture = nullptr;
+    if (renderTargetResource && SUCCEEDED(renderTargetResource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&renderTargetTexture))) {
+        D3D11_TEXTURE2D_DESC desc;
+        renderTargetTexture->GetDesc(&desc);
+        
+        // Use actual render target dimensions for viewport
+        viewport.Width = static_cast<float>(desc.Width);
+        viewport.Height = static_cast<float>(desc.Height);
+        
+        renderTargetTexture->Release();
+    } else {
+        // Fallback to output dimensions if we can't query the render target
+        viewport.Width = static_cast<float>(context.outputWidth);
+        viewport.Height = static_cast<float>(context.outputHeight);
+    }
+    
+    if (renderTargetResource) {
+        renderTargetResource->Release();
+    }
+    
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
     deviceContext->RSSetViewports(1, &viewport);
@@ -162,8 +186,8 @@ bool D3D11SimpleRenderPass::Execute(const D3D11RenderPassContext& context,
         deviceContext->RSSetState(rasterizerState);
     }
     
-    // Render fullscreen quad
-    RenderFullscreenQuad(deviceContext);
+    // Render fullscreen quad with texture coordinate adjustment if needed
+    RenderAdjustedQuad(deviceContext, context);
     
     // Unbind resources
     ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
@@ -380,6 +404,94 @@ void D3D11SimpleRenderPass::RenderFullscreenQuad(ID3D11DeviceContext* context) {
     
     // Draw
     context->DrawIndexed(sharedResources.GetFullscreenQuadIndexCount(), 0, 0);
+}
+
+void D3D11SimpleRenderPass::RenderAdjustedQuad(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext) {
+    // Only apply texture coordinate adjustment when reading from original padded input texture
+    // Intermediate textures don't have padding and should use standard texture coordinates
+    bool needsAdjustment = renderContext.isOriginalTexture && 
+                          (renderContext.textureWidth > renderContext.inputWidth || 
+                           renderContext.textureHeight > renderContext.inputHeight);
+    
+    if (!needsAdjustment) {
+        // Use standard fullscreen quad if no adjustment needed
+        RenderFullscreenQuad(context);
+        return;
+    }
+    
+    // Create or update adjusted vertex buffer for this frame
+    CreateAdjustedVertexBuffer(context, renderContext);
+    
+    // Set adjusted vertex buffer
+    if (m_adjustedVertexBuffer) {
+        UINT stride = 5 * sizeof(float); // Position (3) + TexCoord (2)
+        UINT offset = 0;
+        context->IASetVertexBuffers(0, 1, m_adjustedVertexBuffer.GetAddressOf(), &stride, &offset);
+    }
+    
+    // Set index buffer (use shared geometry)
+    auto& sharedResources = D3D11RenderPassResources::GetInstance();
+    ID3D11Buffer* indexBuffer = sharedResources.GetFullscreenQuadIndexBuffer();
+    if (indexBuffer) {
+        context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+    }
+    
+    // Set input layout
+    context->IASetInputLayout(m_inputLayout.Get());
+    
+    // Set primitive topology
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    
+    // Draw
+    context->DrawIndexed(sharedResources.GetFullscreenQuadIndexCount(), 0, 0);
+}
+
+void D3D11SimpleRenderPass::CreateAdjustedVertexBuffer(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext) {
+    // Calculate texture coordinate adjustment
+    float texCoordU = static_cast<float>(renderContext.inputWidth) / static_cast<float>(renderContext.textureWidth);
+    float texCoordV = static_cast<float>(renderContext.inputHeight) / static_cast<float>(renderContext.textureHeight);
+    
+    // Create adjusted vertices for this frame
+    float adjustedVertices[] = {
+        // Position (x, y, z)    // TexCoord (u, v) - adjusted for content area
+        -1.0f, -1.0f, 0.0f,      0.0f, texCoordV,      // Bottom-left
+         1.0f, -1.0f, 0.0f,      texCoordU, texCoordV,  // Bottom-right
+         1.0f,  1.0f, 0.0f,      texCoordU, 0.0f,      // Top-right
+        -1.0f,  1.0f, 0.0f,      0.0f, 0.0f            // Top-left
+    };
+    
+    // Create or update adjusted vertex buffer
+    if (!m_adjustedVertexBuffer) {
+        // Create new buffer
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(adjustedVertices);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = adjustedVertices;
+        
+        ID3D11Device* device;
+        context->GetDevice(&device);
+        HRESULT hr = device->CreateBuffer(&desc, &initData, &m_adjustedVertexBuffer);
+        device->Release();
+        
+        if (FAILED(hr)) {
+            LOG_ERROR("Failed to create adjusted vertex buffer for render pass");
+            return;
+        }
+    } else {
+        // Update existing buffer
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        HRESULT hr = context->Map(m_adjustedVertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+        if (SUCCEEDED(hr)) {
+            memcpy(mappedResource.pData, adjustedVertices, sizeof(adjustedVertices));
+            context->Unmap(m_adjustedVertexBuffer.Get(), 0);
+        } else {
+            LOG_ERROR("Failed to update adjusted vertex buffer for render pass");
+        }
+    }
 }
 
 bool D3D11SimpleRenderPass::InitializeSharedResources(ID3D11Device* device) {

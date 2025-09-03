@@ -61,10 +61,12 @@ struct PS_INPUT {
 };
 
 float4 main(PS_INPUT input) : SV_TARGET {
-    // Sample Y (luminance)
+    // Sample Y (luminance) at full resolution
     float y = yTexture.Sample(videoSampler, input.tex).r;
     
     // Sample UV (chrominance) - for NV12, UV is at half resolution
+    // The UV texture coordinates should be the same as Y for hardware NV12 textures
+    // as the hardware handles the subsampling automatically
     float2 chroma = uvTexture.Sample(videoSampler, input.tex).rg;
     float u = chroma.r - 0.5;
     float v = chroma.g - 0.5;
@@ -227,16 +229,36 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
                 context.deltaTime = frameDelta.count();
                 context.totalTime = m_totalTime;
                 context.frameNumber = m_frameNumber;
-                context.inputWidth = m_width;
-                context.inputHeight = m_height;
+                context.inputWidth = texture.width;
+                context.inputHeight = texture.height;
                 context.isYUV = texture.isYUV;
                 context.uvSRV = texture.isYUV ? m_currentFrameUVSRV.Get() : nullptr;
                 context.textureFormat = texture.d3d11.dxgiFormat;
                 
+                // Get actual texture dimensions for padding detection
+                ComPtr<ID3D11Resource> resource;
+                inputSRV->GetResource(&resource);
+                ComPtr<ID3D11Texture2D> texture2D;
+                if (SUCCEEDED(resource.As(&texture2D))) {
+                    D3D11_TEXTURE2D_DESC textureDesc;
+                    texture2D->GetDesc(&textureDesc);
+                    context.textureWidth = textureDesc.Width;
+                    context.textureHeight = textureDesc.Height;
+                } else {
+                    // Fallback: assume content dimensions match texture dimensions
+                    context.textureWidth = texture.width;
+                    context.textureHeight = texture.height;
+                }
+                
+                // Set output dimensions to current window size
+                context.outputWidth = m_width;
+                context.outputHeight = m_height;
+                context.isOriginalTexture = true; // Initial context represents original padded texture from decoder
+                
                 renderSuccess = m_renderPassPipeline->Execute(context, inputSRV, m_renderTargetView.Get());
             } else {
                 // Direct rendering without render passes (fallback to original behavior)
-                renderSuccess = PresentD3D11TextureDirect(inputSRV, texture.isYUV);
+                renderSuccess = PresentD3D11TextureDirect(inputSRV, texture.isYUV, texture.width, texture.height);
             }
         }
     }
@@ -446,7 +468,8 @@ bool D3D11Renderer::CreateGeometry() {
     
     // Create vertex buffer
     D3D11_BUFFER_DESC bufferDesc = {};
-    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+    bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     bufferDesc.ByteWidth = sizeof(vertices);
     bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     
@@ -464,6 +487,7 @@ bool D3D11Renderer::CreateGeometry() {
     
     // Create index buffer
     bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.CPUAccessFlags = 0; // Reset CPU access flags for index buffer
     bufferDesc.ByteWidth = sizeof(indices);
     bufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
     
@@ -533,7 +557,8 @@ bool D3D11Renderer::UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV
     D3D11_TEXTURE2D_DESC textureDesc;
     videoTexture->GetDesc(&textureDesc);
     
-    LOG_DEBUG("UpdateFrameTexture - Texture format: ", textureDesc.Format, ", isYUV: ", isYUV);
+    LOG_DEBUG("UpdateFrameTexture - Texture format: ", textureDesc.Format, ", isYUV: ", isYUV, 
+              ", Size: ", textureDesc.Width, "x", textureDesc.Height, ", ArraySize: ", textureDesc.ArraySize);
     
     // Create shader resource view for the video texture
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -557,17 +582,55 @@ bool D3D11Renderer::UpdateFrameTexture(ID3D11Texture2D* videoTexture, bool isYUV
             // Create UV plane view - for NV12, UV is at half resolution and different offset
             D3D11_SHADER_RESOURCE_VIEW_DESC uvDesc = {};
             uvDesc.Format = DXGI_FORMAT_R8G8_UNORM; // UV interleaved
-            uvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            uvDesc.Texture2D.MipLevels = 1;
-            uvDesc.Texture2D.MostDetailedMip = 0;
+            
+            // For NV12 textures, the UV plane is typically at array slice 1
+            // Check if the texture has multiple array slices
+            D3D11_TEXTURE2D_DESC uvTextureDesc;
+            videoTexture->GetDesc(&uvTextureDesc);
+            
+            if (uvTextureDesc.ArraySize > 1) {
+                // Multi-slice texture - UV is at array slice 1
+                uvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                uvDesc.Texture2DArray.MipLevels = 1;
+                uvDesc.Texture2DArray.MostDetailedMip = 0;
+                uvDesc.Texture2DArray.FirstArraySlice = 1;
+                uvDesc.Texture2DArray.ArraySize = 1;
+                LOG_DEBUG("Creating UV plane SRV with array slice 1 for multi-slice NV12 texture");
+            } else {
+                // Single texture - try accessing UV data differently
+                // For some hardware decoders, UV data might be at subresource 1
+                uvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                uvDesc.Texture2D.MipLevels = 1;
+                uvDesc.Texture2D.MostDetailedMip = 0;
+                LOG_DEBUG("Creating UV plane SRV for single-slice NV12 texture");
+            }
             
             // Try to create a view for the UV data
             hr = m_device->CreateShaderResourceView(videoTexture, &uvDesc, &m_currentFrameUVSRV);
             if (FAILED(hr)) {
-                LOG_DEBUG("Failed to create UV plane SRV, will use Y-only. HRESULT: 0x", std::hex, hr);
-                m_currentFrameUVSRV.Reset();
+                LOG_DEBUG("Failed to create UV plane SRV with current approach. HRESULT: 0x", std::hex, hr);
+                
+                // Fallback: try the original approach for single-slice textures
+                if (uvTextureDesc.ArraySize > 1) {
+                    LOG_DEBUG("Falling back to single-slice UV SRV creation");
+                    uvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    uvDesc.Texture2D.MipLevels = 1;
+                    uvDesc.Texture2D.MostDetailedMip = 0;
+                    
+                    hr = m_device->CreateShaderResourceView(videoTexture, &uvDesc, &m_currentFrameUVSRV);
+                    if (FAILED(hr)) {
+                        LOG_DEBUG("Fallback UV plane SRV creation also failed. HRESULT: 0x", std::hex, hr);
+                        m_currentFrameUVSRV.Reset();
+                    } else {
+                        LOG_DEBUG("Fallback UV plane SRV created successfully");
+                    }
+                } else {
+                    LOG_DEBUG("Will use Y-only rendering for this frame");
+                    m_currentFrameUVSRV.Reset();
+                }
             } else {
-                LOG_DEBUG("UV plane SRV created successfully");
+                LOG_DEBUG("UV plane SRV created successfully with ", 
+                         (uvDesc.ViewDimension == D3D11_SRV_DIMENSION_TEXTURE2DARRAY ? "array slice" : "texture2D"), " approach");
             }
             
             return true;
@@ -661,6 +724,54 @@ void D3D11Renderer::SetupRenderState(bool isYUV) {
 }
 
 void D3D11Renderer::DrawQuad() {
+    // Ensure vertex buffer contains normal texture coordinates (0,0 to 1,1)
+    // This is needed to reset from any previous adjusted coordinates
+    QuadVertex normalVertices[] = {
+        // Position (x, y, z)         // TexCoord (u, v) - normal coordinates
+        { {-1.0f,  1.0f, 0.0f}, {0.0f, 0.0f} },    // Top-left
+        { { 1.0f,  1.0f, 0.0f}, {1.0f, 0.0f} },    // Top-right  
+        { { 1.0f, -1.0f, 0.0f}, {1.0f, 1.0f} },    // Bottom-right
+        { {-1.0f, -1.0f, 0.0f}, {0.0f, 1.0f} }     // Bottom-left
+    };
+    
+    // Update vertex buffer with normal coordinates
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = m_context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr)) {
+        memcpy(mappedResource.pData, normalVertices, sizeof(normalVertices));
+        m_context->Unmap(m_vertexBuffer.Get(), 0);
+    } else {
+        LOG_ERROR("Failed to update vertex buffer for normal quad rendering");
+    }
+    
+    m_context->DrawIndexed(6, 0, 0);
+}
+
+void D3D11Renderer::DrawAdjustedQuad(int contentWidth, int contentHeight, int textureWidth, int textureHeight) {
+    // Calculate texture coordinate adjustment to sample only the content area
+    float texCoordU = static_cast<float>(contentWidth) / static_cast<float>(textureWidth);
+    float texCoordV = static_cast<float>(contentHeight) / static_cast<float>(textureHeight);
+    
+    // Create adjusted vertices for this frame
+    QuadVertex adjustedVertices[] = {
+        // Position (x, y, z)         // TexCoord (u, v) - adjusted for content area
+        { {-1.0f,  1.0f, 0.0f}, {0.0f, 0.0f} },           // Top-left
+        { { 1.0f,  1.0f, 0.0f}, {texCoordU, 0.0f} },      // Top-right  
+        { { 1.0f, -1.0f, 0.0f}, {texCoordU, texCoordV} }, // Bottom-right
+        { {-1.0f, -1.0f, 0.0f}, {0.0f, texCoordV} }       // Bottom-left
+    };
+    
+    // Update vertex buffer with adjusted coordinates
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = m_context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr)) {
+        memcpy(mappedResource.pData, adjustedVertices, sizeof(adjustedVertices));
+        m_context->Unmap(m_vertexBuffer.Get(), 0);
+    } else {
+        LOG_ERROR("Failed to update vertex buffer for texture content adjustment");
+    }
+    
+    // Draw with adjusted coordinates
     m_context->DrawIndexed(6, 0, 0);
 }
 
@@ -686,7 +797,7 @@ bool D3D11Renderer::PresentD3D11Texture(const RenderTexture& texture) {
     return true;
 }
 
-bool D3D11Renderer::PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV) {
+bool D3D11Renderer::PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV, int contentWidth, int contentHeight) {
     if (!inputSRV) {
         return false;
     }
@@ -700,8 +811,37 @@ bool D3D11Renderer::PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV
     // Override the SRV binding since we're providing it directly
     m_context->PSSetShaderResources(0, 1, &inputSRV);
     
-    // Draw fullscreen quad
-    DrawQuad();
+    // Get texture dimensions to detect padding
+    ComPtr<ID3D11Resource> resource;
+    inputSRV->GetResource(&resource);
+    ComPtr<ID3D11Texture2D> texture;
+    if (SUCCEEDED(resource.As(&texture))) {
+        D3D11_TEXTURE2D_DESC textureDesc;
+        texture->GetDesc(&textureDesc);
+        
+        // Use the actual video dimensions passed as parameters (from RenderTexture)
+        // These come from DecodedFrame.width/height which are the real video dimensions
+        int actualContentWidth = contentWidth;
+        int actualContentHeight = contentHeight;
+        
+        // Safety check - if video dimensions are invalid, fall back to texture dimensions (no padding adjustment)
+        if (actualContentWidth <= 0 || actualContentHeight <= 0) {
+            LOG_DEBUG("Invalid content dimensions provided (", actualContentWidth, "x", actualContentHeight, "), using texture dimensions");
+            actualContentWidth = textureDesc.Width;
+            actualContentHeight = textureDesc.Height;
+        }
+        
+        if (textureDesc.Width != actualContentWidth || textureDesc.Height != actualContentHeight) {
+            // Use adjusted quad that only samples the actual content area
+            DrawAdjustedQuad(actualContentWidth, actualContentHeight, textureDesc.Width, textureDesc.Height);
+        } else {
+            // No padding, use normal quad
+            DrawQuad();
+        }
+    } else {
+        // Fallback to normal quad if we can't get texture info
+        DrawQuad();
+    }
     
     // Unbind resources
     ID3D11ShaderResourceView* nullSRV = nullptr;

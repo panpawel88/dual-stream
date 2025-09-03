@@ -400,6 +400,11 @@ bool VideoDecoder::ProcessHardwareFrame(DecodedFrame& outFrame) {
         outFrame.format = DXGI_FORMAT_B8G8R8A8_UNORM;
     }
     
+    // Set the actual video dimensions from FFmpeg frame (not texture dimensions which may include padding)
+    outFrame.width = m_frame->width;
+    outFrame.height = m_frame->height;
+    LOG_DEBUG("D3D11 hardware frame processed - Video dimensions: ", outFrame.width, "x", outFrame.height);
+    
     return true;
 }
 

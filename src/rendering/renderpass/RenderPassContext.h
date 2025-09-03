@@ -9,11 +9,14 @@ struct RenderPassContextBase {
     float deltaTime;        // Time since last frame
     float totalTime;        // Total elapsed time
     int frameNumber;        // Frame counter
-    int inputWidth;         // Input texture width
-    int inputHeight;        // Input texture height
+    int inputWidth;         // Input content width (may be smaller than actual texture)
+    int inputHeight;        // Input content height (may be smaller than actual texture)
+    int textureWidth;       // Actual texture allocation width (may include padding)
+    int textureHeight;      // Actual texture allocation height (may include padding)
     int outputWidth;        // Output framebuffer width (window/viewport size)
     int outputHeight;       // Output framebuffer height (window/viewport size)
     bool isYUV;             // True if input texture is in YUV format
+    bool isOriginalTexture; // True if reading from original padded input, false for intermediate textures
 };
 
 /**

@@ -69,10 +69,11 @@ private:
     
     bool PresentD3D11Texture(const RenderTexture& texture);
     bool PresentSoftwareTexture(const RenderTexture& texture);
-    bool PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV);
+    bool PresentD3D11TextureDirect(ID3D11ShaderResourceView* inputSRV, bool isYUV, int contentWidth, int contentHeight);
     bool UpdateFrameTexture(ID3D11Texture2D* texture, bool isYUV, DXGI_FORMAT format);
     void SetupRenderState(bool isYUV);
     void DrawQuad();
+    void DrawAdjustedQuad(int contentWidth, int contentHeight, int textureWidth, int textureHeight);
     
     void Reset();
 };

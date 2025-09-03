@@ -46,6 +46,8 @@ protected:
     // Rendering
     bool CreateFullscreenQuad(ID3D11Device* device);
     void RenderFullscreenQuad(ID3D11DeviceContext* context);
+    void RenderAdjustedQuad(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext);
+    void CreateAdjustedVertexBuffer(ID3D11DeviceContext* context, const D3D11RenderPassContext& renderContext);
     bool InitializeSharedResources(ID3D11Device* device);
 
 protected:
@@ -55,6 +57,7 @@ protected:
     ComPtr<ID3D11PixelShader> m_pixelShader;
     ComPtr<ID3D11InputLayout> m_inputLayout;
     ComPtr<ID3D11Buffer> m_constantBuffer;
+    ComPtr<ID3D11Buffer> m_adjustedVertexBuffer;  // For texture coordinate adjustment
     
     // Note: Geometry, samplers, and render states are now shared via D3D11RenderPassResources
     

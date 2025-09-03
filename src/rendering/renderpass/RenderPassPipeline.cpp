@@ -117,9 +117,9 @@ bool D3D11RenderPassPipeline::Execute(const D3D11RenderPassContext& context,
                                      ID3D11ShaderResourceView* inputSRV,
                                      ID3D11RenderTargetView* outputRTV) {
     if (!m_enabled || m_passes.empty()) {
-        // Pipeline disabled or no passes - direct copy input to output
+        // Pipeline disabled or no passes - direct copy input to output scaled to window size
         return DirectCopy(context.deviceContext, inputSRV, outputRTV, 
-                         context.inputWidth, context.inputHeight);
+                         context.outputWidth, context.outputHeight);
     }
     
     // Build list of enabled passes, with dynamic YUV conversion if needed
@@ -156,12 +156,12 @@ bool D3D11RenderPassPipeline::Execute(const D3D11RenderPassContext& context,
     }
     
     if (enabledPasses.empty()) {
-        // No enabled passes - direct copy
+        // No enabled passes - direct copy scaled to window size
         return DirectCopy(context.deviceContext, inputSRV, outputRTV,
-                         context.inputWidth, context.inputHeight);
+                         context.outputWidth, context.outputHeight);
     }
     
-    // Ensure intermediate textures are allocated
+    // Ensure intermediate textures are allocated at input (video) size for compatibility
     if (!EnsureIntermediateTextures(context.inputWidth, context.inputHeight)) {
         LOG_ERROR("RenderPassPipeline: Failed to ensure intermediate textures");
         return false;
@@ -185,9 +185,13 @@ bool D3D11RenderPassPipeline::Execute(const D3D11RenderPassContext& context,
             currentOutput = m_intermediateRTV[bufferIndex].Get();
         }
         
+        // Create context copy with appropriate isOriginalTexture flag
+        D3D11RenderPassContext passContext = context;
+        passContext.isOriginalTexture = (i == 0);  // Only first pass reads from original padded texture
+        
         // Execute pass
         LOG_DEBUG("RenderPassPipeline: Executing pass '", pass->GetName(), "'");
-        if (!pass->Execute(context, currentInput, currentOutput)) {
+        if (!pass->Execute(passContext, currentInput, currentOutput)) {
             LOG_ERROR("RenderPassPipeline: Pass '", pass->GetName(), "' failed");
             LOG_ERROR("Context: isYUV=", context.isYUV, ", uvSRV=", (context.uvSRV ? "available" : "null"));
             success = false;

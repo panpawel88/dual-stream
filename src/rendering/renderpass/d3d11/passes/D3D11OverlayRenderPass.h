@@ -47,4 +47,5 @@ private:
     void CleanupPassthroughShaders();
     HRESULT CompileShaderFromString(const std::string& shaderCode, const std::string& entryPoint,
                                    const std::string& profile, ID3DBlob** blob);
+    ID3D11Buffer* CreateAdjustedVertexBuffer(const D3D11RenderPassContext& context);
 };
