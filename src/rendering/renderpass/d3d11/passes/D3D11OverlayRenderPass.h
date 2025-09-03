@@ -4,6 +4,7 @@
 #include "../../RenderPassContext.h"
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <string>
 
 class D3D11OverlayRenderPass : public OverlayRenderPass, public D3D11RenderPass {
 public:
@@ -43,4 +44,6 @@ private:
     
     bool InitializePassthroughShaders();
     void CleanupPassthroughShaders();
+    HRESULT CompileShaderFromString(const std::string& shaderCode, const std::string& entryPoint,
+                                   const std::string& profile, ID3DBlob** blob);
 };

@@ -11,6 +11,7 @@
 #include "d3d11/passes/VignettePass.h"
 #include "d3d11/passes/SharpenPass.h"
 #include "d3d11/passes/BloomPass.h"
+#include "d3d11/passes/D3D11OverlayRenderPass.h"
 #include <memory>
 #include <vector>
 #include <string>

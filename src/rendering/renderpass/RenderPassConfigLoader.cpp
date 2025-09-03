@@ -145,6 +145,8 @@ std::unique_ptr<RenderPass> RenderPassConfigLoader::CreatePass(const std::string
         pass = std::make_unique<SharpenPass>();
     } else if (passName == "bloom" || passName == "Bloom") {
         pass = std::make_unique<BloomPass>();
+    } else if (passName == "overlay" || passName == "Overlay") {
+        pass = std::make_unique<D3D11OverlayRenderPass>();
     } else {
         LOG_WARNING("Unknown render pass type: ", passName, ", falling back to simple render pass");
         pass = std::make_unique<D3D11SimpleRenderPass>(passName);
