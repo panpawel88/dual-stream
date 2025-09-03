@@ -32,3 +32,6 @@ ffmpeg/
 *.temp
 *~
 .claude/
+
+# Local configuration files
+.env.local

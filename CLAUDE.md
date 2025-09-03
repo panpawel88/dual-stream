@@ -161,13 +161,25 @@ Switching Strategy Impact:
 
 ## Build Configuration
 
-### Renderer Selection
-Both DirectX 11 and OpenGL renderers are now always compiled and available at runtime. No build-time configuration required.
+### Prerequisites
+- **RealSense SDK:** Required dependency, install via vcpkg
+- **vcpkg:** Package manager for C++ libraries
+- **Visual Studio 2022:** For Windows builds
 
+### Building with vcpkg
 ```cmake
-# Both renderers available - selection happens automatically at runtime
+# Configure with vcpkg toolchain (use your local vcpkg path)
+# Note: Store your local vcpkg path in .env.local file (see .env.local for machine-specific configuration)
+cmake -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake ..
+
+# Build the project
 cmake --build . --config Release
 ```
+
+**Note:** Local development paths (like vcpkg toolchain file) should be stored in `.env.local` which is gitignored. Check this file for machine-specific configuration.
+
+### Renderer Selection
+Both DirectX 11 and OpenGL renderers are now always compiled and available at runtime. No build-time configuration required.
 
 ### CUDA Support
 - **Automatic Detection:** CMake detects CUDA toolkit availability
