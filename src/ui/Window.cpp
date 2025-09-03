@@ -109,6 +109,13 @@ bool Window::ProcessMessages() {
             return false;
         }
         
+        // Debug logging for problematic messages
+        if (msg.message == WM_SYSKEYDOWN || msg.message == WM_SYSKEYUP || 
+            msg.message == WM_SYSCHAR || msg.message == WM_SYSCOMMAND) {
+            LOG_DEBUG("Processing system message: 0x", std::hex, msg.message, 
+                     " wParam: 0x", msg.wParam, " lParam: 0x", msg.lParam, std::dec);
+        }
+        
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
@@ -179,6 +186,29 @@ LRESULT Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
             if (wParam == VK_ESCAPE) {
                 m_shouldClose = true;
             }
+            return 0;
+            
+        case WM_SYSKEYDOWN:
+            // Handle system keys to prevent blocking
+            if (wParam == VK_MENU || wParam == VK_F10) {
+                // Alt key or F10 - consume the message to prevent system menu activation
+                return 0;
+            }
+            
+            if (wParam == VK_F4 && (lParam & (1 << 29))) {
+                // Alt+F4 - allow this to close the window
+                m_shouldClose = true;
+                return 0;
+            }
+            
+            // For other system keys, track them but don't let Windows handle them
+            if (wParam < 256) {
+                m_keyPressed[wParam] = true;
+            }
+            return 0;
+            
+        case WM_SYSCHAR:
+            // Suppress system character beeps (e.g., Alt+letter combinations)
             return 0;
             
         case WM_PAINT: {
