@@ -10,8 +10,8 @@ class UIRegistry {
 public:
     static UIRegistry& GetInstance();
     
-    void RegisterDrawable(std::shared_ptr<IUIDrawable> drawable);
-    void UnregisterDrawable(std::shared_ptr<IUIDrawable> drawable);
+    void RegisterDrawable(IUIDrawable* drawable);
+    void UnregisterDrawable(IUIDrawable* drawable);
     void Clear();
     
     void RenderUI();
@@ -21,13 +21,12 @@ private:
     ~UIRegistry() = default;
     
     mutable std::mutex m_mutex;
-    std::vector<std::weak_ptr<IUIDrawable>> m_drawables;
+    std::vector<IUIDrawable*> m_drawables;
     
     // Cached groupings for better UI organization
-    std::unordered_map<std::string, std::vector<std::weak_ptr<IUIDrawable>>> m_categorizedDrawables;
+    std::unordered_map<std::string, std::vector<IUIDrawable*>> m_categorizedDrawables;
     bool m_needsRegrouping = true;
     
     void RegroupDrawables();
-    void RenderCategory(const std::string& categoryName, const std::vector<std::weak_ptr<IUIDrawable>>& drawables);
-    void CleanupExpiredDrawables();
+    void RenderCategory(const std::string& categoryName, const std::vector<IUIDrawable*>& drawables);
 };

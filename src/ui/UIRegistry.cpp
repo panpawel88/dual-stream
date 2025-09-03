@@ -8,7 +8,7 @@ UIRegistry& UIRegistry::GetInstance() {
     return instance;
 }
 
-void UIRegistry::RegisterDrawable(std::shared_ptr<IUIDrawable> drawable) {
+void UIRegistry::RegisterDrawable(IUIDrawable* drawable) {
     if (!drawable) {
         Logger::GetInstance().Warning("Attempted to register null drawable");
         return;
@@ -21,7 +21,7 @@ void UIRegistry::RegisterDrawable(std::shared_ptr<IUIDrawable> drawable) {
     Logger::GetInstance().Debug("UI drawable registered: {}", drawable->GetUIName());
 }
 
-void UIRegistry::UnregisterDrawable(std::shared_ptr<IUIDrawable> drawable) {
+void UIRegistry::UnregisterDrawable(IUIDrawable* drawable) {
     if (!drawable) {
         return;
     }
@@ -29,10 +29,7 @@ void UIRegistry::UnregisterDrawable(std::shared_ptr<IUIDrawable> drawable) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
     m_drawables.erase(
-        std::remove_if(m_drawables.begin(), m_drawables.end(),
-            [&drawable](const std::weak_ptr<IUIDrawable>& weak) {
-                return weak.expired() || weak.lock() == drawable;
-            }),
+        std::remove(m_drawables.begin(), m_drawables.end(), drawable),
         m_drawables.end());
     
     m_needsRegrouping = true;
@@ -47,9 +44,6 @@ void UIRegistry::Clear() {
 
 void UIRegistry::RenderUI() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
-    // Clean up expired weak pointers
-    CleanupExpiredDrawables();
     
     // Regroup if needed
     if (m_needsRegrouping) {
@@ -77,22 +71,22 @@ void UIRegistry::RenderUI() {
 void UIRegistry::RegroupDrawables() {
     m_categorizedDrawables.clear();
     
-    for (const auto& weak : m_drawables) {
-        if (auto drawable = weak.lock()) {
+    for (auto drawable : m_drawables) {
+        if (drawable) {
             std::string category = drawable->GetUICategory();
-            m_categorizedDrawables[category].push_back(weak);
+            m_categorizedDrawables[category].push_back(drawable);
         }
     }
     
     m_needsRegrouping = false;
 }
 
-void UIRegistry::RenderCategory(const std::string& categoryName, const std::vector<std::weak_ptr<IUIDrawable>>& drawables) {
+void UIRegistry::RenderCategory(const std::string& categoryName, const std::vector<IUIDrawable*>& drawables) {
     if (ImGui::CollapsingHeader(categoryName.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         
-        for (const auto& weak : drawables) {
-            if (auto drawable = weak.lock()) {
+        for (auto drawable : drawables) {
+            if (drawable) {
                 try {
                     drawable->DrawUI();
                 } catch (const std::exception& e) {
@@ -106,21 +100,3 @@ void UIRegistry::RenderCategory(const std::string& categoryName, const std::vect
     }
 }
 
-void UIRegistry::CleanupExpiredDrawables() {
-    m_drawables.erase(
-        std::remove_if(m_drawables.begin(), m_drawables.end(),
-            [](const std::weak_ptr<IUIDrawable>& weak) {
-                return weak.expired();
-            }),
-        m_drawables.end());
-    
-    // Clean up categorized drawables too
-    for (auto& [category, drawables] : m_categorizedDrawables) {
-        drawables.erase(
-            std::remove_if(drawables.begin(), drawables.end(),
-                [](const std::weak_ptr<IUIDrawable>& weak) {
-                    return weak.expired();
-                }),
-            drawables.end());
-    }
-}
