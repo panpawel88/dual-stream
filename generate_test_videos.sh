@@ -126,9 +126,92 @@ ffmpeg -f lavfi -i "color=blue:size=7680x4320:duration=8:rate=30" -f lavfi -i "c
        test_videos/8k_video2_blue_circle.mp4 -y
 
 echo
+echo "Creating 4K 60 FPS Performance Test Videos..."
+echo
+
+echo "Creating 4K 60fps Video 1 - Moving White Square (H264, 3840x2160, 60fps, 8 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=3840x2160:duration=8:rate=60" -f lavfi -i "color=white:size=300x300:duration=8:rate=60" \
+       -filter_complex "[0:v][1:v]overlay=x='150+600*sin(2*PI*t)':y='300+300*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=60:h=60:color=yellow:t=fill,drawbox=x=3780:y=0:w=60:h=60:color=green:t=fill,drawbox=x=0:y=2100:w=60:h=60:color=blue:t=fill,drawbox=x=3780:y=2100:w=60:h=60:color=magenta:t=fill,drawtext=text='4K 60fps Video 1 - Frame %{frame_num}':fontsize=72:fontcolor=white:x=60:y=60:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 25 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/4k_60fps_video1_red_square.mp4 -y
+
+echo "Creating 4K 60fps Video 2 - Moving Yellow Circle (H264, 3840x2160, 60fps, 8 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=3840x2160:duration=8:rate=60" -f lavfi -i "color=yellow:size=240x240:duration=8:rate=60" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-120)*(X-120)+(Y-120)*(Y-120)),120),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='300+600*cos(2*PI*t)':y='450+450*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=60:h=60:color=yellow:t=fill,drawbox=x=3780:y=0:w=60:h=60:color=green:t=fill,drawbox=x=0:y=2100:w=60:h=60:color=blue:t=fill,drawbox=x=3780:y=2100:w=60:h=60:color=magenta:t=fill,drawtext=text='4K 60fps Video 2 - Frame %{frame_num}':fontsize=72:fontcolor=yellow:x=60:y=60:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 25 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/4k_60fps_video2_blue_circle.mp4 -y
+
+echo
+echo "Creating 8K 60 FPS Extreme Performance Test Videos..."
+echo
+
+echo "Creating 8K 60fps Video 1 - Moving White Square (H265, 7680x4320, 60fps, 6 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=7680x4320:duration=6:rate=60" -f lavfi -i "color=white:size=600x600:duration=6:rate=60" \
+       -filter_complex "[0:v][1:v]overlay=x='300+1200*sin(2*PI*t)':y='600+600*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=120:h=120:color=yellow:t=fill,drawbox=x=7560:y=0:w=120:h=120:color=green:t=fill,drawbox=x=0:y=4200:w=120:h=120:color=blue:t=fill,drawbox=x=7560:y=4200:w=120:h=120:color=magenta:t=fill,drawtext=text='8K 60fps Video 1 - Frame %{frame_num}':fontsize=144:fontcolor=white:x=120:y=120:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx265 -preset fast -crf 30 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/8k_60fps_video1_red_square.mp4 -y
+
+echo "Creating 8K 60fps Video 2 - Moving Yellow Circle (H265, 7680x4320, 60fps, 6 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=7680x4320:duration=6:rate=60" -f lavfi -i "color=yellow:size=480x480:duration=6:rate=60" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-240)*(X-240)+(Y-240)*(Y-240)),240),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='600+1200*cos(2*PI*t)':y='900+900*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=120:h=120:color=yellow:t=fill,drawbox=x=7560:y=0:w=120:h=120:color=green:t=fill,drawbox=x=0:y=4200:w=120:h=120:color=blue:t=fill,drawbox=x=7560:y=4200:w=120:h=120:color=magenta:t=fill,drawtext=text='8K 60fps Video 2 - Frame %{frame_num}':fontsize=144:fontcolor=yellow:x=120:y=120:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx265 -preset fast -crf 30 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/8k_60fps_video2_blue_circle.mp4 -y
+
+echo
+echo "Creating 60 FPS Performance Test Videos..."
+echo
+
+echo "Creating 60fps Video 1 - Moving White Square (H264, 1280x720, 60fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=red:size=1280x720:duration=10:rate=60" -f lavfi -i "color=white:size=100x100:duration=10:rate=60" \
+       -filter_complex "[0:v][1:v]overlay=x='50+200*sin(2*PI*t)':y='100+100*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=20:h=20:color=yellow:t=fill,drawbox=x=1260:y=0:w=20:h=20:color=green:t=fill,drawbox=x=0:y=700:w=20:h=20:color=blue:t=fill,drawbox=x=1260:y=700:w=20:h=20:color=magenta:t=fill,drawtext=text='60fps Video 1 - Frame %{frame_num}':fontsize=24:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 23 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/60fps_video1_red_square.mp4 -y
+
+echo "Creating 60fps Video 2 - Moving Yellow Circle (H264, 1280x720, 60fps, 10 seconds)..."
+ffmpeg -f lavfi -i "color=blue:size=1280x720:duration=10:rate=60" -f lavfi -i "color=yellow:size=80x80:duration=10:rate=60" \
+       -filter_complex "[1:v]geq=lum='if(lt(sqrt((X-40)*(X-40)+(Y-40)*(Y-40)),40),255,0)':cb=128:cr=128[circle];[0:v][circle]overlay=x='100+200*cos(2*PI*t)':y='150+150*sin(2*PI*t)'[v];[v]drawbox=x=0:y=0:w=20:h=20:color=yellow:t=fill,drawbox=x=1260:y=0:w=20:h=20:color=green:t=fill,drawbox=x=0:y=700:w=20:h=20:color=blue:t=fill,drawbox=x=1260:y=700:w=20:h=20:color=magenta:t=fill,drawtext=text='60fps Video 2 - Frame %{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8[out]" \
+       -map "[out]" \
+       -c:v libx264 -preset medium -crf 23 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/60fps_video2_blue_circle.mp4 -y
+
+echo "Creating 60fps Video 3 - Bouncing Ball (H264, 1280x720, 60fps, 12 seconds)..."
+ffmpeg -f lavfi -i "color=green:size=1280x720:duration=12:rate=60" \
+       -vf "drawbox=x=50+abs(200*sin(PI*t)):y=50+abs(150*sin(1.5*PI*t)):w=50:h=50:color=red:t=fill,drawbox=x=0:y=0:w=20:h=20:color=yellow:t=fill,drawbox=x=1260:y=0:w=20:h=20:color=green:t=fill,drawbox=x=0:y=700:w=20:h=20:color=blue:t=fill,drawbox=x=1260:y=700:w=20:h=20:color=magenta:t=fill,drawtext=text='60fps Video 3 - Frame %{frame_num} - FPS: 60':fontsize=22:fontcolor=white:x=20:y=20:box=1:boxcolor=black@0.8" \
+       -c:v libx264 -preset medium -crf 23 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/60fps_video3_bouncing_ball.mp4 -y
+
+echo "Creating 60fps Video 4 - Fast Rotating Text (H265, 1280x720, 60fps, 15 seconds)..."
+ffmpeg -f lavfi -i "color=black:size=1280x720:duration=15:rate=60" \
+       -vf "drawbox=x=0:y=0:w=20:h=20:color=yellow:t=fill,drawbox=x=1260:y=0:w=20:h=20:color=green:t=fill,drawbox=x=0:y=700:w=20:h=20:color=blue:t=fill,drawbox=x=1260:y=700:w=20:h=20:color=magenta:t=fill,drawtext=text='60fps Performance Test':fontsize=60:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2+100*sin(4*PI*t/3):enable='between(t,0,15)',drawtext=text='60fps Video 4 H265 - Frame %{frame_num}':fontsize=24:fontcolor=yellow:x=20:y=20:box=1:boxcolor=black@0.8" \
+       -c:v libx265 -preset medium -crf 28 -g 60 -keyint_min 60 -pix_fmt yuv420p \
+       -movflags +faststart \
+       test_videos/60fps_video4_text.mp4 -y
+
+echo
 echo "All videos generated successfully!"
 echo
-echo "Standard HD videos (1280x720) for compatibility testing:"
-echo "4K videos (3840x2160) for performance testing:"
-echo "8K videos (7680x4320) for extreme performance testing:"
+echo "Standard HD videos (1280x720, 30fps) for compatibility testing:"
+echo "60fps HD videos (1280x720, 60fps) for performance testing:"
+echo "4K videos (3840x2160, 30fps) for resolution performance testing:"
+echo "4K 60fps videos (3840x2160, 60fps) for high-resolution performance testing:"
+echo "8K videos (7680x4320, 30fps) for extreme performance testing:"
+echo "8K 60fps videos (7680x4320, 60fps) for ultimate performance testing:"
+echo
+echo "High Performance Usage examples:"
+echo "60fps HD: ./dual_stream test_videos/60fps_video1_red_square.mp4 test_videos/60fps_video2_blue_circle.mp4"
+echo "4K 60fps: ./dual_stream test_videos/4k_60fps_video1_red_square.mp4 test_videos/4k_60fps_video2_blue_circle.mp4"
+echo "8K 60fps: ./dual_stream test_videos/8k_60fps_video1_red_square.mp4 test_videos/8k_60fps_video2_blue_circle.mp4"
+echo
 echo "Press 1/2 to switch between videos, ESC to exit."
