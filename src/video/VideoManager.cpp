@@ -16,7 +16,7 @@ VideoManager::VideoManager()
     , m_state(VideoState::STOPPED)
     , m_activeVideoIndex(0)
     , m_pausedTime(0.0)
-    , m_frameInterval(1.0 / Config::GetInstance()->GetInt("rendering.target_fps", 60))
+    , m_frameInterval(1.0 / Config::GetInstance()->GetDouble("video.fallback_fps", 30.0))
     , m_playbackSpeed(Config::GetInstance()->GetDouble("video.default_speed", 1.0)) {
 }
 

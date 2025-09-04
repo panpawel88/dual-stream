@@ -61,7 +61,6 @@ void Config::LoadDefaults() {
     
     // Rendering settings
     m_values["rendering.preferred_backend"] = "auto";
-    m_values["rendering.target_fps"] = "60";
     
     // Logging settings
     m_values["logging.default_level"] = "info";
