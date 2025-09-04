@@ -61,6 +61,11 @@ private:
     int m_frameNumber;
     float m_totalTime;
     
+    // Rendering configuration
+    int m_vsyncMode;         // 0 = off, 1 = on, 2 = adaptive
+    int m_bufferCount;       // Number of back buffers (1-3)
+    DXGI_SWAP_EFFECT m_swapEffect; // Presentation mode
+    
     bool CreateDeviceAndSwapChain();
     bool CreateRenderTarget();
     bool CreateShaders();

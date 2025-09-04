@@ -8,6 +8,7 @@
 #include <string>
 #include <memory>
 #include <stdexcept>
+#include <algorithm>
 
 #if HAVE_CUDA
 #include "CudaOpenGLInterop.h"
@@ -81,8 +82,20 @@ OpenGLRenderer::OpenGLRenderer()
     , m_coreProfile(false)
     , m_debugContext(false)
     , wglCreateContextAttribsARB(nullptr)
+    , wglSwapIntervalEXT(nullptr)
     , m_frameNumber(0)
     , m_totalTime(0.0f) {
+    
+    // Load rendering configuration from config system
+    Config* config = Config::GetInstance();
+    m_vsyncMode = config->GetInt("rendering.vsync_mode", 1);
+    
+    // Validate range - avoid potential macro conflicts
+    if (m_vsyncMode < 0) m_vsyncMode = 0;
+    if (m_vsyncMode > 2) m_vsyncMode = 2;
+    
+    LOG_INFO("OpenGL Renderer configuration: VSync=", m_vsyncMode);
+    
 #if HAVE_CUDA
     m_cudaInterop = nullptr; // Will be initialized in Initialize()
     m_cudaTextureResource = nullptr;
@@ -416,6 +429,39 @@ bool OpenGLRenderer::CreateOpenGLContext() {
         wglDeleteContext(newContext);
         m_hrc = nullptr;
         return false;
+    }
+    
+    // Get WGL extension for VSync control
+    wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+    if (wglSwapIntervalEXT) {
+        int swapInterval = 0;
+        
+        switch (m_vsyncMode) {
+            case 0: // VSync off
+                swapInterval = 0;
+                break;
+            case 1: // VSync on
+                swapInterval = 1;
+                break;
+            case 2: // Adaptive VSync (try -1, fallback to 1)
+                swapInterval = -1;
+                if (!wglSwapIntervalEXT(-1)) {
+                    LOG_WARNING("Adaptive VSync not supported, falling back to regular VSync");
+                    swapInterval = 1;
+                }
+                break;
+            default:
+                swapInterval = 1;
+                break;
+        }
+        
+        if (swapInterval >= 0 && !wglSwapIntervalEXT(swapInterval)) {
+            LOG_WARNING("Failed to set VSync mode to ", swapInterval);
+        } else {
+            LOG_INFO("OpenGL VSync set to mode: ", swapInterval);
+        }
+    } else {
+        LOG_WARNING("wglSwapIntervalEXT not available, VSync control disabled");
     }
     
     return true;

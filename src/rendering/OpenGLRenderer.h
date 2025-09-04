@@ -81,6 +81,13 @@ private:
     typedef HGLRC (WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int*);
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
     
+    // WGL extension for VSync control
+    typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC)(int interval);
+    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
+    
+    // Rendering configuration
+    int m_vsyncMode;         // 0 = off, 1 = on, 2 = adaptive
+    
     // Frame timing for render pass effects
     int m_frameNumber;
     float m_totalTime;

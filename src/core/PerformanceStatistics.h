@@ -74,6 +74,7 @@ private:
     std::deque<double> m_applicationFpsHistory;
     std::deque<double> m_renderTimeHistory;
     std::deque<double> m_mainLoopTimeHistory;
+    std::deque<double> m_presentationTimeHistory;
     
     // Timing helpers
     std::chrono::steady_clock::time_point m_lastFrameTime;

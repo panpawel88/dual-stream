@@ -71,7 +71,8 @@ void PerformanceStatistics::RecordApplicationFrameTime(double milliseconds) {
 }
 
 void PerformanceStatistics::RecordPresentationTime(double milliseconds) {
-    // Could be used for presentation timing accuracy in the future
+    std::lock_guard<std::mutex> lock(m_mutex);
+    AddToHistory(m_presentationTimeHistory, milliseconds);
 }
 
 void PerformanceStatistics::RecordMainLoopTime(double milliseconds) {
@@ -214,10 +215,26 @@ void PerformanceStatistics::DrawUI() {
             renderMetrics["Min/Max Render"] = minMaxStream.str();
         }
         
+        if (!m_presentationTimeHistory.empty()) {
+            std::stringstream presentStream;
+            presentStream << std::fixed << std::setprecision(2) << CalculateAverage(m_presentationTimeHistory) << " ms";
+            renderMetrics["Avg Present Time"] = presentStream.str();
+            
+            std::stringstream presentMinMaxStream;
+            presentMinMaxStream << std::fixed << std::setprecision(2) 
+                               << GetMinValue(m_presentationTimeHistory) << " / " 
+                               << GetMaxValue(m_presentationTimeHistory) << " ms";
+            renderMetrics["Min/Max Present"] = presentMinMaxStream.str();
+        }
+        
         DrawMetricSection("Rendering", renderMetrics);
         
         if (!m_renderTimeHistory.empty()) {
             DrawGraphSection("Render Time History", m_renderTimeHistory, "ms", 0.0f, 20.0f);
+        }
+        
+        if (!m_presentationTimeHistory.empty()) {
+            DrawGraphSection("Presentation Time History", m_presentationTimeHistory, "ms", 0.0f, 20.0f);
         }
     }
     

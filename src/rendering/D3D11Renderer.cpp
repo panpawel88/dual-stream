@@ -13,6 +13,7 @@
 #include <iostream>
 #include <d3dcompiler.h>
 #include <chrono>
+#include <algorithm>
 
 // Simple vertex shader source
 const char* g_vertexShaderSource = R"(
@@ -87,6 +88,34 @@ D3D11Renderer::D3D11Renderer()
     , m_height(0)
     , m_frameNumber(0)
     , m_totalTime(0.0f) {
+    
+    // Load rendering configuration from config system
+    Config* config = Config::GetInstance();
+    m_vsyncMode = config->GetInt("rendering.vsync_mode", 1);
+    m_bufferCount = config->GetInt("rendering.buffer_count", 2);
+    
+    // Parse presentation mode from config
+    std::string presentationMode = config->GetString("rendering.presentation_mode", "flip_sequential");
+    if (presentationMode == "discard") {
+        m_swapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    } else if (presentationMode == "sequential") {
+        m_swapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
+    } else if (presentationMode == "flip_sequential") {
+        m_swapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    } else if (presentationMode == "flip_discard") {
+        m_swapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    } else {
+        m_swapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; // Default
+        LOG_WARNING("Unknown presentation mode: ", presentationMode, ", using flip_sequential");
+    }
+    
+    // Validate configuration values - avoid potential macro conflicts
+    if (m_bufferCount < 1) m_bufferCount = 1;
+    if (m_bufferCount > 3) m_bufferCount = 3;
+    if (m_vsyncMode < 0) m_vsyncMode = 0;
+    if (m_vsyncMode > 2) m_vsyncMode = 2;
+    
+    LOG_INFO("D3D11 Renderer configuration: VSync=", m_vsyncMode, ", Buffers=", m_bufferCount, ", Mode=", presentationMode);
 }
 
 D3D11Renderer::~D3D11Renderer() {
@@ -265,7 +294,30 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
     
     
     // Always present, even for failed renders (shows black screen)
-    HRESULT hr = m_swapChain->Present(1, 0); // VSync enabled
+    // Use configurable VSync mode
+    UINT syncInterval = 0;
+    UINT presentFlags = 0;
+    
+    switch (m_vsyncMode) {
+        case 0: // VSync off
+            syncInterval = 0;
+            presentFlags = 0;
+            break;
+        case 1: // VSync on
+            syncInterval = 1;
+            presentFlags = 0;
+            break;
+        case 2: // Adaptive VSync (fallback to VSync on if not supported)
+            syncInterval = 1;
+            presentFlags = DXGI_PRESENT_ALLOW_TEARING; // Try adaptive first
+            break;
+        default:
+            syncInterval = 1;
+            presentFlags = 0;
+            break;
+    }
+    
+    HRESULT hr = m_swapChain->Present(syncInterval, presentFlags);
     if (FAILED(hr)) {
         LOG_ERROR("Failed to present frame. HRESULT: 0x", std::hex, hr);
         return false;
@@ -309,20 +361,27 @@ bool D3D11Renderer::Resize(int width, int height) {
 }
 
 bool D3D11Renderer::CreateDeviceAndSwapChain() {
-    // Create swap chain description
+    // Create swap chain description with modern configuration
     DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-    swapChainDesc.BufferCount = 1;
+    swapChainDesc.BufferCount = m_bufferCount;
     swapChainDesc.BufferDesc.Width = m_width;
     swapChainDesc.BufferDesc.Height = m_height;
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+    swapChainDesc.BufferDesc.RefreshRate.Numerator = 0;  // Let DXGI choose optimal refresh rate
     swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.OutputWindow = m_hwnd;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.Windowed = TRUE;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapChainDesc.SwapEffect = m_swapEffect;
+    
+    // Add swap chain flags for modern presentation modes
+    swapChainDesc.Flags = 0;
+    if (m_swapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL || m_swapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD) {
+        // Enable flags for flip model presentation
+        swapChainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    }
     
     // Create device, context and swap chain
     D3D_FEATURE_LEVEL featureLevels[] = {

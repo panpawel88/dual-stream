@@ -291,13 +291,16 @@ int main(int argc, char* argv[]) {
             renderTexture = TextureConverter::CreateNullTexture();
         }
         
-        // Track render time
+        // Track render and presentation time
         auto renderStartTime = std::chrono::high_resolution_clock::now();
         renderer->Present(renderTexture);
         auto renderEndTime = std::chrono::high_resolution_clock::now();
         
         auto renderDuration = std::chrono::duration_cast<std::chrono::microseconds>(renderEndTime - renderStartTime);
         double renderTimeMs = renderDuration.count() / 1000.0;
+        
+        // Track presentation timing for performance analysis
+        stats.RecordPresentationTime(renderTimeMs);
         
         // Update performance statistics
         stats.RecordApplicationFrameTime(frameTimeMs);
@@ -310,9 +313,6 @@ int main(int argc, char* argv[]) {
         stats.RecordMainLoopTime(loopTimeMs);
         
         lastFrameTime = currentFrameTime;
-        
-        // Sleep for a short time to prevent busy waiting, but much shorter than frame interval
-        Sleep(1); // 1ms sleep to prevent excessive CPU usage
     }
     
     LOG_INFO("Application exiting...");
