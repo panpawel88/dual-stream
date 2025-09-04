@@ -1,17 +1,17 @@
 #pragma once
 #include "../../OverlayRenderPass.h"
-#include "../../RenderPass.h"
+#include "../D3D11SimpleRenderPass.h"
 #include "../../RenderPassContext.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <string>
 
-class D3D11OverlayRenderPass : public OverlayRenderPass, public D3D11RenderPass {
+class D3D11OverlayRenderPass : public OverlayRenderPass, public D3D11SimpleRenderPass {
 public:
     D3D11OverlayRenderPass();
     ~D3D11OverlayRenderPass() override;
     
-    // D3D11RenderPass interface - DirectX 11 specific
+    // D3D11SimpleRenderPass interface - DirectX 11 specific
     bool Initialize(ID3D11Device* device, const RenderPassConfig& config) override;
     bool Initialize(ID3D11Device* device, const RenderPassConfig& config, void* hwnd);
     bool Execute(const D3D11RenderPassContext& context,
@@ -30,22 +30,13 @@ protected:
     void BeginImGuiFrame() override;
     void EndImGuiFrame() override;
     
+    // D3D11SimpleRenderPass virtual method overrides
+    std::string GetPixelShaderSource() const override;
+    
 private:
-    Microsoft::WRL::ComPtr<ID3D11Device> m_device;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
+    // Overlay-specific blend state for ImGui rendering
+    Microsoft::WRL::ComPtr<ID3D11BlendState> m_overlayBlendState;
     
-    // Passthrough rendering (copy input to output, then overlay ImGui)
-    Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
-    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
-    Microsoft::WRL::ComPtr<ID3D11Buffer> m_vertexBuffer;
-    Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;
-    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
-    Microsoft::WRL::ComPtr<ID3D11BlendState> m_blendState;
-    Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_rasterizerState;
-    
-    bool InitializePassthroughShaders();
-    void CleanupPassthroughShaders();
-    HRESULT CompileShaderFromString(const std::string& shaderCode, const std::string& entryPoint,
-                                   const std::string& profile, ID3DBlob** blob);
-    ID3D11Buffer* CreateAdjustedVertexBuffer(const D3D11RenderPassContext& context);
+    // Helper methods
+    bool CreateOverlayBlendState(ID3D11Device* device);
 };
