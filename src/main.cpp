@@ -18,8 +18,10 @@
 #include "video/triggers/SwitchingTriggerFactory.h"
 #include "camera/CameraManager.h"
 #include "camera/processing/FaceDetectionSwitchingTrigger.h"
+#include "core/PerformanceStatistics.h"
 #include "rendering/D3D11Renderer.h"
 #include "ui/GlobalInputHandler.h"
+#include "ui/UIRegistry.h"
 #include "core/Logger.h"
 
 #include "core/FFmpegInitializer.h"
@@ -240,7 +242,18 @@ int main(int argc, char* argv[]) {
     int lastWindowWidth = window.GetWidth();
     int lastWindowHeight = window.GetHeight();
     
+    // Register performance statistics with UI registry
+    PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
+    UIRegistry::GetInstance().RegisterDrawable(&stats);
+    
+    // Main loop timing variables
+    auto loopStartTime = std::chrono::high_resolution_clock::now();
+    auto lastFrameTime = loopStartTime;
+    
     while (window.ProcessMessages()) {
+        auto currentFrameTime = std::chrono::high_resolution_clock::now();
+        auto frameDuration = std::chrono::duration_cast<std::chrono::microseconds>(currentFrameTime - lastFrameTime);
+        double frameTimeMs = frameDuration.count() / 1000.0;
         int currentWidth = window.GetWidth();
         int currentHeight = window.GetHeight();
         
@@ -278,7 +291,25 @@ int main(int argc, char* argv[]) {
             renderTexture = TextureConverter::CreateNullTexture();
         }
         
+        // Track render time
+        auto renderStartTime = std::chrono::high_resolution_clock::now();
         renderer->Present(renderTexture);
+        auto renderEndTime = std::chrono::high_resolution_clock::now();
+        
+        auto renderDuration = std::chrono::duration_cast<std::chrono::microseconds>(renderEndTime - renderStartTime);
+        double renderTimeMs = renderDuration.count() / 1000.0;
+        
+        // Update performance statistics
+        stats.RecordApplicationFrameTime(frameTimeMs);
+        stats.RecordRenderTime(renderTimeMs);
+        
+        // Record main loop time  
+        auto loopEndTime = std::chrono::high_resolution_clock::now();
+        auto loopDuration = std::chrono::duration_cast<std::chrono::microseconds>(loopEndTime - currentFrameTime);
+        double loopTimeMs = loopDuration.count() / 1000.0;
+        stats.RecordMainLoopTime(loopTimeMs);
+        
+        lastFrameTime = currentFrameTime;
         
         // Sleep for a short time to prevent busy waiting, but much shorter than frame interval
         Sleep(1); // 1ms sleep to prevent excessive CPU usage

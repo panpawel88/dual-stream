@@ -110,6 +110,19 @@ bool VideoManager::Initialize(const std::vector<std::string>& videoPaths, IRende
     LOG_INFO("Frame rate: ", frameRate, " FPS");
     LOG_INFO("Using switching strategy: ", m_switchingStrategy->GetName());
     
+    // Update performance statistics with initial video info
+    PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
+    stats.SetVideoFrameRate(frameRate);
+    stats.SetVideoResolution(m_videos[0].demuxer.GetWidth(), m_videos[0].demuxer.GetHeight());
+    stats.SetPlaybackSpeed(m_playbackSpeed);
+    stats.SetSwitchingStrategy(m_switchingStrategy->GetName());
+    
+    // Set decoder type info
+    const VideoStream& activeVideo = m_videos[m_activeVideoIndex];
+    std::string decoderType = activeVideo.decoder.IsHardwareAccelerated() ? 
+        "Hardware (" + activeVideo.decoder.GetDecoderInfo().name + ")" : "Software";
+    stats.SetDecoderType(decoderType);
+    
     m_initialized = true;
     return true;
 }
@@ -219,11 +232,24 @@ bool VideoManager::UpdateFrame() {
     
     LOG_DEBUG("Time to present new frame");
 
+    // Track decode time
+    auto decodeStartTime = std::chrono::high_resolution_clock::now();
+
     // Delegate frame updating to the strategy
     if (!m_switchingStrategy->UpdateFrame()) {
         LOG_ERROR("Strategy failed to update frame");
         return false;
     }
+    
+    auto decodeEndTime = std::chrono::high_resolution_clock::now();
+    auto decodeDuration = std::chrono::duration_cast<std::chrono::microseconds>(decodeEndTime - decodeStartTime);
+    double decodeTimeMs = decodeDuration.count() / 1000.0;
+    
+    // Update performance statistics
+    PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
+    stats.RecordDecodeTime(decodeTimeMs);
+    stats.SetCurrentPlaybackTime(GetCurrentTime());
+    stats.SetActiveVideoIndex(m_activeVideoIndex);
     
     m_lastFrameTime = std::chrono::steady_clock::now();
     LOG_DEBUG("UpdateFrame completed successfully");

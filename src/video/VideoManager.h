@@ -9,6 +9,7 @@
 #include "decode/HardwareDecoder.h"
 #include "switching/VideoSwitchingStrategy.h"
 #include "triggers/ISwitchingTrigger.h"
+#include "../core/PerformanceStatistics.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
