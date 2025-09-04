@@ -59,6 +59,11 @@ bool ImmediateSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double curr
 
     LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to time ", targetTime);
     
+    // Notify VideoManager that the switch is completed for frame rate updates
+    if (m_manager) {
+        m_manager->OnVideoSwitchCompleted(targetVideoIndex);
+    }
+    
     return true;
 }
 

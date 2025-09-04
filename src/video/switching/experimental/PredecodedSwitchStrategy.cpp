@@ -55,6 +55,12 @@ bool PredecodedSwitchStrategy::SwitchToVideo(size_t targetVideoIndex, double cur
     }
     
     LOG_INFO("Instant switch completed successfully");
+    
+    // Notify VideoManager that the switch is completed for frame rate updates
+    if (m_manager) {
+        m_manager->OnVideoSwitchCompleted(targetVideoIndex);
+    }
+    
     return true;
 }
 

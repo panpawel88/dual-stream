@@ -285,6 +285,11 @@ bool KeyframeSwitchStrategy::ExecuteSwitch(size_t targetVideoIndex, double curre
 
     LOG_INFO("Successfully synchronized video ", (targetVideoIndex + 1), " to keyframe time ", newActiveStream.currentTime);
     
+    // Notify VideoManager that the switch is completed for frame rate updates
+    if (m_manager) {
+        m_manager->OnVideoSwitchCompleted(targetVideoIndex);
+    }
+    
     // Show notification for successful switch
     NotificationManager::GetInstance().ShowSuccess(
         "Video Switch", 

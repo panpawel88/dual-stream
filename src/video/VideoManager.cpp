@@ -204,12 +204,8 @@ bool VideoManager::SwitchToVideo(size_t videoIndex) {
     double currentTime = GetCurrentTime();
     
     // Delegate switching to the strategy
-    bool result = m_switchingStrategy->SwitchToVideo(videoIndex, currentTime);
-    if (result) {
-        m_activeVideoIndex = videoIndex;
-    }
-    
-    return result;
+    // Note: The actual video switch completion is handled by OnVideoSwitchCompleted callback
+    return m_switchingStrategy->SwitchToVideo(videoIndex, currentTime);
 }
 
 bool VideoManager::UpdateFrame() {
@@ -399,4 +395,39 @@ bool VideoManager::ProcessSwitchingTriggers() {
     }
     
     return switched;
+}
+
+void VideoManager::OnVideoSwitchCompleted(size_t newActiveVideoIndex) {
+    if (!m_initialized || newActiveVideoIndex >= m_videos.size()) {
+        return;
+    }
+    
+    size_t previousVideoIndex = m_activeVideoIndex;
+    m_activeVideoIndex = newActiveVideoIndex;
+    
+    // Update frame rate and timing based on the new active video
+    const VideoStream& newActiveVideo = m_videos[m_activeVideoIndex];
+    double newFrameRate = newActiveVideo.demuxer.GetFrameRate();
+    
+    if (newFrameRate > 0) {
+        double previousFrameRate = (previousVideoIndex < m_videos.size()) ? 
+            m_videos[previousVideoIndex].demuxer.GetFrameRate() : 0.0;
+        
+        // Update frame interval if frame rate changed
+        if (std::abs(newFrameRate - previousFrameRate) > 0.1) {
+            m_frameInterval = 1.0 / newFrameRate;
+            LOG_INFO("Frame rate changed from ", previousFrameRate, " FPS to ", newFrameRate, " FPS");
+            LOG_INFO("Frame interval updated to ", m_frameInterval * 1000.0, " ms");
+            
+            // Update performance statistics with new video properties
+            PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
+            stats.SetVideoFrameRate(newFrameRate);
+            stats.SetVideoResolution(newActiveVideo.demuxer.GetWidth(), newActiveVideo.demuxer.GetHeight());
+            stats.SetActiveVideoIndex(static_cast<int>(m_activeVideoIndex));
+            
+            // Set format if available
+            std::string format = "Unknown"; // Default format - could be enhanced to get actual format
+            stats.SetVideoFormat(format);
+        }
+    }
 }

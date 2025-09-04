@@ -77,6 +77,9 @@ public:
     void UpdateSwitchingTrigger();
     bool ProcessSwitchingTriggers();
     
+    // Strategy callback for completed switches
+    void OnVideoSwitchCompleted(size_t newActiveVideoIndex);
+    
 private:
     bool m_initialized;
     VideoState m_state;
