@@ -1,0 +1,136 @@
+{
+  "test_suites": [
+    {
+      "name": "frame_validation_basic",
+      "description": "Basic frame validation tests with short test videos",
+      "tests": [
+        {
+          "name": "short_videos_frame_numbers",
+          "video_paths": [
+            "test_videos/short_a_red_fade.mp4",
+            "test_videos/short_b_blue_pulse.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 3,
+          "test_type": "frame_validation"
+        },
+        {
+          "name": "hd_videos_frame_numbers", 
+          "video_paths": [
+            "test_videos/video1_red_square.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "keyframe-sync",
+          "duration_seconds": 5,
+          "test_type": "frame_validation"
+        }
+      ]
+    },
+    {
+      "name": "switching_accuracy",
+      "description": "Test switching accuracy for all algorithms",
+      "tests": [
+        {
+          "name": "immediate_algorithm_switching",
+          "video_paths": [
+            "test_videos/video1_red_square.mp4", 
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 10,
+          "test_type": "switching_accuracy",
+          "switch_count": 5
+        },
+        {
+          "name": "keyframe_algorithm_switching",
+          "video_paths": [
+            "test_videos/video1_red_square.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "keyframe-sync",
+          "duration_seconds": 10,
+          "test_type": "switching_accuracy", 
+          "switch_count": 5
+        },
+        {
+          "name": "predecoded_algorithm_switching",
+          "video_paths": [
+            "test_videos/video1_red_square.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "predecoded",
+          "duration_seconds": 10,
+          "test_type": "switching_accuracy",
+          "switch_count": 5
+        }
+      ]
+    },
+    {
+      "name": "performance_benchmarks",
+      "description": "Performance testing with different resolutions and frame rates",
+      "tests": [
+        {
+          "name": "hd_30fps_performance",
+          "video_paths": [
+            "test_videos/video1_red_square.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "keyframe-sync",
+          "duration_seconds": 30,
+          "test_type": "performance",
+          "expected_fps": 30
+        },
+        {
+          "name": "hd_60fps_performance", 
+          "video_paths": [
+            "test_videos/60fps_video1_red_square.mp4",
+            "test_videos/60fps_video2_blue_circle.mp4"
+          ],
+          "algorithm": "keyframe-sync",
+          "duration_seconds": 30,
+          "test_type": "performance",
+          "expected_fps": 60
+        },
+        {
+          "name": "4k_30fps_performance",
+          "video_paths": [
+            "test_videos/4k_video1_red_square.mp4",
+            "test_videos/4k_video2_blue_circle.mp4"
+          ],
+          "algorithm": "keyframe-sync", 
+          "duration_seconds": 20,
+          "test_type": "performance",
+          "expected_fps": 30
+        },
+        {
+          "name": "4k_60fps_stress_test",
+          "video_paths": [
+            "test_videos/4k_60fps_video1_red_square.mp4",
+            "test_videos/4k_60fps_video2_blue_circle.mp4"  
+          ],
+          "algorithm": "predecoded",
+          "duration_seconds": 15,
+          "test_type": "performance",
+          "expected_fps": 60
+        }
+      ]
+    },
+    {
+      "name": "algorithm_comparison",
+      "description": "Compare all algorithms with identical videos",
+      "tests": [
+        {
+          "name": "algorithm_latency_comparison",
+          "video_paths": [
+            "test_videos/video4_bouncing_ball.mp4",
+            "test_videos/video3_gradient.mp4"
+          ],
+          "algorithms": ["immediate", "keyframe-sync", "predecoded"],
+          "duration_seconds": 15,
+          "test_type": "algorithm_comparison",
+          "switch_count": 8
+        }
+      ]
+    }
+  ]
+}

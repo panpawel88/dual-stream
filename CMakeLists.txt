@@ -667,3 +667,32 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         "$<$<CONFIG:MinSizeRel>:/NODEFAULTLIB:LIBCMT>"
     )
 endif()
+
+# Test system
+option(ENABLE_TESTS "Enable test system" ON)
+
+if(ENABLE_TESTS)
+    message(STATUS "Test system enabled")
+    
+    # Add test subdirectory
+    add_subdirectory(tests)
+    
+    # Create convenience targets for running tests
+    add_custom_target(test_videos
+        COMMAND cmd //c generate_test_videos.bat
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating test videos"
+    )
+    
+    # Make test runner depend on main executable being built  
+    add_dependencies(test_runner dual_stream)
+    
+    message(STATUS "Test targets available:")
+    message(STATUS "  make test_videos       - Generate test videos")
+    message(STATUS "  make test_runner       - Build test runner executable")
+    message(STATUS "  make run_basic_tests   - Run basic frame validation tests") 
+    message(STATUS "  make run_all_tests     - Run all test suites")
+    message(STATUS "  make run_performance_tests - Run performance benchmarks")
+else()
+    message(STATUS "Test system disabled")
+endif()
