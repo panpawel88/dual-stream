@@ -4,6 +4,7 @@
 #include <vector>
 #include <chrono>
 #include <memory>
+#include <thread>
 
 // Forward declarations
 class VideoManager;

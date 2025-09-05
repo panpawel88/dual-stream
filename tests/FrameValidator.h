@@ -56,7 +56,7 @@ public:
     // Pattern-specific validation
     bool ValidateMovingSquarePattern(const DecodedFrame& frame, double timestamp);
     bool ValidateMovingCirclePattern(const DecodedFrame& frame, double timestamp);
-    bool ValidateBouncing BallPattern(const DecodedFrame& frame, double timestamp);
+    bool ValidateBouncingBallPattern(const DecodedFrame& frame, double timestamp);
     bool ValidateGradientPattern(const DecodedFrame& frame, double timestamp);
     
     // Frame number extraction

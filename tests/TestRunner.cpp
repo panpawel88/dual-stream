@@ -9,7 +9,7 @@
 #include "../src/rendering/RendererFactory.h"
 #include "../src/ui/Window.h"
 
-#include <json/json.h>
+// #include <json/json.h>  // Disabled for simplified build
 #include <fstream>
 #include <chrono>
 
@@ -272,61 +272,62 @@ void TestRunner::AddTestSuite(const TestSuite& suite) {
 }
 
 void TestRunner::SaveResultsToJson(const std::string& filename) const {
-    Json::Value root;
-    Json::Value resultsArray(Json::arrayValue);
-    
-    for (const auto& result : m_results) {
-        Json::Value resultJson;
-        resultJson["test_name"] = result.testName;
-        resultJson["suite_name"] = result.suiteName;
-        resultJson["passed"] = result.passed;
-        resultJson["execution_time_seconds"] = result.executionTimeSeconds;
-        resultJson["error_message"] = result.errorMessage;
-        
-        // Frame metrics
-        Json::Value frameMetrics;
-        frameMetrics["total_frames_processed"] = result.frameMetrics.totalFramesProcessed;
-        frameMetrics["frames_with_valid_numbers"] = result.frameMetrics.framesWithValidNumbers;
-        frameMetrics["frame_drop_count"] = result.frameMetrics.frameDropCount;
-        frameMetrics["frame_accuracy_percentage"] = result.frameMetrics.frameAccuracyPercentage;
-        resultJson["frame_metrics"] = frameMetrics;
-        
-        // Switching metrics
-        Json::Value switchingMetrics;
-        switchingMetrics["switch_attempts"] = result.switchingMetrics.switchAttempts;
-        switchingMetrics["successful_switches"] = result.switchingMetrics.successfulSwitches;
-        switchingMetrics["average_switch_latency_ms"] = result.switchingMetrics.averageSwitchLatencyMs;
-        switchingMetrics["max_switch_latency_ms"] = result.switchingMetrics.maxSwitchLatencyMs;
-        resultJson["switching_metrics"] = switchingMetrics;
-        
-        // Performance metrics
-        Json::Value performanceMetrics;
-        performanceMetrics["average_frame_time_ms"] = result.performanceMetrics.averageFrameTimeMs;
-        performanceMetrics["max_frame_time_ms"] = result.performanceMetrics.maxFrameTimeMs;
-        performanceMetrics["average_fps"] = result.performanceMetrics.averageFps;
-        performanceMetrics["memory_usage_mb"] = result.performanceMetrics.memoryUsageMB;
-        performanceMetrics["cpu_usage_percent"] = result.performanceMetrics.cpuUsagePercent;
-        performanceMetrics["gpu_usage_percent"] = result.performanceMetrics.gpuUsagePercent;
-        resultJson["performance_metrics"] = performanceMetrics;
-        
-        resultsArray.append(resultJson);
+    // Simplified text-based results saving (no JSON dependency)
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        LOG_ERROR("TestRunner: Failed to open results file: ", filename);
+        return;
     }
     
-    root["test_results"] = resultsArray;
-    root["total_tests"] = static_cast<int>(m_results.size());
+    // Write header
+    file << "DualStream Video Player Test Results\n";
+    file << "=====================================\n\n";
     
+    // Write summary
     int passed = 0;
     for (const auto& result : m_results) {
         if (result.passed) passed++;
     }
-    root["tests_passed"] = passed;
-    root["tests_failed"] = static_cast<int>(m_results.size()) - passed;
     
-    // Save to file
-    std::ofstream file(filename);
-    Json::StreamWriterBuilder builder;
-    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-    writer->write(root, &file);
+    file << "Total Tests: " << m_results.size() << "\n";
+    file << "Passed: " << passed << "\n";
+    file << "Failed: " << (m_results.size() - passed) << "\n";
+    file << "Success Rate: " << (m_results.size() > 0 ? (passed * 100.0 / m_results.size()) : 0.0) << "%\n\n";
+    
+    // Write individual test results
+    file << "Individual Test Results:\n";
+    file << "========================\n\n";
+    
+    for (const auto& result : m_results) {
+        file << "Test: " << result.testName << "\n";
+        file << "Suite: " << result.suiteName << "\n";
+        file << "Status: " << (result.passed ? "PASSED" : "FAILED") << "\n";
+        file << "Execution Time: " << result.executionTimeSeconds << "s\n";
+        
+        if (!result.errorMessage.empty()) {
+            file << "Error: " << result.errorMessage << "\n";
+        }
+        
+        // Frame metrics
+        if (result.frameMetrics.totalFramesProcessed > 0) {
+            file << "Frame Metrics:\n";
+            file << "  Total Frames: " << result.frameMetrics.totalFramesProcessed << "\n";
+            file << "  Valid Frames: " << result.frameMetrics.framesWithValidNumbers << "\n";
+            file << "  Frame Drops: " << result.frameMetrics.frameDropCount << "\n";
+            file << "  Frame Accuracy: " << result.frameMetrics.frameAccuracyPercentage << "%\n";
+        }
+        
+        // Performance metrics
+        if (result.performanceMetrics.averageFps > 0) {
+            file << "Performance Metrics:\n";
+            file << "  Average FPS: " << result.performanceMetrics.averageFps << "\n";
+            file << "  Average Frame Time: " << result.performanceMetrics.averageFrameTimeMs << "ms\n";
+            file << "  Max Frame Time: " << result.performanceMetrics.maxFrameTimeMs << "ms\n";
+            file << "  Memory Usage: " << result.performanceMetrics.memoryUsageMB << "MB\n";
+        }
+        
+        file << "\n";
+    }
     
     LOG_INFO("TestRunner: Saved test results to ", filename);
 }
