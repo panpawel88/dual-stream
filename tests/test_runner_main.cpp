@@ -3,7 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
-// #include <json/json.h>  // Disabled for simplified build
+#include <nlohmann/json.hpp>
 
 #include "TestRunner.h"
 #include "FrameValidator.h" 
@@ -83,31 +83,118 @@ void PrintUsage(const char* programName) {
     std::cout << "  " << programName << " --test hd_30fps_performance --debug\n";
 }
 
-// Simplified hardcoded test configuration (no JSON dependency)
-std::vector<TestRunner::TestSuite> LoadHardcodedTestConfig() {
+// Load test configuration from JSON file
+std::vector<TestRunner::TestSuite> LoadTestConfigFromJson(const std::string& configFile) {
     std::vector<TestRunner::TestSuite> testSuites;
     
-    // Basic frame validation test suite
-    TestRunner::TestSuite basicSuite;
-    basicSuite.suiteName = "frame_validation_basic";
-    
-    TestRunner::TestConfig basicTest;
-    basicTest.testName = "short_videos_frame_numbers";
-    basicTest.videoPaths = {"test_videos/short_a_red_fade.mp4", "test_videos/short_b_blue_pulse.mp4"};
-    basicTest.algorithm = "immediate";
-    basicTest.durationSeconds = 3;
-    basicTest.customParams["test_type"] = "frame_validation";
-    
-    basicSuite.tests.push_back(basicTest);
-    testSuites.push_back(basicSuite);
+    try {
+        std::ifstream file(configFile);
+        if (!file.is_open()) {
+            LOG_ERROR("Failed to open test configuration file: ", configFile);
+            return testSuites;
+        }
+        
+        nlohmann::json configJson;
+        file >> configJson;
+        
+        if (!configJson.contains("test_suites") || !configJson["test_suites"].is_array()) {
+            LOG_ERROR("Invalid JSON format: missing or invalid 'test_suites' array");
+            return testSuites;
+        }
+        
+        for (const auto& suiteJson : configJson["test_suites"]) {
+            TestRunner::TestSuite suite;
+            
+            if (!suiteJson.contains("name") || !suiteJson["name"].is_string()) {
+                LOG_WARNING("Skipping test suite without valid name");
+                continue;
+            }
+            
+            suite.suiteName = suiteJson["name"];
+            
+            if (!suiteJson.contains("tests") || !suiteJson["tests"].is_array()) {
+                LOG_WARNING("Skipping test suite '", suite.suiteName, "' without tests array");
+                continue;
+            }
+            
+            for (const auto& testJson : suiteJson["tests"]) {
+                TestRunner::TestConfig test;
+                
+                if (!testJson.contains("name") || !testJson["name"].is_string()) {
+                    LOG_WARNING("Skipping test without valid name in suite '", suite.suiteName, "'");
+                    continue;
+                }
+                
+                test.testName = testJson["name"];
+                
+                // Load video paths
+                if (testJson.contains("video_paths") && testJson["video_paths"].is_array()) {
+                    for (const auto& pathJson : testJson["video_paths"]) {
+                        if (pathJson.is_string()) {
+                            test.videoPaths.push_back(pathJson);
+                        }
+                    }
+                }
+                
+                // Load algorithm (can be string or array for comparison tests)
+                if (testJson.contains("algorithm") && testJson["algorithm"].is_string()) {
+                    test.algorithm = testJson["algorithm"];
+                } else if (testJson.contains("algorithms") && testJson["algorithms"].is_array()) {
+                    // For algorithm comparison tests, use the first algorithm as primary
+                    // and store the rest in custom params
+                    std::vector<std::string> algorithms;
+                    for (const auto& algoJson : testJson["algorithms"]) {
+                        if (algoJson.is_string()) {
+                            algorithms.push_back(algoJson);
+                        }
+                    }
+                    if (!algorithms.empty()) {
+                        test.algorithm = algorithms[0];
+                        test.customParams["all_algorithms"] = nlohmann::json(algorithms).dump();
+                    }
+                }
+                
+                // Load duration
+                if (testJson.contains("duration_seconds") && testJson["duration_seconds"].is_number()) {
+                    test.durationSeconds = testJson["duration_seconds"];
+                }
+                
+                // Load test type
+                if (testJson.contains("test_type") && testJson["test_type"].is_string()) {
+                    test.customParams["test_type"] = testJson["test_type"];
+                }
+                
+                // Load additional custom parameters
+                if (testJson.contains("switch_count") && testJson["switch_count"].is_number()) {
+                    test.customParams["switch_count"] = std::to_string(static_cast<int>(testJson["switch_count"]));
+                }
+                
+                if (testJson.contains("expected_fps") && testJson["expected_fps"].is_number()) {
+                    test.customParams["expected_fps"] = std::to_string(static_cast<int>(testJson["expected_fps"]));
+                }
+                
+                suite.tests.push_back(test);
+            }
+            
+            if (!suite.tests.empty()) {
+                testSuites.push_back(suite);
+            }
+        }
+        
+    } catch (const nlohmann::json::exception& e) {
+        LOG_ERROR("JSON parsing error: ", e.what());
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error loading test configuration: ", e.what());
+    }
     
     return testSuites;
 }
 
-// Simplified test loading without JSON dependency
-std::vector<TestRunner::TestSuite> GetFilteredTestSuites(const std::string& filterSuite = "",
+// Load and filter test suites from JSON configuration
+std::vector<TestRunner::TestSuite> GetFilteredTestSuites(const std::string& configFile,
+                                                          const std::string& filterSuite = "",
                                                           const std::string& filterTest = "") {
-    auto testSuites = LoadHardcodedTestConfig();
+    auto testSuites = LoadTestConfigFromJson(configFile);
     
     if (filterSuite.empty() && filterTest.empty()) {
         return testSuites;
@@ -153,8 +240,8 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Output file: ", args.outputFile);
     
     try {
-        // Load test configuration (simplified, no JSON)
-        std::vector<TestRunner::TestSuite> testSuites = GetFilteredTestSuites(args.testSuite, args.testName);
+        // Load test configuration from JSON
+        std::vector<TestRunner::TestSuite> testSuites = GetFilteredTestSuites(args.configFile, args.testSuite, args.testName);
         
         if (testSuites.empty()) {
             LOG_ERROR("No test suites found matching criteria");
