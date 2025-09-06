@@ -428,6 +428,7 @@ set(RENDERER_SOURCES
     src/rendering/renderpass/d3d11/passes/SharpenPass.cpp
     src/rendering/renderpass/d3d11/passes/BloomPass.cpp
     src/rendering/renderpass/d3d11/passes/VignettePass.cpp
+    src/rendering/renderpass/d3d11/passes/D3D11OverlayRenderPass.cpp
     # OpenGL render pass core files
     src/rendering/renderpass/opengl/OpenGLRenderPassPipeline.cpp
     src/rendering/renderpass/opengl/OpenGLRenderPassResources.cpp
@@ -439,6 +440,9 @@ set(RENDERER_SOURCES
     src/rendering/renderpass/opengl/passes/VignettePass.cpp
     src/rendering/renderpass/opengl/passes/SharpenPass.cpp
     src/rendering/renderpass/opengl/passes/BloomPass.cpp
+    src/rendering/renderpass/opengl/passes/OpenGLOverlayRenderPass.cpp
+    # Overlay system
+    src/rendering/renderpass/OverlayRenderPass.cpp
 )
 
 # Add CUDA sources for OpenGL renderer if CUDA is available
@@ -509,9 +513,6 @@ add_library(dual_stream_core STATIC
     src/ui/UIRegistry.cpp
     src/ui/GlobalInputHandler.cpp
     src/ui/OverlayManager.cpp
-    src/rendering/renderpass/OverlayRenderPass.cpp
-    src/rendering/renderpass/d3d11/passes/D3D11OverlayRenderPass.cpp
-    src/rendering/renderpass/opengl/passes/OpenGLOverlayRenderPass.cpp
 )
 
 # Main executable - thin wrapper around core library
