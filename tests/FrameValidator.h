@@ -86,7 +86,7 @@ public:
 
 private:
     // Frame number extraction methods
-    int ExtractFrameNumberFromPixels(const uint8_t* pixelData, int width, int height, int stride);
+    int ExtractFrameNumberFromPixels(const uint8_t* pixelData, int width, int height);
     std::string ExtractTextFromRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h);
     
     // Pattern calculation methods

@@ -412,7 +412,7 @@ if(WIN32)
     )
 endif()
 
-# Main executable - compile both renderers for runtime selection
+# Core library - contains all business logic for video processing and rendering
 set(RENDERER_SOURCES
     src/rendering/OpenGLRenderer.cpp
     src/rendering/D3D11Renderer.cpp
@@ -479,9 +479,9 @@ if(ENABLE_CAMERA_SUPPORT)
     )
 endif()
 
-add_executable(dual_stream
+# Core library containing all business logic (static library for tests and main app)
+add_library(dual_stream_core STATIC
     src/pch.cpp  # Precompiled header source
-    src/main.cpp
     src/ui/Window.cpp
     src/core/CommandLineParser.cpp
     src/video/VideoValidator.cpp
@@ -503,18 +503,34 @@ add_executable(dual_stream
     src/video/triggers/KeyboardSwitchingTrigger.cpp
     src/video/triggers/SwitchingTriggerFactory.cpp
     ${CAMERA_SOURCES}
+    # UI and overlay system
+    src/ui/ImGuiManager.cpp
+    src/ui/NotificationManager.cpp
+    src/ui/UIRegistry.cpp
+    src/ui/GlobalInputHandler.cpp
+    src/ui/OverlayManager.cpp
+    src/rendering/renderpass/OverlayRenderPass.cpp
+    src/rendering/renderpass/d3d11/passes/D3D11OverlayRenderPass.cpp
+    src/rendering/renderpass/opengl/passes/OpenGLOverlayRenderPass.cpp
 )
 
+# Main executable - thin wrapper around core library
+add_executable(dual_stream
+    src/main.cpp
+)
+
+# Configure core library properties
 # Unity Build disabled due to OpenGL header conflicts with windows.h in pch.h
-# The issue: pch.h includes windows.h which includes GL/gl.h, conflicting with GLAD
-set_target_properties(dual_stream PROPERTIES
+set_target_properties(dual_stream_core PROPERTIES
     UNITY_BUILD OFF
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
 )
 
 # Exclude OpenGL-related files from using precompiled headers to prevent header conflicts
 set_source_files_properties(
     src/rendering/OpenGLRenderer.cpp
-    src/rendering/OpenGLToastRenderer.cpp
     src/rendering/CudaOpenGLInterop.cpp
     src/rendering/RendererFactory.cpp
     src/rendering/renderpass/RenderPassConfigLoaderOpenGL.cpp
@@ -535,59 +551,58 @@ set_source_files_properties(
     SKIP_PRECOMPILE_HEADERS ON
 )
 
-# Configure precompiled headers
-target_precompile_headers(dual_stream
+# Configure precompiled headers for core library
+target_precompile_headers(dual_stream_core
     PRIVATE
     src/pch.h
 )
 
-target_link_libraries(dual_stream PRIVATE FFmpeg)
+# Link core library with all dependencies
+target_link_libraries(dual_stream_core PUBLIC FFmpeg)
 
 # Add src directory to include path for absolute includes
-target_include_directories(dual_stream PRIVATE src)
+target_include_directories(dual_stream_core PUBLIC src)
 
-# Add ImGui include directories and sources
-target_include_directories(dual_stream PRIVATE ${IMGUI_DIR})
-target_include_directories(dual_stream PRIVATE ${IMGUI_DIR}/backends)
-target_sources(dual_stream PRIVATE ${IMGUI_SOURCES})
+# Add ImGui include directories and sources to core library
+target_include_directories(dual_stream_core PUBLIC ${IMGUI_DIR})
+target_include_directories(dual_stream_core PUBLIC ${IMGUI_DIR}/backends)
+target_sources(dual_stream_core PRIVATE ${IMGUI_SOURCES})
 
 # Add ImGui-Notify include directory (header-only library)
-target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/backends)
-target_include_directories(dual_stream PRIVATE ${IMGUI_NOTIFY_DIR}/win32Example/fonts)
+target_include_directories(dual_stream_core PUBLIC ${IMGUI_NOTIFY_DIR}/win32Example/backends)
+target_include_directories(dual_stream_core PUBLIC ${IMGUI_NOTIFY_DIR}/win32Example/fonts)
 
 # Configure ImGui-Notify to render outside main window
-target_compile_definitions(dual_stream PRIVATE NOTIFY_RENDER_OUTSIDE_MAIN_WINDOW=false)
-
-# Add overlay system source files
-target_sources(dual_stream PRIVATE
-    src/ui/ImGuiManager.cpp
-    src/ui/NotificationManager.cpp
-    src/ui/UIRegistry.cpp
-    src/ui/GlobalInputHandler.cpp
-    src/ui/OverlayManager.cpp
-    src/rendering/renderpass/OverlayRenderPass.cpp
-    src/rendering/renderpass/d3d11/passes/D3D11OverlayRenderPass.cpp
-    src/rendering/renderpass/opengl/passes/OpenGLOverlayRenderPass.cpp
-)
+target_compile_definitions(dual_stream_core PUBLIC NOTIFY_RENDER_OUTSIDE_MAIN_WINDOW=false)
 
 # Always link GLAD for OpenGL runtime support
-target_link_libraries(dual_stream PRIVATE glad)
+target_link_libraries(dual_stream_core PUBLIC glad)
 
 # Link CUDA libraries if CUDA is available (needed for OpenGL CUDA interop)
 if(HAVE_CUDA)
-    target_link_libraries(dual_stream PRIVATE CUDA::cudart)
+    target_link_libraries(dual_stream_core PUBLIC CUDA::cudart)
 endif()
 
 # Link camera support libraries
 if(ENABLE_CAMERA_SUPPORT)
     if(HAVE_OPENCV)
-        target_link_libraries(dual_stream PRIVATE CameraOpenCV)
+        target_link_libraries(dual_stream_core PUBLIC CameraOpenCV)
     endif()
     
     if(HAVE_REALSENSE)
-        target_link_libraries(dual_stream PRIVATE CameraRealSense)
+        target_link_libraries(dual_stream_core PUBLIC CameraRealSense)
     endif()
 endif()
+
+# Configure main executable properties
+set_target_properties(dual_stream PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
+)
+
+# Link main executable with core library (all dependencies come through the library)
+target_link_libraries(dual_stream PRIVATE dual_stream_core)
 
 # Copy FFmpeg DLLs to output directory on Windows
 if(WIN32)
@@ -684,8 +699,9 @@ if(ENABLE_TESTS)
         COMMENT "Generating test videos"
     )
     
-    # Make test runner depend on main executable being built  
-    add_dependencies(simple_test dual_stream)
+    # Make test runner depend on core library being built  
+    add_dependencies(simple_test dual_stream_core)
+    add_dependencies(test_runner dual_stream_core)
     
     message(STATUS "Test targets available:")
     message(STATUS "  make test_videos       - Generate test videos")

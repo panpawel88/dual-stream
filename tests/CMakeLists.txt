@@ -43,7 +43,7 @@ target_include_directories(json_config_test PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 
-# Create the full test runner (restored with nlohmann/json)
+# Create the full test runner (restored with nlohmann/json and core library linking)
 add_executable(test_runner
     test_runner_main.cpp
     TestRunner.cpp  
@@ -52,29 +52,11 @@ add_executable(test_runner
     PerformanceBenchmark.cpp
 )
 
-# Link with test dependencies - using nlohmann/json
-target_link_libraries(test_runner
+# Link with core library (provides all video system dependencies)
+target_link_libraries(test_runner PRIVATE
+    dual_stream_core
     nlohmann_json::nlohmann_json
 )
-
-# Add FFmpeg include path for test files that need video system headers
-target_include_directories(test_runner PRIVATE
-    ${FFMPEG_INCLUDE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-# Link with system libraries
-if(WIN32)
-    target_link_libraries(test_runner
-        d3d11
-        dxgi  
-        d3dcompiler
-        opengl32
-        user32
-        gdi32
-        winmm
-    )
-endif()
 
 # Copy test configuration to build directory
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test_config.json 

@@ -89,21 +89,18 @@ int FrameValidator::ExtractFrameNumber(const DecodedFrame& frame) {
     }
     
     // For software frames, analyze the pixel data directly
-    if (frame.format == AV_PIX_FMT_RGB24 || frame.format == AV_PIX_FMT_RGBA) {
-        return ExtractFrameNumberFromPixels(frame.data, frame.width, frame.height, frame.linesize[0]);
+    if (frame.data != nullptr) {
+        return ExtractFrameNumberFromPixels(frame.data, frame.width, frame.height);
     }
     
-    // For YUV frames, we'd need to convert to RGB first or analyze the Y plane
-    if (frame.format == AV_PIX_FMT_YUV420P || frame.format == AV_PIX_FMT_NV12) {
-        // Analyze Y plane for text (brightness information)
-        return ExtractFrameNumberFromPixels(frame.data, frame.width, frame.height, frame.linesize[0]);
-    }
-    
-    LOG_WARNING("FrameValidator: Unsupported pixel format for frame number extraction: ", frame.format);
+    // For hardware frames, we cannot directly access pixel data
+    // This would require texture readback, which is complex
+    // For now, return a placeholder frame number
+    LOG_WARNING("FrameValidator: Hardware frames not yet supported for frame number extraction");
     return -1;
 }
 
-int FrameValidator::ExtractFrameNumberFromPixels(const uint8_t* pixelData, int width, int height, int stride) {
+int FrameValidator::ExtractFrameNumberFromPixels(const uint8_t* pixelData, int width, int height) {
     if (!pixelData) {
         return -1;
     }

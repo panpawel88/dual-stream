@@ -6,9 +6,9 @@
 #include <memory>
 #include <thread>
 
-// Forward declarations
-class VideoManager;
-class IRenderer;
+// Include actual headers now that we link with core library
+#include "../src/video/VideoManager.h"
+#include "../src/rendering/IRenderer.h"
 
 /**
  * Performance benchmarking system for different video resolutions, frame rates, and algorithms.

@@ -5,10 +5,10 @@
 #include <chrono>
 #include <memory>
 
-// Forward declarations
-class VideoManager;
-class FrameValidator;
-enum class SwitchingAlgorithm;
+// Include actual headers now that we link with core library
+#include "../src/video/VideoManager.h"
+#include "FrameValidator.h"
+#include "../src/video/switching/VideoSwitchingStrategy.h"
 
 /**
  * Validates video switching behavior and timing for all switching algorithms.
