@@ -118,6 +118,17 @@ if(CAN_BUILD_TESTS)
         VERBATIM
     )
     
+    # Copy tessdata directory for Tesseract OCR (from build directory)
+    if(DEFINED TESSDATA_DOWNLOAD_DIR)
+        add_custom_command(TARGET test_runner POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:test_runner>/tessdata"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${TESSDATA_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:test_runner>/tessdata"
+            COMMENT "Copying tessdata directory to runtime directory"
+            VERBATIM
+        )
+    endif()
+    
     # Create a target to run basic tests
     add_custom_target(run_basic_tests
         COMMAND test_runner --suite frame_validation_basic --verbose

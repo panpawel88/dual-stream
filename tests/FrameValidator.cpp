@@ -418,9 +418,28 @@ bool FrameValidator::InitializeOCR() {
         // Create Tesseract API instance
         tesseract::TessBaseAPI* api = new tesseract::TessBaseAPI();
         
-        // Initialize Tesseract with English language
-        if (api->Init(NULL, "eng") != 0) {
-            LOG_ERROR("FrameValidator: Failed to initialize Tesseract OCR engine");
+        // Try multiple tessdata directory paths
+        const char* tessdata_paths[] = {
+            "./tessdata",           // Relative to executable (from CMake build)
+            "../tessdata",          // One level up from build directory
+            "../../tessdata",       // Two levels up from build/bin directory  
+            nullptr
+        };
+        
+        bool initialized = false;
+        for (int i = 0; tessdata_paths[i] != nullptr; i++) {
+            LOG_DEBUG("FrameValidator: Trying tessdata path: ", tessdata_paths[i]);
+            if (api->Init(tessdata_paths[i], "eng") == 0) {
+                LOG_INFO("FrameValidator: Tesseract initialized with tessdata path: ", tessdata_paths[i]);
+                initialized = true;
+                break;
+            } else {
+                LOG_DEBUG("FrameValidator: Failed to initialize with path: ", tessdata_paths[i]);
+            }
+        }
+        
+        if (!initialized) {
+            LOG_ERROR("FrameValidator: Failed to initialize Tesseract OCR engine with any tessdata path");
             delete api;
             return false;
         }
