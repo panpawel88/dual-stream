@@ -111,6 +111,7 @@ if(CAN_BUILD_TESTS)
         FrameValidator.cpp
         SwitchingValidator.cpp
         PerformanceBenchmark.cpp
+        LocalTestConfig.cpp
     )
     
     # Link with core library and test dependencies
@@ -149,6 +150,19 @@ if(CAN_BUILD_TESTS)
         COMMENT "Copying test configuration file to runtime directory"
         VERBATIM
     )
+    
+    # Copy optional local test config file if it exists (not committed to version control)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test_config.local.json")
+        add_custom_command(TARGET test_runner POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/test_config.local.json" "$<TARGET_FILE_DIR:test_runner>/tests/test_config.local.json"
+            COMMENT "Copying local test configuration file to runtime directory"
+            VERBATIM
+        )
+        message(STATUS "Local test config file found - will be copied to build directory")
+    else()
+        message(STATUS "Local test config file not found (optional) - using defaults")
+    endif()
     
     # Copy tessdata directory for Tesseract OCR (from tests build directory)
     if(DEFINED TESTS_TESSDATA_DOWNLOAD_DIR)

@@ -190,8 +190,14 @@ bool TestRunner::InitializeVideoSystem(const TestConfig& config) {
         }
         
         // Validate video files first
+        LOG_INFO("TestRunner: Validating video file 1: ", config.videoPaths[0]);
+        LOG_INFO("TestRunner: Validating video file 2: ", config.videoPaths[1]);
+        
         VideoInfo video1Info = VideoValidator::GetVideoInfo(config.videoPaths[0]);
         VideoInfo video2Info = VideoValidator::GetVideoInfo(config.videoPaths[1]);
+        
+        LOG_INFO("TestRunner: Video 1 valid: ", video1Info.valid ? "true" : "false");
+        LOG_INFO("TestRunner: Video 2 valid: ", video2Info.valid ? "true" : "false");
         
         if (!video1Info.valid || !video2Info.valid) {
             LOG_ERROR("TestRunner: Invalid video files provided");

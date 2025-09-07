@@ -1,0 +1,15 @@
+{
+  "_comment": "Local test configuration - Copy this to test_config.local.json and modify",
+  "_comment2": "This file should NOT be committed to version control",
+  "_comment3": "Use absolute paths for test_videos_directory or relative to project root",
+  
+  "test_videos_directory": "test_videos/",
+  
+  "_examples": {
+    "_comment": "Example configurations:",
+    "_absolute_path": "C:/Users/YourName/Videos/test_videos/",
+    "_relative_path": "test_videos/",
+    "_network_path": "//server/shared/test_videos/",
+    "_different_drive": "D:/Projects/test_videos/"
+  }
+}

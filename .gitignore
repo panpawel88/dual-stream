@@ -35,3 +35,4 @@ ffmpeg/
 
 # Local configuration files
 .env.local
+test_config.local.json

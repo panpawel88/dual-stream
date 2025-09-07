@@ -7,6 +7,7 @@
 
 #include "TestRunner.h"
 #include "FrameValidator.h" 
+#include "LocalTestConfig.h"
 #include "../src/core/Logger.h"
 #include "../src/core/CommandLineParser.h"
 
@@ -20,6 +21,7 @@ struct TestRunnerArgs {
     std::string outputFile = "test_results.json";
     std::string testSuite = "";  // Run specific test suite, empty = run all
     std::string testName = "";   // Run specific test, empty = run all
+    std::string testVideosDir = ""; // Override test videos directory
     bool verbose = false;
     bool debugLogging = false;
     bool helpRequested = false;
@@ -53,6 +55,10 @@ TestRunnerArgs ParseArguments(int argc, char* argv[]) {
             args.verbose = true;
         } else if (arg == "--debug" || arg == "-d") {
             args.debugLogging = true;
+        } else if (arg == "--test-videos-dir") {
+            if (i + 1 < argc) {
+                args.testVideosDir = argv[++i];
+            }
         }
     }
     
@@ -69,6 +75,7 @@ void PrintUsage(const char* programName) {
     std::cout << "  --test, -t <name>      Run specific test only\n";
     std::cout << "  --verbose, -v          Enable verbose output\n";
     std::cout << "  --debug, -d            Enable debug logging\n";
+    std::cout << "  --test-videos-dir <dir> Override test videos directory\n";
     std::cout << "  --help, -h             Show this help message\n\n";
     
     std::cout << "Test Types:\n";
@@ -84,7 +91,7 @@ void PrintUsage(const char* programName) {
 }
 
 // Load test configuration from JSON file
-std::vector<TestRunner::TestSuite> LoadTestConfigFromJson(const std::string& configFile) {
+std::vector<TestRunner::TestSuite> LoadTestConfigFromJson(const std::string& configFile, const LocalTestConfig& localConfig) {
     std::vector<TestRunner::TestSuite> testSuites;
     
     try {
@@ -131,7 +138,8 @@ std::vector<TestRunner::TestSuite> LoadTestConfigFromJson(const std::string& con
                 if (testJson.contains("video_paths") && testJson["video_paths"].is_array()) {
                     for (const auto& pathJson : testJson["video_paths"]) {
                         if (pathJson.is_string()) {
-                            test.videoPaths.push_back(pathJson);
+                            std::string resolvedPath = localConfig.ResolveVideoPath(pathJson);
+                            test.videoPaths.push_back(resolvedPath);
                         }
                     }
                 }
@@ -192,9 +200,10 @@ std::vector<TestRunner::TestSuite> LoadTestConfigFromJson(const std::string& con
 
 // Load and filter test suites from JSON configuration
 std::vector<TestRunner::TestSuite> GetFilteredTestSuites(const std::string& configFile,
+                                                          const LocalTestConfig& localConfig,
                                                           const std::string& filterSuite = "",
                                                           const std::string& filterTest = "") {
-    auto testSuites = LoadTestConfigFromJson(configFile);
+    auto testSuites = LoadTestConfigFromJson(configFile, localConfig);
     
     if (filterSuite.empty() && filterTest.empty()) {
         return testSuites;
@@ -240,8 +249,19 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Output file: ", args.outputFile);
     
     try {
+        // Load local test configuration
+        LocalTestConfig localConfig;
+        localConfig.LoadFromFile("tests/test_config.local.json");
+        
+        // Override with command line argument if provided
+        if (!args.testVideosDir.empty()) {
+            localConfig.SetTestVideosDirectory(args.testVideosDir);
+        }
+        
+        LOG_INFO("Test videos directory: ", localConfig.GetTestVideosDirectory());
+        
         // Load test configuration from JSON
-        std::vector<TestRunner::TestSuite> testSuites = GetFilteredTestSuites(args.configFile, args.testSuite, args.testName);
+        std::vector<TestRunner::TestSuite> testSuites = GetFilteredTestSuites(args.configFile, localConfig, args.testSuite, args.testName);
         
         if (testSuites.empty()) {
             LOG_ERROR("No test suites found matching criteria");
