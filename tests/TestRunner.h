@@ -9,6 +9,7 @@
 // Forward declarations
 class VideoManager;
 class IRenderer;
+class FFmpegInitializer;
 struct TestResult;
 
 /**
@@ -63,6 +64,9 @@ private:
 private:
     std::vector<TestSuite> m_testSuites;
     std::vector<TestResult> m_results;
+    
+    // Core initialization components
+    std::unique_ptr<FFmpegInitializer> m_ffmpegInitializer;
     
     // Video system components (initialized per test)
     std::unique_ptr<class Window> m_testWindow;

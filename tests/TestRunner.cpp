@@ -24,15 +24,17 @@ TestRunner::TestRunner() {
 
 TestRunner::~TestRunner() {
     CleanupVideoSystem();
+    m_ffmpegInitializer.reset();
 }
 
 bool TestRunner::Initialize() {
     LOG_INFO("TestRunner: Initializing test framework");
     
-    // Initialize FFmpeg
-    FFmpegInitializer ffmpegInit;
-    if (!ffmpegInit.Initialize()) {
+    // Initialize FFmpeg using member variable to keep it alive
+    m_ffmpegInitializer = std::make_unique<FFmpegInitializer>();
+    if (!m_ffmpegInitializer->Initialize()) {
         LOG_ERROR("TestRunner: Failed to initialize FFmpeg");
+        m_ffmpegInitializer.reset();
         return false;
     }
     
