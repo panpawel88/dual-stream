@@ -104,6 +104,9 @@ private:
     // OCR/Text recognition helpers
     bool InitializeOCR();
     std::string PerformOCROnRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h);
+    
+    // Debug helpers
+    void SaveDebugImage(const uint8_t* data, int width, int height, int channels, const std::string& suffix);
 
 private:
     ValidationStats m_stats;

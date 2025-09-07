@@ -5,6 +5,10 @@
 #include <regex>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
 
 // Tesseract OCR headers
 #include <tesseract/baseapi.h>
@@ -172,12 +176,15 @@ std::string FrameValidator::ExtractTextFromRegion(const uint8_t* pixelData, int 
     }
     
     // Use Tesseract OCR if available, otherwise fall back to simple pattern matching
+    LOG_DEBUG("FrameValidator: ExtractTextFromRegion called, m_tesseractApi is ", (m_tesseractApi ? "initialized" : "null"));
     if (m_tesseractApi) {
+        LOG_DEBUG("FrameValidator: Using Tesseract OCR for text extraction");
         return PerformOCROnRegion(pixelData, width, height, x, y, w, h);
     }
     
     // Fallback: Simple pattern matching for high-contrast text
     // This is used when Tesseract is not available
+    LOG_DEBUG("FrameValidator: Using fallback pattern matching for text extraction");
     int highContrastPixels = 0;
     int totalPixels = w * h;
     
@@ -200,12 +207,16 @@ std::string FrameValidator::ExtractTextFromRegion(const uint8_t* pixelData, int 
     
     // If we have a reasonable amount of bright pixels, assume there's text
     double textRatio = (double)highContrastPixels / totalPixels;
+    LOG_DEBUG("FrameValidator: Fallback analysis - textRatio=", textRatio, " (", highContrastPixels, "/", totalPixels, ")");
     if (textRatio > 0.1 && textRatio < 0.8) {  // Between 10% and 80% bright pixels
         // Return a placeholder that matches our regex - in practice, you'd use real OCR
         // For test videos, we can also estimate frame number based on region brightness patterns
-        return "Frame " + std::to_string((int)(textRatio * 1000));  // Rough estimation
+        std::string result = "Frame " + std::to_string((int)(textRatio * 1000));  // Rough estimation
+        LOG_DEBUG("FrameValidator: Fallback returning: '", result, "'");
+        return result;
     }
     
+    LOG_DEBUG("FrameValidator: Fallback returning empty string");
     return "";
 }
 
@@ -501,6 +512,9 @@ std::string FrameValidator::PerformOCROnRegion(const uint8_t* pixelData, int wid
             }
         }
         
+        // DEBUG: Save the raw RGBA region
+        SaveDebugImage(regionData, w, h, 4, "raw_rgba");
+        
         // Convert RGBA to grayscale for better OCR performance
         uint8_t* grayData = new uint8_t[w * h];
         for (int i = 0; i < w * h; ++i) {
@@ -510,6 +524,9 @@ std::string FrameValidator::PerformOCROnRegion(const uint8_t* pixelData, int wid
             int b = regionData[i * 4 + 2];
             grayData[i] = static_cast<uint8_t>(0.299 * r + 0.587 * g + 0.114 * b);
         }
+        
+        // DEBUG: Save the grayscale converted image
+        SaveDebugImage(grayData, w, h, 1, "grayscale");
         
         // Create Leptonica PIX from grayscale data
         PIX* pix = pixCreate(w, h, 8);  // 8-bit grayscale
@@ -556,5 +573,92 @@ std::string FrameValidator::PerformOCROnRegion(const uint8_t* pixelData, int wid
     } catch (const std::exception& e) {
         LOG_ERROR("FrameValidator: Exception during OCR processing: ", e.what());
         return "";
+    }
+}
+
+// Helper function to save debug images
+void FrameValidator::SaveDebugImage(const uint8_t* data, int width, int height, int channels, const std::string& suffix) {
+    try {
+        // Create timestamp-based filename
+        auto now = std::chrono::high_resolution_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+        
+        std::stringstream ss;
+        ss << "debug_ocr_" << suffix << "_" 
+           << std::put_time(std::localtime(&time_t), "%H%M%S") 
+           << "_" << std::setfill('0') << std::setw(3) << ms << ".bmp";
+        std::string filename = ss.str();
+        
+        // Save as simple BMP file
+        std::ofstream file(filename, std::ios::binary);
+        if (!file.is_open()) {
+            LOG_ERROR("FrameValidator: Failed to open debug image file: ", filename);
+            return;
+        }
+        
+        // BMP header - always write 24-bit BMP (3 bytes per pixel)
+        const int bytesPerPixel = 3; // Always write as 24-bit BGR
+        int padding = (4 - (width * bytesPerPixel) % 4) % 4;
+        int dataSize = (width * bytesPerPixel + padding) * height;
+        int fileSize = 54 + dataSize; // 54 bytes header + data
+        
+        // File header (14 bytes)
+        file.write("BM", 2);
+        file.write(reinterpret_cast<const char*>(&fileSize), 4);
+        int reserved = 0;
+        file.write(reinterpret_cast<const char*>(&reserved), 4);
+        int offset = 54;
+        file.write(reinterpret_cast<const char*>(&offset), 4);
+        
+        // Info header (40 bytes)
+        int headerSize = 40;
+        file.write(reinterpret_cast<const char*>(&headerSize), 4);
+        file.write(reinterpret_cast<const char*>(&width), 4);
+        file.write(reinterpret_cast<const char*>(&height), 4);
+        short planes = 1;
+        file.write(reinterpret_cast<const char*>(&planes), 2);
+        short bitsPerPixel = 24; // Always 24-bit BMP
+        file.write(reinterpret_cast<const char*>(&bitsPerPixel), 2);
+        int compression = 0;
+        file.write(reinterpret_cast<const char*>(&compression), 4);
+        file.write(reinterpret_cast<const char*>(&dataSize), 4);
+        int pixelsPerMeterX = 2835;
+        file.write(reinterpret_cast<const char*>(&pixelsPerMeterX), 4);
+        int pixelsPerMeterY = 2835;
+        file.write(reinterpret_cast<const char*>(&pixelsPerMeterY), 4);
+        int colorsUsed = 0;
+        file.write(reinterpret_cast<const char*>(&colorsUsed), 4);
+        int importantColors = 0;
+        file.write(reinterpret_cast<const char*>(&importantColors), 4);
+        
+        // Write pixel data (BMP stores bottom-to-top)
+        std::vector<uint8_t> paddingBytes(padding, 0);
+        for (int y = height - 1; y >= 0; y--) {
+            if (channels == 4) {
+                // Convert RGBA to BGR for BMP
+                for (int x = 0; x < width; x++) {
+                    int srcIdx = (y * width + x) * 4;
+                    file.write(reinterpret_cast<const char*>(&data[srcIdx + 2]), 1); // B
+                    file.write(reinterpret_cast<const char*>(&data[srcIdx + 1]), 1); // G
+                    file.write(reinterpret_cast<const char*>(&data[srcIdx + 0]), 1); // R
+                }
+            } else if (channels == 1) {
+                // Grayscale - write same value for BGR
+                for (int x = 0; x < width; x++) {
+                    int srcIdx = y * width + x;
+                    uint8_t gray = data[srcIdx];
+                    file.write(reinterpret_cast<const char*>(&gray), 1); // B
+                    file.write(reinterpret_cast<const char*>(&gray), 1); // G
+                    file.write(reinterpret_cast<const char*>(&gray), 1); // R
+                }
+            }
+            file.write(reinterpret_cast<const char*>(paddingBytes.data()), padding);
+        }
+        
+        LOG_INFO("FrameValidator: Saved debug image: ", filename);
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("FrameValidator: Failed to save debug image: ", e.what());
     }
 }
