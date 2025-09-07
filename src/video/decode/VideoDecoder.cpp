@@ -823,7 +823,7 @@ bool VideoDecoder::ProcessCudaHardwareFrame(DecodedFrame& outFrame) {
 
 // DecodedFrame implementation
 DecodedFrame::~DecodedFrame() {
-    if (data) {
+    if (data && ownsData) {
         delete[] data;
         data = nullptr;
     }
@@ -838,7 +838,7 @@ DecodedFrame::~DecodedFrame() {
 DecodedFrame& DecodedFrame::operator=(const DecodedFrame& other) {
     if (this != &other) {
         // Clean up existing data
-        if (data) {
+        if (data && ownsData) {
             delete[] data;
             data = nullptr;
         }
@@ -865,6 +865,10 @@ DecodedFrame& DecodedFrame::operator=(const DecodedFrame& other) {
             size_t dataSize = pitch * height;
             data = new uint8_t[dataSize];
             memcpy(data, other.data, dataSize);
+            ownsData = true;  // We own the newly allocated data
+        } else {
+            data = nullptr;
+            ownsData = true;  // Default ownership to true
         }
         
 #ifdef HAVE_CUDA

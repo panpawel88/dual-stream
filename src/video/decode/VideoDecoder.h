@@ -41,6 +41,7 @@ struct DecodedFrame {
     bool isYUV;  // True for hardware frames that need YUV->RGB conversion in shader
     bool keyframe;  // True if this frame is a keyframe (I-frame)
     DXGI_FORMAT format;
+    bool ownsData = true;  // True if this frame owns the data pointer and should delete it
     
     DecodedFrame() : presentationTime(0.0), valid(false), isYUV(false), keyframe(false), format(DXGI_FORMAT_B8G8R8A8_UNORM) {}
     
@@ -49,7 +50,7 @@ struct DecodedFrame {
     DecodedFrame(const DecodedFrame& other) 
         : texture(other.texture), presentationTime(other.presentationTime), valid(other.valid)
         , isYUV(other.isYUV), keyframe(other.keyframe), format(other.format)
-        , width(other.width), height(other.height), pitch(other.pitch) {
+        , width(other.width), height(other.height), pitch(other.pitch), ownsData(true) {
         if (other.data && width > 0 && height > 0 && pitch > 0) {
             size_t dataSize = pitch * height;
             data = new uint8_t[dataSize];

@@ -101,6 +101,7 @@ FrameValidator::FrameAnalysis FrameValidator::ValidateRenderedFrame(IRenderer* r
     capturedFrame.height = height;
     capturedFrame.pitch = width * 4; // RGBA8 format
     capturedFrame.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    capturedFrame.ownsData = false; // We don't own this data - it belongs to frameBuffer
     
     // Validate the captured frame using existing frame validation logic
     analysis = ValidateFrame(capturedFrame, expectedTimestamp);

@@ -334,6 +334,7 @@ bool TestRunner::RunFrameValidationTest(const TestConfig& config) {
                     capturedFrame.height = height;
                     capturedFrame.pitch = width * 4; // RGBA format
                     capturedFrame.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                    capturedFrame.ownsData = false; // We don't own this data - it belongs to frameBuffer
                     
                     // Validate the frame
                     auto analysis = validator.ValidateFrame(capturedFrame, m_videoManager->GetCurrentTime());
@@ -491,6 +492,7 @@ bool TestRunner::RunSwitchingAccuracyTest(const TestConfig& config) {
             postFrame.height = height;
             postFrame.pitch = width * 4;
             postFrame.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            postFrame.ownsData = false; // We don't own this data - it belongs to postFrameBuffer
             
             auto analysis = frameValidator.ValidateFrame(postFrame, m_videoManager->GetCurrentTime());
             if (!analysis.hasValidFrameNumber) {

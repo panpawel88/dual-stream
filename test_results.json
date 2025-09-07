@@ -1,0 +1,21 @@
+DualStream Video Player Test Results
+=====================================
+
+Total Tests: 2
+Passed: 0
+Failed: 2
+Success Rate: 0%
+
+Individual Test Results:
+========================
+
+Test: short_videos_frame_numbers
+Suite: 
+Status: FAILED
+Execution Time: 3.18857s
+
+Test: hd_videos_frame_numbers
+Suite: 
+Status: FAILED
+Execution Time: 5.13881s
+
