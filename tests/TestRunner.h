@@ -65,6 +65,7 @@ private:
     std::vector<TestResult> m_results;
     
     // Video system components (initialized per test)
+    std::unique_ptr<class Window> m_testWindow;
     std::unique_ptr<IRenderer> m_renderer;
     std::unique_ptr<VideoManager> m_videoManager;
     

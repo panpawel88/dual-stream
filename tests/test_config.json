@@ -131,6 +131,69 @@
           "switch_count": 8
         }
       ]
+    },
+    {
+      "name": "pattern_validation",
+      "description": "Validate different video patterns and visual elements", 
+      "tests": [
+        {
+          "name": "bouncing_ball_pattern",
+          "video_paths": [
+            "test_videos/60fps_video3_bouncing_ball.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 8,
+          "test_type": "frame_validation"
+        },
+        {
+          "name": "gradient_pattern", 
+          "video_paths": [
+            "test_videos/video3_gradient.mp4",
+            "test_videos/video2_blue_circle.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 8,
+          "test_type": "frame_validation"
+        },
+        {
+          "name": "text_pattern",
+          "video_paths": [
+            "test_videos/video5_text.mp4",
+            "test_videos/60fps_video4_text.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 8,
+          "test_type": "frame_validation"
+        }
+      ]
+    },
+    {
+      "name": "high_resolution_tests",
+      "description": "Test with 8K and mixed resolution videos",
+      "tests": [
+        {
+          "name": "8k_vs_4k_mixed_resolution",
+          "video_paths": [
+            "test_videos/8k_video1_red_square.mp4",
+            "test_videos/4k_video1_red_square.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 10,
+          "test_type": "frame_validation"
+        },
+        {
+          "name": "8k_60fps_performance",
+          "video_paths": [
+            "test_videos/8k_60fps_video1_red_square.mp4",
+            "test_videos/8k_60fps_video2_blue_circle.mp4"
+          ],
+          "algorithm": "immediate",
+          "duration_seconds": 5,
+          "test_type": "performance",
+          "expected_fps": 60
+        }
+      ]
     }
   ]
 }

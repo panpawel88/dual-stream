@@ -136,6 +136,12 @@ int FrameValidator::ExtractFrameNumberFromPixels(const uint8_t* pixelData, int w
     int textRegionW = 400;  // Wide enough for "Video X - Frame 12345"
     int textRegionH = 40;   // Height for text
     
+    // Ensure we don't exceed frame boundaries
+    if (textRegionX + textRegionW > width || textRegionY + textRegionH > height) {
+        LOG_WARNING("FrameValidator: Text region exceeds frame boundaries");
+        return -1;
+    }
+    
     // Extract text from the region
     std::string extractedText = ExtractTextFromRegion(pixelData, width, height, 
                                                      textRegionX, textRegionY, 
@@ -176,11 +182,16 @@ std::string FrameValidator::ExtractTextFromRegion(const uint8_t* pixelData, int 
     
     for (int row = y; row < y + h; row++) {
         for (int col = x; col < x + w; col++) {
-            int pixelIndex = row * width + col;  // Assuming grayscale or Y channel
-            uint8_t pixelValue = pixelData[pixelIndex];
+            int pixelIndex = (row * width + col) * 4;  // RGBA format: 4 bytes per pixel
+            
+            // Calculate grayscale value from RGB (ignore alpha)
+            uint8_t r = pixelData[pixelIndex];
+            uint8_t g = pixelData[pixelIndex + 1];
+            uint8_t b = pixelData[pixelIndex + 2];
+            uint8_t grayscale = static_cast<uint8_t>(0.299 * r + 0.587 * g + 0.114 * b);
             
             // Look for bright pixels (likely text) - threshold at 200 for white text
-            if (pixelValue > 200) {
+            if (grayscale > 200) {
                 highContrastPixels++;
             }
         }
@@ -228,12 +239,13 @@ bool FrameValidator::DetectColorAtPosition(const uint8_t* pixelData, int width, 
         return false;
     }
     
-    // This implementation assumes RGB24 format - you'd need to adapt for other formats
-    int pixelIndex = (y * width + x) * 3;  // 3 bytes per pixel for RGB
+    // Handle RGBA format from framebuffer capture (4 bytes per pixel)
+    int pixelIndex = (y * width + x) * 4;  // 4 bytes per pixel for RGBA
     
     uint8_t r = pixelData[pixelIndex];
     uint8_t g = pixelData[pixelIndex + 1];  
     uint8_t b = pixelData[pixelIndex + 2];
+    // Note: pixelData[pixelIndex + 3] is alpha, but we don't need it for color matching
     
     // Check if color is within tolerance
     return (abs(r - expectedR) <= tolerance) && 
