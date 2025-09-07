@@ -10,17 +10,19 @@
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
 
-FrameValidator::FrameValidator() {
+FrameValidator::FrameValidator() : m_tesseractApi(nullptr, [](void* ptr) {
+        if (ptr) {
+            tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(ptr);
+            api->End();
+            delete api;
+        }
+    }) {
     // Initialize default frame number regex to match patterns like:
     // "Video 1 - Frame 123", "SHORT A - Frame 456 (60fps)", etc.
     m_frameNumberRegex = std::regex(R"(Frame\s+(\d+))");
     
     // Initialize Tesseract OCR
     InitializeOCR();
-}
-
-FrameValidator::~FrameValidator() {
-    CleanupOCR();
 }
 
 FrameValidator::FrameAnalysis FrameValidator::ValidateFrame(const DecodedFrame& frame, double expectedTimestamp) {
@@ -163,7 +165,7 @@ std::string FrameValidator::ExtractTextFromRegion(const uint8_t* pixelData, int 
     }
     
     // Use Tesseract OCR if available, otherwise fall back to simple pattern matching
-    if (m_ocrAvailable && m_tesseractApi) {
+    if (m_tesseractApi) {
         return PerformOCROnRegion(pixelData, width, height, x, y, w, h);
     }
     
@@ -448,35 +450,24 @@ bool FrameValidator::InitializeOCR() {
         api->SetPageSegMode(tesseract::PSM_SINGLE_LINE);
         api->SetVariable("tessedit_char_whitelist", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz -():");
         
-        m_tesseractApi = static_cast<void*>(api);
-        m_ocrAvailable = true;
+        m_tesseractApi.reset(static_cast<void*>(api));
         
         LOG_INFO("FrameValidator: Tesseract OCR initialized successfully");
         return true;
         
     } catch (const std::exception& e) {
         LOG_ERROR("FrameValidator: Exception during OCR initialization: ", e.what());
-        m_ocrAvailable = false;
         return false;
     }
 }
 
-void FrameValidator::CleanupOCR() {
-    if (m_tesseractApi) {
-        tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(m_tesseractApi);
-        api->End();
-        delete api;
-        m_tesseractApi = nullptr;
-    }
-    m_ocrAvailable = false;
-}
 
 std::string FrameValidator::PerformOCROnRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h) {
-    if (!m_ocrAvailable || !m_tesseractApi) {
+    if (!m_tesseractApi) {
         return "";
     }
     
-    tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(m_tesseractApi);
+    tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(m_tesseractApi.get());
     
     try {
         // Extract the region of interest

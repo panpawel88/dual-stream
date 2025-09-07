@@ -47,7 +47,7 @@ public:
     };
 
     FrameValidator();
-    ~FrameValidator();
+    ~FrameValidator() = default;
 
     // Frame analysis methods
     FrameAnalysis ValidateFrame(const DecodedFrame& frame, double expectedTimestamp);
@@ -103,7 +103,6 @@ private:
     
     // OCR/Text recognition helpers
     bool InitializeOCR();
-    void CleanupOCR();
     std::string PerformOCROnRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h);
 
 private:
@@ -112,8 +111,7 @@ private:
     std::regex m_frameNumberRegex;
     
     // Tesseract OCR system
-    void* m_tesseractApi = nullptr;  // TessBaseAPI* stored as void* to avoid header dependency
-    bool m_ocrAvailable = false;
+    std::unique_ptr<void, void(*)(void*)> m_tesseractApi;  // TessBaseAPI* stored as void* to avoid header dependency
     
     // Expected patterns based on video type
     enum class VideoPattern {
