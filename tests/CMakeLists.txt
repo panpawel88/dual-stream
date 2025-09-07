@@ -109,6 +109,15 @@ if(CAN_BUILD_TESTS)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test_config.json 
                    ${CMAKE_BINARY_DIR}/tests/test_config.json COPYONLY)
     
+    # Also copy test_config.json to the runtime directory where test executables are located
+    add_custom_command(TARGET test_runner POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:test_runner>/tests"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_config.json" "$<TARGET_FILE_DIR:test_runner>/tests/test_config.json"
+        COMMENT "Copying test configuration file to runtime directory"
+        VERBATIM
+    )
+    
     # Create a target to run basic tests
     add_custom_target(run_basic_tests
         COMMAND test_runner --suite frame_validation_basic --verbose
