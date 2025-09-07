@@ -1,6 +1,62 @@
 # Test system for DualStream Video Player
 cmake_minimum_required(VERSION 3.25)
 
+# Common function for downloading model files (same as in main CMakeLists.txt)
+function(download_model_file MODEL_URL MODEL_PATH MODEL_NAME TIMEOUT_SECONDS)
+    if(NOT EXISTS "${MODEL_PATH}")
+        message(STATUS "Downloading ${MODEL_NAME}...")
+        # Use SHOW_PROGRESS for downloads with timeout > 30 seconds
+        if(${TIMEOUT_SECONDS} GREATER 30)
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT ${TIMEOUT_SECONDS}
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+                SHOW_PROGRESS
+            )
+        else()
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT ${TIMEOUT_SECONDS}
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+            )
+        endif()
+        
+        list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
+        if(NOT DOWNLOAD_RESULT EQUAL 0)
+            list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
+            message(WARNING "Failed to download ${MODEL_NAME}: ${DOWNLOAD_ERROR}")
+            message(STATUS "Download log: ${DOWNLOAD_LOG}")
+            # Remove empty/failed file
+            if(EXISTS "${MODEL_PATH}")
+                file(REMOVE "${MODEL_PATH}")
+            endif()
+        else()
+            # Validate that the downloaded file is not empty
+            file(SIZE "${MODEL_PATH}" MODEL_SIZE)
+            if(MODEL_SIZE EQUAL 0)
+                message(WARNING "Downloaded ${MODEL_NAME} is empty (0 bytes). Removing invalid file.")
+                file(REMOVE "${MODEL_PATH}")
+            else()
+                message(STATUS "Successfully downloaded ${MODEL_NAME} (${MODEL_SIZE} bytes)")
+            endif()
+        endif()
+    else()
+        # Check if existing file is empty and re-download if necessary
+        file(SIZE "${MODEL_PATH}" EXISTING_SIZE)
+        if(EXISTING_SIZE EQUAL 0)
+            message(STATUS "Existing ${MODEL_NAME} is empty, re-downloading...")
+            file(REMOVE "${MODEL_PATH}")
+            download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_NAME}" ${TIMEOUT_SECONDS})
+        else()
+            message(STATUS "${MODEL_NAME} already exists (${EXISTING_SIZE} bytes), skipping download")
+        endif()
+    endif()
+endfunction()
+
 # Test dependencies (managed via vcpkg)
 
 # Find nlohmann_json library
@@ -32,6 +88,36 @@ if(HAVE_NLOHMANN_JSON AND HAVE_TESSERACT)
     message(STATUS "All test dependencies found - building test executables")
 else()
     message(WARNING "Some test dependencies missing - only building basic tests")
+endif()
+
+# Tesseract OCR model downloading (only if Tesseract is available and tests can be built)
+option(DOWNLOAD_TESSERACT_MODELS "Download Tesseract language data files for tests" ON)
+
+if(HAVE_TESSERACT AND DOWNLOAD_TESSERACT_MODELS)
+    message(STATUS "Downloading Tesseract language data for tests...")
+    
+    # Create tessdata directory structure in tests
+    set(TESTS_TESSDATA_DIR "${CMAKE_BINARY_DIR}/tests/tessdata")
+    file(MAKE_DIRECTORY "${TESTS_TESSDATA_DIR}")
+    
+    # Define Tesseract language files to download
+    set(TESSERACT_MODELS_BASE_URL "https://raw.githubusercontent.com/tesseract-ocr/tessdata/main")
+    set(TESSERACT_MODELS
+        "eng.traineddata"
+    )
+    
+    # Download Tesseract language models using common function
+    foreach(MODEL_FILE ${TESSERACT_MODELS})
+        set(MODEL_URL "${TESSERACT_MODELS_BASE_URL}/${MODEL_FILE}")
+        set(MODEL_PATH "${TESTS_TESSDATA_DIR}/${MODEL_FILE}")
+        download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_FILE}" 120)
+    endforeach()
+    
+    # Store tessdata directory for later use in test executable post-build
+    set(TESTS_TESSDATA_DOWNLOAD_DIR "${TESTS_TESSDATA_DIR}" CACHE INTERNAL "Tests Tesseract language data directory")
+    
+elseif(HAVE_TESSERACT AND NOT DOWNLOAD_TESSERACT_MODELS)
+    message(STATUS "Tesseract model downloading disabled for tests (DOWNLOAD_TESSERACT_MODELS=OFF)")
 endif()
 
 # Always build simple test (no dependencies)
@@ -118,13 +204,13 @@ if(CAN_BUILD_TESTS)
         VERBATIM
     )
     
-    # Copy tessdata directory for Tesseract OCR (from build directory)
-    if(DEFINED TESSDATA_DOWNLOAD_DIR)
+    # Copy tessdata directory for Tesseract OCR (from tests build directory)
+    if(DEFINED TESTS_TESSDATA_DOWNLOAD_DIR)
         add_custom_command(TARGET test_runner POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:test_runner>/tessdata"
             COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${TESSDATA_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:test_runner>/tessdata"
-            COMMENT "Copying tessdata directory to runtime directory"
+            "${TESTS_TESSDATA_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:test_runner>/tessdata"
+            COMMENT "Copying tessdata directory to test runner runtime directory"
             VERBATIM
         )
     endif()

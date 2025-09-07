@@ -215,11 +215,65 @@ else()
     add_definitions(-DHAVE_OPENCV=0 -DHAVE_REALSENSE=0)
 endif()
 
+# Common function for downloading model files
+function(download_model_file MODEL_URL MODEL_PATH MODEL_NAME TIMEOUT_SECONDS)
+    if(NOT EXISTS "${MODEL_PATH}")
+        message(STATUS "Downloading ${MODEL_NAME}...")
+        # Use SHOW_PROGRESS for downloads with timeout > 30 seconds
+        if(${TIMEOUT_SECONDS} GREATER 30)
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT ${TIMEOUT_SECONDS}
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+                SHOW_PROGRESS
+            )
+        else()
+            file(DOWNLOAD
+                "${MODEL_URL}"
+                "${MODEL_PATH}"
+                TIMEOUT ${TIMEOUT_SECONDS}
+                STATUS DOWNLOAD_STATUS
+                LOG DOWNLOAD_LOG
+            )
+        endif()
+        
+        list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
+        if(NOT DOWNLOAD_RESULT EQUAL 0)
+            list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
+            message(WARNING "Failed to download ${MODEL_NAME}: ${DOWNLOAD_ERROR}")
+            message(STATUS "Download log: ${DOWNLOAD_LOG}")
+            # Remove empty/failed file
+            if(EXISTS "${MODEL_PATH}")
+                file(REMOVE "${MODEL_PATH}")
+            endif()
+        else()
+            # Validate that the downloaded file is not empty
+            file(SIZE "${MODEL_PATH}" MODEL_SIZE)
+            if(MODEL_SIZE EQUAL 0)
+                message(WARNING "Downloaded ${MODEL_NAME} is empty (0 bytes). Removing invalid file.")
+                file(REMOVE "${MODEL_PATH}")
+            else()
+                message(STATUS "Successfully downloaded ${MODEL_NAME} (${MODEL_SIZE} bytes)")
+            endif()
+        endif()
+    else()
+        # Check if existing file is empty and re-download if necessary
+        file(SIZE "${MODEL_PATH}" EXISTING_SIZE)
+        if(EXISTING_SIZE EQUAL 0)
+            message(STATUS "Existing ${MODEL_NAME} is empty, re-downloading...")
+            file(REMOVE "${MODEL_PATH}")
+            download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_NAME}" ${TIMEOUT_SECONDS})
+        else()
+            message(STATUS "${MODEL_NAME} already exists (${EXISTING_SIZE} bytes), skipping download")
+        endif()
+    endif()
+endfunction()
+
 # Face detection model downloading (OpenCV Haar cascades)
 option(DOWNLOAD_FACE_DETECTION_MODELS "Download OpenCV Haar cascade models at build time" ON)
 
-# Tesseract OCR model downloading
-option(DOWNLOAD_TESSERACT_MODELS "Download Tesseract language data files at build time" ON)
 
 if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     message(STATUS "Downloading face detection models...")
@@ -248,98 +302,14 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     foreach(MODEL_FILE ${HAAR_CASCADE_MODELS})
         set(MODEL_URL "${OPENCV_MODELS_BASE_URL}/${MODEL_FILE}")
         set(MODEL_PATH "${HAAR_MODELS_DIR}/${MODEL_FILE}")
-        
-        if(NOT EXISTS "${MODEL_PATH}")
-            message(STATUS "Downloading ${MODEL_FILE}...")
-            file(DOWNLOAD
-                "${MODEL_URL}"
-                "${MODEL_PATH}"
-                TIMEOUT 30
-                STATUS DOWNLOAD_STATUS
-                LOG DOWNLOAD_LOG
-            )
-            
-            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-            if(NOT DOWNLOAD_RESULT EQUAL 0)
-                list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
-                message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
-                message(STATUS "Download log: ${DOWNLOAD_LOG}")
-            else()
-                message(STATUS "Successfully downloaded ${MODEL_FILE}")
-            endif()
-        else()
-            message(STATUS "${MODEL_FILE} already exists, skipping download")
-        endif()
+        download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_FILE}" 30)
     endforeach()
     
     # Download YuNet models
     foreach(MODEL_FILE ${YUNET_MODELS})
         set(MODEL_URL "${YUNET_MODELS_BASE_URL}/${MODEL_FILE}")
         set(MODEL_PATH "${YUNET_MODELS_DIR}/${MODEL_FILE}")
-        
-        if(NOT EXISTS "${MODEL_PATH}")
-            message(STATUS "Downloading ${MODEL_FILE}...")
-            file(DOWNLOAD
-                "${MODEL_URL}"
-                "${MODEL_PATH}"
-                TIMEOUT 60
-                STATUS DOWNLOAD_STATUS
-                LOG DOWNLOAD_LOG
-                SHOW_PROGRESS
-            )
-            
-            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-            if(NOT DOWNLOAD_RESULT EQUAL 0)
-                list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
-                message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
-                message(STATUS "Download log: ${DOWNLOAD_LOG}")
-                # Remove empty/failed file
-                if(EXISTS "${MODEL_PATH}")
-                    file(REMOVE "${MODEL_PATH}")
-                endif()
-            else()
-                # Validate that the downloaded file is not empty
-                file(SIZE "${MODEL_PATH}" MODEL_SIZE)
-                if(MODEL_SIZE EQUAL 0)
-                    message(WARNING "Downloaded ${MODEL_FILE} is empty (0 bytes). Removing invalid file.")
-                    file(REMOVE "${MODEL_PATH}")
-                else()
-                    message(STATUS "Successfully downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
-                endif()
-            endif()
-        else()
-            # Check if existing file is empty and re-download if necessary
-            file(SIZE "${MODEL_PATH}" EXISTING_SIZE)
-            if(EXISTING_SIZE EQUAL 0)
-                message(STATUS "Existing ${MODEL_FILE} is empty, re-downloading...")
-                file(REMOVE "${MODEL_PATH}")
-                file(DOWNLOAD
-                    "${MODEL_URL}"
-                    "${MODEL_PATH}"
-                    TIMEOUT 60
-                    STATUS DOWNLOAD_STATUS
-                    LOG DOWNLOAD_LOG
-                    SHOW_PROGRESS
-                )
-                
-                list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-                if(NOT DOWNLOAD_RESULT EQUAL 0)
-                    list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
-                    message(WARNING "Failed to re-download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
-                    file(REMOVE "${MODEL_PATH}")
-                else()
-                    file(SIZE "${MODEL_PATH}" MODEL_SIZE)
-                    if(MODEL_SIZE EQUAL 0)
-                        message(WARNING "Re-downloaded ${MODEL_FILE} is still empty. Removing invalid file.")
-                        file(REMOVE "${MODEL_PATH}")
-                    else()
-                        message(STATUS "Successfully re-downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
-                    endif()
-                endif()
-            else()
-                message(STATUS "${MODEL_FILE} already exists (${EXISTING_SIZE} bytes), skipping download")
-            endif()
-        endif()
+        download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_FILE}" 60)
     endforeach()
     
     # Store face models directories for later use in executable post-build
@@ -352,96 +322,6 @@ else()
     endif()
 endif()
 
-# Tesseract OCR language data downloading
-if(DOWNLOAD_TESSERACT_MODELS)
-    message(STATUS "Downloading Tesseract language data...")
-    
-    # Create tessdata directory structure
-    set(TESSDATA_DIR "${CMAKE_BINARY_DIR}/tessdata")
-    file(MAKE_DIRECTORY "${TESSDATA_DIR}")
-    
-    # Define Tesseract language files to download
-    set(TESSERACT_MODELS_BASE_URL "https://raw.githubusercontent.com/tesseract-ocr/tessdata/main")
-    set(TESSERACT_MODELS
-        "eng.traineddata"
-    )
-    
-    # Download Tesseract language models
-    foreach(MODEL_FILE ${TESSERACT_MODELS})
-        set(MODEL_URL "${TESSERACT_MODELS_BASE_URL}/${MODEL_FILE}")
-        set(MODEL_PATH "${TESSDATA_DIR}/${MODEL_FILE}")
-        
-        if(NOT EXISTS "${MODEL_PATH}")
-            message(STATUS "Downloading ${MODEL_FILE}...")
-            file(DOWNLOAD
-                "${MODEL_URL}"
-                "${MODEL_PATH}"
-                TIMEOUT 120
-                STATUS DOWNLOAD_STATUS
-                LOG DOWNLOAD_LOG
-                SHOW_PROGRESS
-            )
-            
-            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-            if(NOT DOWNLOAD_RESULT EQUAL 0)
-                list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
-                message(WARNING "Failed to download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
-                message(STATUS "Download log: ${DOWNLOAD_LOG}")
-                # Remove empty/failed file
-                if(EXISTS "${MODEL_PATH}")
-                    file(REMOVE "${MODEL_PATH}")
-                endif()
-            else()
-                # Validate that the downloaded file is not empty
-                file(SIZE "${MODEL_PATH}" MODEL_SIZE)
-                if(MODEL_SIZE EQUAL 0)
-                    message(WARNING "Downloaded ${MODEL_FILE} is empty (0 bytes). Removing invalid file.")
-                    file(REMOVE "${MODEL_PATH}")
-                else()
-                    message(STATUS "Successfully downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
-                endif()
-            endif()
-        else()
-            # Check if existing file is empty and re-download if necessary
-            file(SIZE "${MODEL_PATH}" EXISTING_SIZE)
-            if(EXISTING_SIZE EQUAL 0)
-                message(STATUS "Existing ${MODEL_FILE} is empty, re-downloading...")
-                file(REMOVE "${MODEL_PATH}")
-                file(DOWNLOAD
-                    "${MODEL_URL}"
-                    "${MODEL_PATH}"
-                    TIMEOUT 120
-                    STATUS DOWNLOAD_STATUS
-                    LOG DOWNLOAD_LOG
-                    SHOW_PROGRESS
-                )
-                
-                list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-                if(NOT DOWNLOAD_RESULT EQUAL 0)
-                    list(GET DOWNLOAD_STATUS 1 DOWNLOAD_ERROR)
-                    message(WARNING "Failed to re-download ${MODEL_FILE}: ${DOWNLOAD_ERROR}")
-                    file(REMOVE "${MODEL_PATH}")
-                else()
-                    file(SIZE "${MODEL_PATH}" MODEL_SIZE)
-                    if(MODEL_SIZE EQUAL 0)
-                        message(WARNING "Re-downloaded ${MODEL_FILE} is still empty. Removing invalid file.")
-                        file(REMOVE "${MODEL_PATH}")
-                    else()
-                        message(STATUS "Successfully re-downloaded ${MODEL_FILE} (${MODEL_SIZE} bytes)")
-                    endif()
-                endif()
-            else()
-                message(STATUS "${MODEL_FILE} already exists (${EXISTING_SIZE} bytes), skipping download")
-            endif()
-        endif()
-    endforeach()
-    
-    # Store tessdata directory for later use in executable post-build
-    set(TESSDATA_DOWNLOAD_DIR "${TESSDATA_DIR}" CACHE INTERNAL "Tesseract language data directory")
-    
-else()
-    message(STATUS "Tesseract model downloading disabled (DOWNLOAD_TESSERACT_MODELS=OFF)")
-endif()
 
 # GLAD OpenGL loader (for modern OpenGL - always needed for runtime switching)
 include(FetchContent)
@@ -750,17 +630,6 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     endif()
 endif()
 
-# Copy Tesseract language data to runtime directory (all platforms)
-if(DOWNLOAD_TESSERACT_MODELS)
-    if(DEFINED TESSDATA_DOWNLOAD_DIR)
-        add_custom_command(TARGET dual_stream POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/tessdata"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${TESSDATA_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/tessdata"
-            COMMENT "Copying Tesseract language data to runtime directory"
-            VERBATIM
-        )
-    endif()
-endif()
 
 # Copy configuration file to output directory
 add_custom_command(TARGET dual_stream POST_BUILD
