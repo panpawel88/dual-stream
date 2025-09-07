@@ -996,3 +996,59 @@ bool OpenGLRenderer::SupportsCudaInterop() const {
 }
 
 #endif // HAVE_CUDA
+
+bool OpenGLRenderer::CaptureFramebuffer(uint8_t* outputBuffer, size_t bufferSize, int& width, int& height) {
+    if (!m_initialized || !outputBuffer) {
+        LOG_ERROR("OpenGLRenderer: Cannot capture framebuffer - renderer not initialized or invalid buffer");
+        return false;
+    }
+    
+    width = m_width;
+    height = m_height;
+    
+    // Check buffer size (RGBA8 = 4 bytes per pixel)
+    size_t requiredSize = static_cast<size_t>(width * height * 4);
+    if (bufferSize < requiredSize) {
+        LOG_ERROR("OpenGLRenderer: Buffer too small for framebuffer capture. Required: ", requiredSize, ", provided: ", bufferSize);
+        return false;
+    }
+    
+    // Bind the default framebuffer (back buffer)
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    
+    // Check for OpenGL errors before reading
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        LOG_ERROR("OpenGLRenderer: OpenGL error before framebuffer capture: 0x", std::hex, error);
+        return false;
+    }
+    
+    // Read pixels from the framebuffer
+    // Note: OpenGL reads from bottom-left, so we need to flip vertically
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, outputBuffer);
+    
+    // Check for errors after reading
+    error = glGetError();
+    if (error != GL_NO_ERROR) {
+        LOG_ERROR("OpenGLRenderer: OpenGL error during framebuffer capture: 0x", std::hex, error);
+        return false;
+    }
+    
+    // Flip the image vertically since OpenGL coordinates are bottom-left origin
+    // but most image processing expects top-left origin
+    size_t rowSize = width * 4;
+    std::vector<uint8_t> tempRow(rowSize);
+    
+    for (int row = 0; row < height / 2; ++row) {
+        uint8_t* topRow = outputBuffer + row * rowSize;
+        uint8_t* bottomRow = outputBuffer + (height - 1 - row) * rowSize;
+        
+        // Swap top and bottom rows
+        memcpy(tempRow.data(), topRow, rowSize);
+        memcpy(topRow, bottomRow, rowSize);
+        memcpy(bottomRow, tempRow.data(), rowSize);
+    }
+    
+    LOG_DEBUG("OpenGLRenderer: Successfully captured framebuffer (", width, "x", height, ")");
+    return true;
+}

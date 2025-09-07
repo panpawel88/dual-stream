@@ -29,6 +29,7 @@ public:
     bool IsInitialized() const override { return m_initialized; }
     RendererType GetRendererType() const override { return RendererType::OpenGL; }
     bool SupportsCudaInterop() const override;
+    bool CaptureFramebuffer(uint8_t* outputBuffer, size_t bufferSize, int& width, int& height) override;
     
     // OpenGL-specific methods
     bool IsCudaInteropAvailable() const;

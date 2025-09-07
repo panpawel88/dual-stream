@@ -23,6 +23,7 @@ public:
     bool IsInitialized() const override { return m_initialized; }
     RendererType GetRendererType() const override { return RendererType::DirectX11; }
     bool SupportsCudaInterop() const override { return false; } // D3D11 doesn't support CUDA interop
+    bool CaptureFramebuffer(uint8_t* outputBuffer, size_t bufferSize, int& width, int& height) override;
     
     // D3D11-specific methods
     ID3D11Device* GetDevice() const { return m_device.Get(); }

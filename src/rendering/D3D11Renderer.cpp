@@ -921,6 +921,67 @@ bool D3D11Renderer::PresentSoftwareTexture(const RenderTexture& texture) {
     return false;
 }
 
+bool D3D11Renderer::CaptureFramebuffer(uint8_t* outputBuffer, size_t bufferSize, int& width, int& height) {
+    if (!m_initialized || !outputBuffer) {
+        LOG_ERROR("D3D11Renderer: Cannot capture framebuffer - renderer not initialized or invalid buffer");
+        return false;
+    }
+    
+    width = m_width;
+    height = m_height;
+    
+    // Check buffer size (RGBA8 = 4 bytes per pixel)
+    size_t requiredSize = static_cast<size_t>(width * height * 4);
+    if (bufferSize < requiredSize) {
+        LOG_ERROR("D3D11Renderer: Buffer too small for framebuffer capture. Required: ", requiredSize, ", provided: ", bufferSize);
+        return false;
+    }
+    
+    // Create a staging texture to read back from GPU
+    D3D11_TEXTURE2D_DESC stagingDesc = {};
+    stagingDesc.Width = width;
+    stagingDesc.Height = height;
+    stagingDesc.MipLevels = 1;
+    stagingDesc.ArraySize = 1;
+    stagingDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    stagingDesc.SampleDesc.Count = 1;
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    stagingDesc.BindFlags = 0;
+    
+    ComPtr<ID3D11Texture2D> stagingTexture;
+    HRESULT hr = m_device->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture);
+    if (FAILED(hr)) {
+        LOG_ERROR("D3D11Renderer: Failed to create staging texture for framebuffer capture. HRESULT: 0x", std::hex, hr);
+        return false;
+    }
+    
+    // Copy the back buffer to the staging texture
+    m_context->CopyResource(stagingTexture.Get(), m_backBuffer.Get());
+    
+    // Map the staging texture and read the data
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    hr = m_context->Map(stagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mappedResource);
+    if (FAILED(hr)) {
+        LOG_ERROR("D3D11Renderer: Failed to map staging texture for framebuffer capture. HRESULT: 0x", std::hex, hr);
+        return false;
+    }
+    
+    // Copy the pixel data row by row (handling potential row padding)
+    const uint8_t* srcData = static_cast<const uint8_t*>(mappedResource.pData);
+    uint8_t* dstData = outputBuffer;
+    
+    for (int row = 0; row < height; ++row) {
+        memcpy(dstData + row * width * 4, srcData + row * mappedResource.RowPitch, width * 4);
+    }
+    
+    // Unmap the staging texture
+    m_context->Unmap(stagingTexture.Get(), 0);
+    
+    LOG_DEBUG("D3D11Renderer: Successfully captured framebuffer (", width, "x", height, ")");
+    return true;
+}
+
 void D3D11Renderer::Reset() {
     m_initialized = false;
     

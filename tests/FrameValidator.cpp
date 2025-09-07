@@ -6,16 +6,21 @@
 #include <cmath>
 #include <algorithm>
 
+// Tesseract OCR headers
+#include <tesseract/baseapi.h>
+#include <leptonica/allheaders.h>
+
 FrameValidator::FrameValidator() {
     // Initialize default frame number regex to match patterns like:
     // "Video 1 - Frame 123", "SHORT A - Frame 456 (60fps)", etc.
     m_frameNumberRegex = std::regex(R"(Frame\s+(\d+))");
+    
+    // Initialize Tesseract OCR
+    InitializeOCR();
 }
 
 FrameValidator::~FrameValidator() {
-    if (m_ocrEngine) {
-        // Cleanup OCR engine if initialized
-    }
+    CleanupOCR();
 }
 
 FrameValidator::FrameAnalysis FrameValidator::ValidateFrame(const DecodedFrame& frame, double expectedTimestamp) {
@@ -76,10 +81,27 @@ FrameValidator::FrameAnalysis FrameValidator::ValidateRenderedFrame(IRenderer* r
         return analysis;
     }
     
-    // For now, we'll need to add a method to IRenderer to capture the current frame
-    // This is a placeholder implementation
-    LOG_WARNING("FrameValidator: ValidateRenderedFrame not fully implemented - requires renderer frame capture");
+    // Capture the current framebuffer
+    int width, height;
+    const size_t maxBufferSize = 7680 * 4320 * 4; // 4K * 2 = 8K max, 4 bytes per pixel (RGBA)
+    std::vector<uint8_t> frameBuffer(maxBufferSize);
     
+    if (!renderer->CaptureFramebuffer(frameBuffer.data(), maxBufferSize, width, height)) {
+        LOG_ERROR("FrameValidator: Failed to capture framebuffer from renderer");
+        return analysis;
+    }
+    
+    // Create a temporary DecodedFrame structure from the captured framebuffer
+    DecodedFrame capturedFrame;
+    capturedFrame.valid = true;
+    capturedFrame.data = frameBuffer.data();
+    capturedFrame.width = width;
+    capturedFrame.height = height;
+    capturedFrame.pitch = width * 4; // RGBA8 format
+    capturedFrame.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    
+    // Validate the captured frame using existing frame validation logic
+    analysis = ValidateFrame(capturedFrame, expectedTimestamp);
     return analysis;
 }
 
@@ -136,15 +158,17 @@ int FrameValidator::ExtractFrameNumberFromPixels(const uint8_t* pixelData, int w
 }
 
 std::string FrameValidator::ExtractTextFromRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h) {
-    // This is a simplified implementation - in a real system, you'd use OCR
-    // For now, we'll look for high-contrast patterns that might indicate text
-    
     if (!pixelData || x < 0 || y < 0 || x + w > width || y + h > height) {
         return "";
     }
     
-    // Simple pattern: look for white text on dark background
-    // Count pixels that might be text (high brightness contrasts)
+    // Use Tesseract OCR if available, otherwise fall back to simple pattern matching
+    if (m_ocrAvailable && m_tesseractApi) {
+        return PerformOCROnRegion(pixelData, width, height, x, y, w, h);
+    }
+    
+    // Fallback: Simple pattern matching for high-contrast text
+    // This is used when Tesseract is not available
     int highContrastPixels = 0;
     int totalPixels = w * h;
     
@@ -387,4 +411,127 @@ void FrameValidator::SetFrameNumberRegex(const std::string& regex) {
 
 void FrameValidator::ResetStatistics() {
     m_stats = ValidationStats{};
+}
+
+bool FrameValidator::InitializeOCR() {
+    try {
+        // Create Tesseract API instance
+        tesseract::TessBaseAPI* api = new tesseract::TessBaseAPI();
+        
+        // Initialize Tesseract with English language
+        if (api->Init(NULL, "eng") != 0) {
+            LOG_ERROR("FrameValidator: Failed to initialize Tesseract OCR engine");
+            delete api;
+            return false;
+        }
+        
+        // Configure Tesseract for optimal frame number recognition
+        api->SetPageSegMode(tesseract::PSM_SINGLE_LINE);
+        api->SetVariable("tessedit_char_whitelist", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz -():");
+        
+        m_tesseractApi = static_cast<void*>(api);
+        m_ocrAvailable = true;
+        
+        LOG_INFO("FrameValidator: Tesseract OCR initialized successfully");
+        return true;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("FrameValidator: Exception during OCR initialization: ", e.what());
+        m_ocrAvailable = false;
+        return false;
+    }
+}
+
+void FrameValidator::CleanupOCR() {
+    if (m_tesseractApi) {
+        tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(m_tesseractApi);
+        api->End();
+        delete api;
+        m_tesseractApi = nullptr;
+    }
+    m_ocrAvailable = false;
+}
+
+std::string FrameValidator::PerformOCROnRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h) {
+    if (!m_ocrAvailable || !m_tesseractApi) {
+        return "";
+    }
+    
+    tesseract::TessBaseAPI* api = static_cast<tesseract::TessBaseAPI*>(m_tesseractApi);
+    
+    try {
+        // Extract the region of interest
+        int regionSize = w * h * 4; // RGBA format
+        uint8_t* regionData = new uint8_t[regionSize];
+        
+        // Copy pixel data from the specified region
+        for (int row = 0; row < h; ++row) {
+            for (int col = 0; col < w; ++col) {
+                int srcIndex = ((y + row) * width + (x + col)) * 4; // Source pixel index
+                int dstIndex = (row * w + col) * 4; // Destination pixel index
+                
+                // Copy RGBA pixel
+                regionData[dstIndex + 0] = pixelData[srcIndex + 0]; // R
+                regionData[dstIndex + 1] = pixelData[srcIndex + 1]; // G  
+                regionData[dstIndex + 2] = pixelData[srcIndex + 2]; // B
+                regionData[dstIndex + 3] = pixelData[srcIndex + 3]; // A
+            }
+        }
+        
+        // Convert RGBA to grayscale for better OCR performance
+        uint8_t* grayData = new uint8_t[w * h];
+        for (int i = 0; i < w * h; ++i) {
+            // Standard grayscale conversion: 0.299*R + 0.587*G + 0.114*B
+            int r = regionData[i * 4 + 0];
+            int g = regionData[i * 4 + 1]; 
+            int b = regionData[i * 4 + 2];
+            grayData[i] = static_cast<uint8_t>(0.299 * r + 0.587 * g + 0.114 * b);
+        }
+        
+        // Create Leptonica PIX from grayscale data
+        PIX* pix = pixCreate(w, h, 8);  // 8-bit grayscale
+        if (!pix) {
+            LOG_ERROR("FrameValidator: Failed to create PIX image for OCR");
+            delete[] regionData;
+            delete[] grayData;
+            return "";
+        }
+        
+        // Copy grayscale data to PIX
+        for (int row = 0; row < h; ++row) {
+            for (int col = 0; col < w; ++col) {
+                pixSetPixel(pix, col, row, grayData[row * w + col]);
+            }
+        }
+        
+        // Perform OCR on the PIX image
+        api->SetImage(pix);
+        char* text = api->GetUTF8Text();
+        
+        std::string result = text ? std::string(text) : "";
+        
+        // Cleanup
+        delete[] text;
+        pixDestroy(&pix);
+        delete[] regionData;
+        delete[] grayData;
+        
+        // Clean up whitespace and newlines
+        result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());
+        result.erase(std::remove(result.begin(), result.end(), '\r'), result.end());
+        
+        // Trim leading and trailing whitespace
+        size_t start = result.find_first_not_of(" \t");
+        if (start == std::string::npos) return "";
+        
+        size_t end = result.find_last_not_of(" \t");
+        result = result.substr(start, end - start + 1);
+        
+        LOG_DEBUG("FrameValidator: OCR extracted text: '", result, "' from region (", x, ",", y, ",", w, "x", h, ")");
+        return result;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("FrameValidator: Exception during OCR processing: ", e.what());
+        return "";
+    }
 }

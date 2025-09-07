@@ -103,6 +103,7 @@ private:
     
     // OCR/Text recognition helpers
     bool InitializeOCR();
+    void CleanupOCR();
     std::string PerformOCROnRegion(const uint8_t* pixelData, int width, int height, int x, int y, int w, int h);
 
 private:
@@ -110,8 +111,8 @@ private:
     std::string m_expectedVideoPattern;
     std::regex m_frameNumberRegex;
     
-    // OCR system (optional - could use Tesseract or simple pattern matching)
-    void* m_ocrEngine = nullptr;
+    // Tesseract OCR system
+    void* m_tesseractApi = nullptr;  // TessBaseAPI* stored as void* to avoid header dependency
     bool m_ocrAvailable = false;
     
     // Expected patterns based on video type
