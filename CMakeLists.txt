@@ -606,11 +606,11 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     )
 endif()
 
-# Test system
-option(ENABLE_TESTS "Enable test system" ON)
+# Test system (experimental)
+option(ENABLE_TESTS "Enable experimental test system" OFF)
 
 if(ENABLE_TESTS)
-    message(STATUS "Test system enabled")
+    message(STATUS "Experimental test system enabled")
     
     # Add test subdirectory
     add_subdirectory(tests)
@@ -626,12 +626,12 @@ if(ENABLE_TESTS)
     add_dependencies(simple_test dual_stream_core)
     add_dependencies(test_runner dual_stream_core)
     
-    message(STATUS "Test targets available:")
+    message(STATUS "Experimental test targets available:")
     message(STATUS "  make test_videos       - Generate test videos")
     message(STATUS "  make simple_test       - Build simple test executable")
     message(STATUS "  make run_basic_tests   - Run basic functionality tests") 
     message(STATUS "  make run_all_tests     - Run all tests")
     message(STATUS "  make run_performance_tests - Run performance tests")
 else()
-    message(STATUS "Test system disabled")
+    message(STATUS "Experimental test system disabled (use -DENABLE_TESTS=ON to enable)")
 endif()
