@@ -25,8 +25,6 @@ enum class CameraFormat {
 struct CameraFrame {
     // Core metadata
     CameraFormat format;
-    int width;
-    int height;
     std::chrono::steady_clock::time_point timestamp;
 
     // Frame data - always stored as cv::Mat
@@ -36,7 +34,7 @@ struct CameraFrame {
     /**
      * Default constructor creates invalid frame
      */
-    CameraFrame() : format(CameraFormat::BGR8), width(0), height(0),
+    CameraFrame() : format(CameraFormat::BGR8),
                    timestamp(std::chrono::steady_clock::now()) {}
 
     // Make non-copyable, only moveable

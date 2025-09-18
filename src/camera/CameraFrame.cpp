@@ -13,8 +13,6 @@ std::shared_ptr<CameraFrame> CameraFrame::CreateFromMat(
 
     auto frame = std::make_shared<CameraFrame>();
     frame->format = format;
-    frame->width = mat.cols;
-    frame->height = mat.rows;
     frame->timestamp = std::chrono::steady_clock::now();
 
     // Clone mat to ensure we own the data
@@ -75,8 +73,6 @@ std::shared_ptr<CameraFrame> CameraFrame::CreateFromRealSense<rs2::video_frame, 
     int h = colorFrame.get_height();
     auto profile = colorFrame.get_profile().as<rs2::video_stream_profile>();
 
-    frame->width = w;
-    frame->height = h;
 
     // Handle different RealSense formats
     switch (profile.format()) {
