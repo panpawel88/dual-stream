@@ -1,5 +1,6 @@
 #include "CameraManager.h"
 #include "../core/Config.h"
+#include "../core/Logger.h"
 #include "processing/CircularBuffer.h"
 
 CameraManager::CameraManager() 
@@ -72,12 +73,34 @@ bool CameraManager::Initialize(const CameraDeviceInfo& deviceInfo,
 
 bool CameraManager::InitializeAuto(const CameraConfig& config,
                                  const PublisherConfig& publisherConfig) {
-    auto devices = EnumerateDevices();
+    // Read camera source type preference from configuration
+    Config* globalConfig = Config::GetInstance();
+    std::string sourceTypeStr = globalConfig->GetString("camera.source_type", "auto");
+
+    std::vector<CameraDeviceInfo> devices;
+
+    if (sourceTypeStr == "auto") {
+        // Use existing logic - enumerate all devices
+        devices = EnumerateDevices();
+    } else {
+        // Try to use specific source type
+        CameraSourceType preferredType = CameraSourceFactory::ParseSourceType(sourceTypeStr);
+        devices = EnumerateDevices(preferredType);
+
+        if (devices.empty()) {
+            // Fallback to auto mode if preferred source has no devices
+            LOG_WARNING("No devices found for preferred camera source '", sourceTypeStr, "', falling back to auto mode");
+            devices = EnumerateDevices();
+        } else {
+            LOG_INFO("Using configured camera source: ", CameraSourceFactory::GetSourceTypeName(preferredType));
+        }
+    }
+
     if (devices.empty()) {
         UpdateLastError("No camera devices found");
         return false;
     }
-    
+
     // Use first available device
     return InitializeInternal(devices[0], config, publisherConfig);
 }
