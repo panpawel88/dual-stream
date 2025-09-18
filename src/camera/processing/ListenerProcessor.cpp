@@ -142,14 +142,8 @@ bool ListenerProcessor::ProcessFrame(const TimestampedFrame& timestampedFrame) {
     FrameProcessingResult result = FrameProcessingResult::FAILED;
 
     try {
-        // Process the frame with optional timeout
-        if (m_config.processingTimeoutMs > 0) {
-            // For simplicity, we don't implement timeout here - would need more complex async handling
-            // This is a feature that could be added later if needed
-            result = m_listener->ProcessFrame(timestampedFrame.frame);
-        } else {
-            result = m_listener->ProcessFrame(timestampedFrame.frame);
-        }
+        // Process the frame
+        result = m_listener->ProcessFrame(timestampedFrame.frame);
 
         // Handle critical errors by disabling the listener
         if (result == FrameProcessingResult::CRITICAL_ERROR) {

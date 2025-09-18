@@ -17,7 +17,6 @@ struct ListenerProcessorConfig {
     OverflowPolicy overflowPolicy = OverflowPolicy::DROP_OLDEST; // What to do when queue is full
     double maxFrameAgeMs = 100.0;                      // Maximum age before dropping frames
     bool enableFrameAgeCheck = true;                   // Enable frame age checking
-    uint32_t processingTimeoutMs = 0;                  // Processing timeout (0 = no timeout)
     bool enableStatistics = true;                      // Enable detailed statistics
     std::string threadName = "";                       // Thread name for debugging (auto-generated if empty)
 };
@@ -32,7 +31,6 @@ struct ListenerProcessorStats {
     uint64_t framesDroppedAge = 0;     // Frames dropped due to age limit
     uint64_t framesSkipped = 0;        // Frames skipped by listener
     uint64_t framesFailed = 0;         // Failed processing attempts
-    uint64_t framesTimeout = 0;        // Frames that timed out during processing
 
     double averageProcessingTimeMs = 0.0;  // Average processing time
     double maxProcessingTimeMs = 0.0;      // Maximum processing time seen
@@ -49,7 +47,6 @@ struct ListenerProcessorStats {
         framesDroppedAge = 0;
         framesSkipped = 0;
         framesFailed = 0;
-        framesTimeout = 0;
         averageProcessingTimeMs = 0.0;
         maxProcessingTimeMs = 0.0;
         averageQueueDepth = 0.0;
@@ -65,7 +62,7 @@ struct ListenerProcessorStats {
     }
 
     double GetSuccessRate() const {
-        uint64_t totalAttempts = framesProcessed + framesSkipped + framesFailed + framesTimeout;
+        uint64_t totalAttempts = framesProcessed + framesSkipped + framesFailed;
         return totalAttempts > 0 ? (double)framesProcessed / totalAttempts : 0.0;
     }
 };
