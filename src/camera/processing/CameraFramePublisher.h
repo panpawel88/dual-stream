@@ -1,31 +1,33 @@
 #pragma once
 
 #include "ICameraFrameListener.h"
+#include "ListenerProcessor.h"
 #include "../CameraFrame.h"
 #include "camera/sources/ICameraSource.h"
 #include <vector>
 #include <mutex>
-#include <thread>
-#include <queue>
-#include <condition_variable>
+#include <unordered_map>
 #include <atomic>
 #include <algorithm>
 #include <memory>
+#include <optional>
 
 /**
  * Publisher configuration for frame delivery behavior
  */
 struct PublisherConfig {
-    size_t maxFrameQueueSize = 5;          // Maximum frames in delivery queue
-    size_t maxWorkerThreads = 2;           // Number of worker threads for frame processing
-    double maxFrameAgeMs = 100.0;          // Maximum age for frames before dropping (ms)
-    bool enableFrameSkipping = true;       // Allow skipping frames under load
-    bool enableLoadBalancing = true;       // Distribute listeners across worker threads
-    bool enablePriorityProcessing = true;  // Process higher priority listeners first
-    
-    // Performance monitoring
-    double statsReportIntervalMs = 5000.0; // Statistics reporting interval
+    // Default listener processor configuration
+    ListenerProcessorConfig defaultListenerConfig;
+
+    // Global publisher settings
+    bool useListenerPreferences = true;    // Use listener-specific queue preferences
     bool enablePerformanceLogging = false; // Log performance statistics
+    double statsReportIntervalMs = 5000.0; // Statistics reporting interval
+
+    // Backward compatibility settings
+    size_t maxFrameQueueSize = 3;          // Default queue size for listeners (deprecated)
+    double maxFrameAgeMs = 100.0;          // Default max frame age (deprecated)
+    bool enableFrameSkipping = true;       // Default frame skipping setting (deprecated)
 };
 
 /**
@@ -33,63 +35,47 @@ struct PublisherConfig {
  */
 struct PublisherStats {
     uint64_t framesPublished = 0;          // Total frames published
-    uint64_t framesDroppedQueue = 0;       // Frames dropped due to full queue
-    uint64_t framesDroppedAge = 0;         // Frames dropped due to age limit
-    uint64_t totalListenerCalls = 0;       // Total listener processing calls
+    uint64_t totalFrameEnqueues = 0;       // Total frame enqueue operations
+    uint64_t successfulEnqueues = 0;       // Successful frame enqueues
+    uint64_t failedEnqueues = 0;           // Failed frame enqueues
     double averagePublishTimeMs = 0.0;     // Average time to publish to all listeners
     double maxPublishTimeMs = 0.0;         // Maximum publish time seen
     int activeListeners = 0;               // Number of active listeners
     int enabledListeners = 0;              // Number of enabled listeners
-    
+    int runningProcessors = 0;             // Number of running processors
+
     void Reset() {
         framesPublished = 0;
-        framesDroppedQueue = 0;
-        framesDroppedAge = 0;
-        totalListenerCalls = 0;
+        totalFrameEnqueues = 0;
+        successfulEnqueues = 0;
+        failedEnqueues = 0;
         averagePublishTimeMs = 0.0;
         maxPublishTimeMs = 0.0;
     }
 };
 
-/**
- * Frame delivery task for worker threads
- */
-struct FrameDeliveryTask {
-    CameraFrame frame;
-    std::chrono::steady_clock::time_point timestamp;
-    std::vector<CameraFrameListenerPtr> listeners; // Listeners to deliver to
-    
-    FrameDeliveryTask(const CameraFrame& f, const std::vector<CameraFrameListenerPtr>& l)
-        : frame(f), timestamp(std::chrono::steady_clock::now()), listeners(l) {}
-    
-    double GetAgeMs() const {
-        auto now = std::chrono::steady_clock::now();
-        auto age = std::chrono::duration_cast<std::chrono::microseconds>(now - timestamp);
-        return age.count() / 1000.0;
-    }
-};
 
 /**
- * Thread-safe camera frame publisher with multi-subscriber support.
- * Delivers frames to registered listeners using background worker threads
- * to avoid blocking the camera capture thread.
+ * Thread-safe camera frame publisher with per-listener processing.
+ * Each listener gets its own dedicated thread and circular buffer queue.
+ * This ensures that slow listeners don't block other listeners.
  */
 class CameraFramePublisher {
 public:
     explicit CameraFramePublisher(const PublisherConfig& config = PublisherConfig{});
     ~CameraFramePublisher();
-    
+
     /**
-     * Start the publisher and worker threads.
+     * Start the publisher and all listener processors.
      * @return true if started successfully
      */
     bool Start();
-    
+
     /**
-     * Stop the publisher and worker threads.
+     * Stop the publisher and all listener processors.
      */
     void Stop();
-    
+
     /**
      * Check if publisher is currently running.
      * @return true if publisher is active
@@ -99,9 +85,10 @@ public:
     /**
      * Publish a frame to all registered listeners.
      * This method is thread-safe and non-blocking.
-     * 
+     * Each listener processes the frame independently on its own thread.
+     *
      * @param frame Frame to publish
-     * @return true if frame was queued for delivery
+     * @return true if frame was queued for delivery to at least one listener
      */
     bool PublishFrame(const CameraFrame& frame);
     
@@ -171,27 +158,58 @@ public:
     
     /**
      * Get current publisher statistics.
-     * 
+     *
      * @return Statistics structure
      */
     PublisherStats GetStats() const;
-    
+
     /**
      * Reset publisher statistics.
      */
     void ResetStats();
-    
+
     /**
-     * Get number of frames currently in delivery queue.
-     * 
-     * @return Queue size
+     * Get statistics for a specific listener processor.
+     *
+     * @param listenerId ID of listener to get stats for
+     * @return Processor statistics or empty optional if not found
      */
-    size_t GetQueueSize() const;
-    
+    std::optional<ListenerProcessorStats> GetListenerStats(const std::string& listenerId) const;
+
     /**
-     * Clear all frames from delivery queue.
+     * Get statistics for all listener processors.
+     *
+     * @return Map of listener ID to processor statistics
      */
-    void ClearQueue();
+    std::unordered_map<std::string, ListenerProcessorStats> GetAllListenerStats() const;
+
+    /**
+     * Get total number of frames queued across all listeners.
+     *
+     * @return Total queue size
+     */
+    size_t GetTotalQueueSize() const;
+
+    /**
+     * Get queue size for a specific listener.
+     *
+     * @param listenerId ID of listener
+     * @return Queue size or 0 if listener not found
+     */
+    size_t GetListenerQueueSize(const std::string& listenerId) const;
+
+    /**
+     * Clear all frames from all listener queues.
+     */
+    void ClearAllQueues();
+
+    /**
+     * Clear frames from a specific listener queue.
+     *
+     * @param listenerId ID of listener
+     * @return true if listener was found and queue cleared
+     */
+    bool ClearListenerQueue(const std::string& listenerId);
     
     /**
      * Notify listeners of camera configuration change.
@@ -204,32 +222,28 @@ private:
     PublisherConfig m_config;
     mutable std::mutex m_listenersMutex;
     std::vector<CameraFrameListenerPtr> m_listeners;
-    
-    // Worker thread management
-    std::vector<std::unique_ptr<std::thread>> m_workerThreads;
+
+    // Per-listener processors
+    mutable std::mutex m_processorsMutex;
+    std::unordered_map<std::string, std::unique_ptr<ListenerProcessor>> m_processors;
+
     std::atomic<bool> m_running{false};
-    std::atomic<bool> m_shouldStop{false};
-    
-    // Frame delivery queue
-    mutable std::mutex m_queueMutex;
-    std::queue<FrameDeliveryTask> m_frameQueue;
-    std::condition_variable m_queueCondition;
-    
+
     // Statistics
     mutable std::mutex m_statsMutex;
     PublisherStats m_stats;
-    
+
     // Private methods
-    void WorkerThreadFunc(int threadId);
-    void ProcessDeliveryTask(const FrameDeliveryTask& task, int threadId);
     std::vector<CameraFrameListenerPtr> GetEnabledListeners() const;
     std::vector<CameraFrameListenerPtr> GetEnabledListenersInternal() const; // No mutex lock - for internal use
     std::vector<CameraFrameListenerPtr> GetListenersForFormat(CameraFormat format) const;
-    bool ShouldDropFrame(const FrameDeliveryTask& task) const;
     void UpdatePublishStats(double processingTimeMs);
     void LogPerformanceStats();
-    void SortListenersByPriority(std::vector<CameraFrameListenerPtr>& listeners) const;
-    void RemoveExpiredFrames();
+    ListenerProcessorConfig CreateProcessorConfig(CameraFrameListenerPtr listener) const;
+    bool StartListenerProcessor(CameraFrameListenerPtr listener);
+    void StopListenerProcessor(const std::string& listenerId);
+    void StopAllProcessors();
+    void UpdateStatsCounts();
 };
 
 

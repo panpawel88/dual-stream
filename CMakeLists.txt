@@ -398,7 +398,9 @@ if(ENABLE_CAMERA_SUPPORT)
     # Add camera processing and management sources
     list(APPEND CAMERA_SOURCES
         src/camera/CameraFrame.cpp
+        src/camera/processing/ICameraFrameListener.cpp
         src/camera/processing/CameraFramePublisher.cpp
+        src/camera/processing/ListenerProcessor.cpp
         src/camera/processing/FaceDetectionSwitchingTrigger.cpp
         src/camera/CameraManager.cpp
     )

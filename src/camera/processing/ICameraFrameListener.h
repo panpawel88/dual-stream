@@ -5,6 +5,9 @@
 #include <string>
 #include <memory>
 
+// Forward declarations
+enum class OverflowPolicy;
+
 /**
  * Camera frame listener priority levels for processing order
  */
@@ -167,10 +170,42 @@ public:
     /**
      * Check if this listener supports frame skipping under load.
      * If true, the publisher may skip frames when the listener is falling behind.
-     * 
+     *
      * @return true if frame skipping is acceptable
      */
     virtual bool SupportsFrameSkipping() const { return true; }
+
+    /**
+     * Check if this listener has custom queue configuration preferences.
+     * If true, the publisher will call GetCustomQueueConfig() for settings.
+     *
+     * @return true if listener has custom preferences
+     */
+    virtual bool HasCustomQueueConfig() const { return false; }
+
+    /**
+     * Get preferred queue size for this listener.
+     * Used if GetPreferredQueueConfig() returns nullptr.
+     *
+     * @return Preferred queue size (0 = use default)
+     */
+    virtual size_t GetPreferredQueueSize() const { return 0; }
+
+    /**
+     * Get preferred overflow policy for this listener.
+     * Used if GetPreferredQueueConfig() returns nullptr.
+     *
+     * @return Preferred overflow policy
+     */
+    virtual OverflowPolicy GetPreferredOverflowPolicy() const;
+
+    /**
+     * Get preferred maximum frame age for this listener.
+     * Frames older than this will be dropped before processing.
+     *
+     * @return Maximum frame age in milliseconds (0 = no limit)
+     */
+    virtual double GetPreferredMaxFrameAgeMs() const { return 100.0; }
 
 protected:
     bool m_enabled = true;
@@ -216,3 +251,6 @@ protected:
  * Shared pointer type for camera frame listeners to enable safe multi-threaded access
  */
 using CameraFrameListenerPtr = std::shared_ptr<ICameraFrameListener>;
+
+// Forward declare OverflowPolicy enum - defined in CircularBuffer.h
+// Default implementation for GetPreferredOverflowPolicy - defined in cpp file if needed

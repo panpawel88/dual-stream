@@ -1,5 +1,6 @@
 #include "CameraManager.h"
 #include "../core/Config.h"
+#include "processing/CircularBuffer.h"
 
 CameraManager::CameraManager() 
     : m_state(CameraManagerState::UNINITIALIZED) {
@@ -42,15 +43,24 @@ CameraConfig CameraManager::CreateCameraConfigFromGlobal() {
 PublisherConfig CameraManager::CreatePublisherConfigFromGlobal() {
     Config* config = Config::GetInstance();
     PublisherConfig publisherConfig;
-    
-    publisherConfig.maxFrameQueueSize = config->GetInt("frame_publisher.max_frame_queue_size", 5);
-    publisherConfig.maxWorkerThreads = config->GetInt("frame_publisher.max_worker_threads", 2);
-    publisherConfig.maxFrameAgeMs = config->GetDouble("frame_publisher.max_frame_age_ms", 100.0);
-    publisherConfig.enableFrameSkipping = config->GetBool("frame_publisher.enable_frame_skipping", true);
-    publisherConfig.enablePriorityProcessing = config->GetBool("frame_publisher.enable_priority_processing", true);
+
+    // New structure maps to default listener config
+    publisherConfig.defaultListenerConfig.queueSize = config->GetInt("frame_publisher.max_frame_queue_size", 3);
+    publisherConfig.defaultListenerConfig.maxFrameAgeMs = config->GetDouble("frame_publisher.max_frame_age_ms", 100.0);
+    publisherConfig.defaultListenerConfig.enableFrameAgeCheck = config->GetBool("frame_publisher.enable_frame_skipping", true);
+    publisherConfig.defaultListenerConfig.overflowPolicy = OverflowPolicy::DROP_OLDEST;
+    publisherConfig.defaultListenerConfig.enableStatistics = true;
+
+    // Global publisher settings
+    publisherConfig.useListenerPreferences = config->GetBool("frame_publisher.use_listener_preferences", true);
     publisherConfig.enablePerformanceLogging = config->GetBool("frame_publisher.enable_performance_logging", false);
     publisherConfig.statsReportIntervalMs = config->GetDouble("frame_publisher.stats_report_interval_ms", 5000.0);
-    
+
+    // Backward compatibility settings (deprecated but kept for transition)
+    publisherConfig.maxFrameQueueSize = publisherConfig.defaultListenerConfig.queueSize;
+    publisherConfig.maxFrameAgeMs = publisherConfig.defaultListenerConfig.maxFrameAgeMs;
+    publisherConfig.enableFrameSkipping = publisherConfig.defaultListenerConfig.enableFrameAgeCheck;
+
     return publisherConfig;
 }
 
