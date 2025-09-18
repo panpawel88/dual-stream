@@ -152,7 +152,7 @@ public:
      * @param frame Output frame
      * @return true if frame captured successfully
      */
-    bool CaptureFrame(CameraFrame& frame);
+    std::shared_ptr<CameraFrame> CaptureFrame();
     
     /**
      * Get current camera configuration.
@@ -254,7 +254,7 @@ private:
     PublisherConfig m_publisherConfig;
     
     // Frame callback for camera source
-    void OnCameraFrame(const CameraFrame& frame);
+    void OnCameraFrame(std::shared_ptr<const CameraFrame> frame);
     
     // Internal helpers
     bool InitializeInternal(const CameraDeviceInfo& deviceInfo,

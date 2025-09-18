@@ -1,80 +1,33 @@
 #include "CameraFrame.h"
 #include <cstring>
 
-CameraFrame CameraFrame::CreateCPUFrame(int width, int height, CameraFormat format, 
-                                       const uint8_t* data, int pitch) {
-    CameraFrame frame;
-    frame.type = CameraFrameType::OPENCV_MAT;
-    frame.format = format;
-    frame.width = width;
-    frame.height = height;
-    frame.timestamp = std::chrono::steady_clock::now();
-    
-    // Calculate data size and create reference-counted buffer
-    size_t dataSize = pitch * height;
-    frame.frameData = std::make_shared<FrameData>(dataSize);
-    std::memcpy(frame.frameData->data.get(), data, dataSize);
-    
-    // Set CPU buffer pointers
-    frame.cpu.data = frame.frameData->data.get();
-    frame.cpu.pitch = pitch;
-    
-    // Create OpenCV Mat for zero-copy processing
-    int cvType = GetOpenCVType(format);
-    frame.cpu.mat = cv::Mat(height, width, cvType, 
-                           const_cast<uint8_t*>(frame.cpu.data), pitch);
-    
+// Include RealSense headers only in implementation
+#ifdef HAVE_REALSENSE
+#include <librealsense2/rs.hpp>
+#endif
+
+std::shared_ptr<CameraFrame> CameraFrame::CreateFromMat(
+    cv::Mat mat,
+    CameraFormat format,
+    std::optional<cv::Mat> depth) {
+
+    auto frame = std::make_shared<CameraFrame>();
+    frame->format = format;
+    frame->width = mat.cols;
+    frame->height = mat.rows;
+    frame->timestamp = std::chrono::steady_clock::now();
+
+    // Clone mat to ensure we own the data
+    frame->mat = mat.clone();
+
+    // Clone depth if provided
+    if (depth.has_value()) {
+        frame->depthMat = depth->clone();
+    }
+
     return frame;
 }
 
-CameraFrame CameraFrame::CreateFromMat(const cv::Mat& mat, CameraFormat format) {
-    CameraFrame frame;
-    frame.type = CameraFrameType::OPENCV_MAT;
-    frame.format = format;
-    frame.width = mat.cols;
-    frame.height = mat.rows;
-    frame.timestamp = std::chrono::steady_clock::now();
-    
-    // Use Mat's data directly if possible (continuous memory)
-    if (mat.isContinuous()) {
-        size_t dataSize = mat.total() * mat.elemSize();
-        frame.frameData = std::make_shared<FrameData>(dataSize);
-        std::memcpy(frame.frameData->data.get(), mat.data, dataSize);
-        
-        frame.cpu.data = frame.frameData->data.get();
-        frame.cpu.pitch = static_cast<int>(mat.step[0]);
-        frame.cpu.mat = cv::Mat(frame.height, frame.width, mat.type(), 
-                               const_cast<uint8_t*>(frame.cpu.data), frame.cpu.pitch);
-    } else {
-        // Copy to continuous buffer
-        cv::Mat continuous;
-        mat.copyTo(continuous);
-        return CreateFromMat(continuous, format);
-    }
-    
-    return frame;
-}
-
-bool CameraFrame::IsValid() const {
-    return width > 0 && height > 0 && cpu.data != nullptr;
-}
-
-int CameraFrame::GetBytesPerPixel() const {
-    switch (format) {
-        case CameraFormat::BGR8:
-        case CameraFormat::RGB8:
-            return 3;
-        case CameraFormat::BGRA8:
-        case CameraFormat::RGBA8:
-            return 4;
-        case CameraFormat::GRAY8:
-            return 1;
-        case CameraFormat::DEPTH16:
-            return 2;
-        default:
-            return 0;
-    }
-}
 
 int CameraFrame::GetOpenCVType(CameraFormat format) {
     switch (format) {
@@ -106,3 +59,53 @@ const char* CameraFrame::GetFormatName() const {
         default: return "UNKNOWN";
     }
 }
+
+#ifdef HAVE_REALSENSE
+// Template specialization for RealSense frames
+template<>
+std::shared_ptr<CameraFrame> CameraFrame::CreateFromRealSense<rs2::video_frame, rs2::depth_frame>(
+    const rs2::video_frame& colorFrame,
+    const rs2::depth_frame* depthFrame) {
+
+    auto frame = std::make_shared<CameraFrame>();
+    frame->timestamp = std::chrono::steady_clock::now();
+
+    // Extract color/IR data into cv::Mat
+    int w = colorFrame.get_width();
+    int h = colorFrame.get_height();
+    auto profile = colorFrame.get_profile().as<rs2::video_stream_profile>();
+
+    frame->width = w;
+    frame->height = h;
+
+    // Handle different RealSense formats
+    switch (profile.format()) {
+        case RS2_FORMAT_BGR8:
+            frame->format = CameraFormat::BGR8;
+            frame->mat = cv::Mat(h, w, CV_8UC3, (void*)colorFrame.get_data()).clone();
+            break;
+        case RS2_FORMAT_RGB8:
+            frame->format = CameraFormat::RGB8;
+            frame->mat = cv::Mat(h, w, CV_8UC3, (void*)colorFrame.get_data()).clone();
+            break;
+        case RS2_FORMAT_Y8:
+            frame->format = CameraFormat::GRAY8;
+            frame->mat = cv::Mat(h, w, CV_8UC1, (void*)colorFrame.get_data()).clone();
+            break;
+        default:
+            // Default to BGR8 and convert if needed
+            frame->format = CameraFormat::BGR8;
+            frame->mat = cv::Mat(h, w, CV_8UC3, (void*)colorFrame.get_data()).clone();
+            break;
+    }
+
+    // Extract depth if provided
+    if (depthFrame) {
+        int dw = depthFrame->get_width();
+        int dh = depthFrame->get_height();
+        frame->depthMat = cv::Mat(dh, dw, CV_16UC1, (void*)depthFrame->get_data()).clone();
+    }
+
+    return frame;
+}
+#endif

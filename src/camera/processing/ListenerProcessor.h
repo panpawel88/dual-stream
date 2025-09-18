@@ -71,14 +71,14 @@ struct ListenerProcessorStats {
  * Frame with timestamp for age checking
  */
 struct TimestampedFrame {
-    CameraFrame frame;
+    std::shared_ptr<const CameraFrame> frame;
     std::chrono::steady_clock::time_point timestamp;
 
     // Default constructor needed for CircularBuffer template
     TimestampedFrame()
         : timestamp(std::chrono::steady_clock::now()) {}
 
-    TimestampedFrame(const CameraFrame& f)
+    TimestampedFrame(std::shared_ptr<const CameraFrame> f)
         : frame(f), timestamp(std::chrono::steady_clock::now()) {}
 
     double GetAgeMs() const {
@@ -121,7 +121,7 @@ public:
      * @param frame Frame to process
      * @return true if frame was enqueued successfully
      */
-    bool EnqueueFrame(const CameraFrame& frame);
+    bool EnqueueFrame(std::shared_ptr<const CameraFrame> frame);
 
     /**
      * Get the associated listener.

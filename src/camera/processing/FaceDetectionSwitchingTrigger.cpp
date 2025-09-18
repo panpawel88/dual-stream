@@ -117,23 +117,23 @@ std::optional<size_t> FaceDetectionSwitchingTrigger::GetTargetVideoIndex() {
     return std::nullopt; // No switch requested
 }
 
-FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFrame& frame) {
-    if (!m_detectionInitialized) {
+FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(std::shared_ptr<const CameraFrame> frame) {
+    if (!m_detectionInitialized || !frame) {
         UpdateStats(FrameProcessingResult::SKIPPED, 0.0);
         return FrameProcessingResult::SKIPPED;
     }
-    
+
     auto startTime = std::chrono::steady_clock::now();
-    
+
     try {
         // Convert frame to OpenCV Mat
-        if (frame.cpu.mat.empty()) {
+        if (frame->mat.empty()) {
             UpdateStats(FrameProcessingResult::FAILED, 0.0);
             return FrameProcessingResult::FAILED;
         }
         
         // Preprocess frame for better detection
-        cv::Mat processedFrame = PreprocessFrame(frame.cpu.mat);
+        cv::Mat processedFrame = PreprocessFrame(frame->mat);
         
         // Detect faces
         std::vector<cv::Rect> faces = DetectFaces(processedFrame);
@@ -143,7 +143,7 @@ FrameProcessingResult FaceDetectionSwitchingTrigger::ProcessFrame(const CameraFr
         
         // Update preview window if enabled (use original frame for consistent brightness)
         if (m_previewEnabled) {
-            UpdatePreview(frame.cpu.mat, faces);
+            UpdatePreview(frame->mat, faces);
         }
         
         auto endTime = std::chrono::steady_clock::now();

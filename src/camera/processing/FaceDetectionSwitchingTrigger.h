@@ -102,7 +102,7 @@ public:
     std::string GetName() const override;
 
     // ICameraFrameListener interface implementation
-    FrameProcessingResult ProcessFrame(const CameraFrame& frame) override;
+    FrameProcessingResult ProcessFrame(std::shared_ptr<const CameraFrame> frame) override;
     ListenerPriority GetPriority() const override;
     std::string GetListenerId() const override;
     std::string GetListenerName() const override;

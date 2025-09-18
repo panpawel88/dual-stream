@@ -39,8 +39,8 @@ void CameraFramePublisher::Stop() {
     StopAllProcessors();
 }
 
-bool CameraFramePublisher::PublishFrame(const CameraFrame& frame) {
-    if (!m_running || !frame.IsValid()) {
+bool CameraFramePublisher::PublishFrame(std::shared_ptr<const CameraFrame> frame) {
+    if (!m_running || !frame || !frame->IsValid()) {
         return false;
     }
 
@@ -53,7 +53,7 @@ bool CameraFramePublisher::PublishFrame(const CameraFrame& frame) {
         for (auto& [listenerId, processor] : m_processors) {
             if (processor && processor->IsRunning() &&
                 processor->IsEnabled() &&
-                processor->CanProcessFormat(frame.format)) {
+                processor->CanProcessFormat(frame->format)) {
                 targetProcessors.push_back(processor.get());
             }
         }

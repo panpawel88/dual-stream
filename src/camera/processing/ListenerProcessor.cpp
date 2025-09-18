@@ -72,8 +72,8 @@ void ListenerProcessor::Stop() {
     }
 }
 
-bool ListenerProcessor::EnqueueFrame(const CameraFrame& frame) {
-    if (!m_running || !m_listener || !m_frameQueue) {
+bool ListenerProcessor::EnqueueFrame(std::shared_ptr<const CameraFrame> frame) {
+    if (!m_running || !m_listener || !m_frameQueue || !frame) {
         return false;
     }
 
@@ -83,7 +83,7 @@ bool ListenerProcessor::EnqueueFrame(const CameraFrame& frame) {
     }
 
     // Check if listener can process this format
-    if (!m_listener->CanProcessFormat(frame.format)) {
+    if (!m_listener->CanProcessFormat(frame->format)) {
         return true; // Not an error, just skip
     }
 

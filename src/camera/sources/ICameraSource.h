@@ -89,7 +89,7 @@ struct CameraStats {
 /**
  * Frame callback function type for asynchronous frame delivery
  */
-using FrameCallback = std::function<void(const CameraFrame& frame)>;
+using FrameCallback = std::function<void(std::shared_ptr<const CameraFrame> frame)>;
 
 /**
  * Abstract interface for camera sources.
@@ -126,10 +126,9 @@ public:
     
     /**
      * Capture a single frame (synchronous).
-     * @param frame Output frame structure
-     * @return true if frame captured successfully
+     * @return shared_ptr to captured frame, nullptr if capture failed
      */
-    virtual bool CaptureFrame(CameraFrame& frame) = 0;
+    virtual std::shared_ptr<CameraFrame> CaptureFrame() = 0;
     
     /**
      * Set callback for asynchronous frame delivery.
