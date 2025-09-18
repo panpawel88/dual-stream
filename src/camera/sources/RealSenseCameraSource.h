@@ -53,11 +53,22 @@ public:
      */
     static bool IsRealSenseAvailable();
 
+    /**
+     * Check if a path is a RealSense BAG file.
+     * @param path Path to check
+     * @return true if path appears to be a BAG file
+     */
+    static bool IsBagFile(const std::string& path);
+
 private:
     // RealSense pipeline objects (using unique_ptr to avoid header dependency)
     std::unique_ptr<rs2::pipeline> m_pipeline;
     std::unique_ptr<rs2::config> m_config_rs;
     std::unique_ptr<rs2::context> m_context;
+
+    // BAG file support
+    bool m_isPlayingBagFile{false};
+    std::string m_bagFilePath;
     
     std::unique_ptr<std::thread> m_captureThread;
     mutable std::mutex m_configMutex;

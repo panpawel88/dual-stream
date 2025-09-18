@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <filesystem>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -189,15 +190,48 @@ int main(int argc, char* argv[]) {
         cameraManager = std::make_unique<CameraManager>();
         CameraConfig cameraConfig = CameraManager::CreateCameraConfigFromGlobal();
         PublisherConfig publisherConfig = CameraManager::CreatePublisherConfigFromGlobal();
-        if (!cameraManager->InitializeAuto(cameraConfig, publisherConfig)) {
+
+        bool cameraInitialized = false;
+
+        // Check if a BAG file was specified
+        if (!args.realsenseBagPath.empty()) {
+            // Create a device info for the BAG file
+            CameraDeviceInfo bagDeviceInfo;
+            bagDeviceInfo.deviceName = "RealSense BAG: " + std::filesystem::path(args.realsenseBagPath).filename().string();
+            bagDeviceInfo.serialNumber = args.realsenseBagPath;
+            bagDeviceInfo.type = CameraSourceType::REALSENSE_DEVICE;
+            bagDeviceInfo.isBagFile = true;
+            bagDeviceInfo.supportsDepth = true;  // Assume BAG files may contain depth
+            bagDeviceInfo.maxWidth = 1920;
+            bagDeviceInfo.maxHeight = 1080;
+            bagDeviceInfo.maxFrameRate = 30.0;
+
+            if (cameraManager->Initialize(bagDeviceInfo, cameraConfig, publisherConfig)) {
+                cameraInitialized = true;
+                LOG_INFO("Camera initialized with BAG file: ", args.realsenseBagPath);
+            } else {
+                LOG_ERROR("Failed to initialize camera with BAG file: ", args.realsenseBagPath);
+                LOG_INFO("Falling back to auto camera detection...");
+            }
+        }
+
+        // If BAG file wasn't specified or failed, try auto detection
+        if (!cameraInitialized) {
+            if (cameraManager->InitializeAuto(cameraConfig, publisherConfig)) {
+                cameraInitialized = true;
+                LOG_INFO("Camera initialized for face detection");
+            }
+        }
+
+        if (!cameraInitialized) {
             LOG_ERROR("Failed to initialize camera for face detection");
             return 1;
         }
+
         if (!cameraManager->StartCapture()) {
             LOG_ERROR("Failed to start camera capture");
             return 1;
         }
-        LOG_INFO("Camera initialized for face detection");
     }
     
     // Create trigger configuration

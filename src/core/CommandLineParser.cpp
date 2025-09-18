@@ -15,6 +15,7 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
         args.errorMessage += "\n  --switching-algorithm=<alg>    Switching algorithm: immediate (default), predecoded, keyframe-sync";
         args.errorMessage += "\n  --trigger=<type>               Trigger type: keyboard (default), face_detection";
         args.errorMessage += "\n  --speed=<speed>                Playback speed: 0.05, 0.1, 0.2, 0.5, 1.0 (default), 2.0, 5.0, 10.0";
+        args.errorMessage += "\n  --realsense-bag=<path>         RealSense BAG file path for face detection";
         args.errorMessage += "\nNote: Command line options override configuration file settings";
         return args;
     }
@@ -89,9 +90,15 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
                 args.errorMessage = "Invalid playback speed format: " + speedStr + speedErrorMsg;
                 return args;
             }
+        } else if (arg.find("--realsense-bag=") == 0) {
+            args.realsenseBagPath = arg.substr(16); // Skip "--realsense-bag="
+            if (args.realsenseBagPath.empty()) {
+                args.errorMessage = "RealSense BAG file path cannot be empty";
+                return args;
+            }
         } else {
             args.errorMessage = "Unknown option: " + arg;
-            args.errorMessage += "\nValid options: --config=<path>, --debug, --switching-algorithm=<algorithm>, --trigger=<trigger>, --speed=<speed>";
+            args.errorMessage += "\nValid options: --config=<path>, --debug, --switching-algorithm=<algorithm>, --trigger=<trigger>, --speed=<speed>, --realsense-bag=<path>";
             return args;
         }
     }
@@ -110,7 +117,30 @@ VideoPlayerArgs CommandLineParser::Parse(int argc, char* argv[]) {
             return args;
         }
     }
-    
+
+    // Validate RealSense BAG file if provided
+    if (!args.realsenseBagPath.empty()) {
+        if (!FileExists(args.realsenseBagPath)) {
+            args.errorMessage = "RealSense BAG file does not exist: " + args.realsenseBagPath;
+            return args;
+        }
+
+        // Check if it has .bag extension
+        try {
+            std::filesystem::path bagPath(args.realsenseBagPath);
+            std::string extension = bagPath.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+            if (extension != ".bag") {
+                args.errorMessage = "RealSense file must be a .bag file: " + args.realsenseBagPath;
+                return args;
+            }
+        } catch (const std::exception& e) {
+            args.errorMessage = "Error checking BAG file extension: " + args.realsenseBagPath;
+            return args;
+        }
+    }
+
     args.valid = true;
     return args;
 }

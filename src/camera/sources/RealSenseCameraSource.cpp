@@ -1,4 +1,5 @@
 #include "RealSenseCameraSource.h"
+#include <algorithm>
 
 #ifdef HAVE_REALSENSE
 #include <librealsense2/rs.hpp>
@@ -15,45 +16,56 @@ RealSenseCameraSource::~RealSenseCameraSource() {
     StopCapture();
 }
 
-bool RealSenseCameraSource::Initialize(const CameraDeviceInfo& deviceInfo, 
+bool RealSenseCameraSource::Initialize(const CameraDeviceInfo& deviceInfo,
                                       const CameraConfig& config) {
     std::lock_guard<std::mutex> lock(m_configMutex);
-    
+
     if (!ValidateConfig(config)) {
         UpdateLastError("Invalid camera configuration");
         return false;
     }
-    
+
     if (!IsRealSenseAvailable()) {
         UpdateLastError("RealSense SDK not available");
         return false;
     }
-    
+
     m_deviceInfo = deviceInfo;
     m_config = config;
-    
+
+    // Check if this is a BAG file
+    if (IsBagFile(deviceInfo.serialNumber)) {
+        m_isPlayingBagFile = true;
+        m_bagFilePath = deviceInfo.serialNumber;
+    }
+
     return InitializePipeline();
 }
 
 bool RealSenseCameraSource::InitializePipeline() {
     try {
-        // Configure RGB stream
-        m_config_rs->enable_stream(RS2_STREAM_COLOR, m_config.width, m_config.height, 
-                                 RS2_FORMAT_BGR8, static_cast<int>(m_config.frameRate));
-        
-        // Configure depth stream if enabled
-        if (m_config.enableDepth && m_deviceInfo.supportsDepth) {
-            m_config_rs->enable_stream(RS2_STREAM_DEPTH, m_config.width, m_config.height, 
-                                     RS2_FORMAT_Z16, static_cast<int>(m_config.frameRate));
+        if (m_isPlayingBagFile) {
+            // Configure for BAG file playback
+            m_config_rs->enable_device_from_file(m_bagFilePath, true); // true = realtime playback
+        } else {
+            // Configure RGB stream for live camera
+            m_config_rs->enable_stream(RS2_STREAM_COLOR, m_config.width, m_config.height,
+                                     RS2_FORMAT_BGR8, static_cast<int>(m_config.frameRate));
+
+            // Configure depth stream if enabled
+            if (m_config.enableDepth && m_deviceInfo.supportsDepth) {
+                m_config_rs->enable_stream(RS2_STREAM_DEPTH, m_config.width, m_config.height,
+                                         RS2_FORMAT_Z16, static_cast<int>(m_config.frameRate));
+            }
+
+            // Enable specific device if serial number is provided
+            if (!m_deviceInfo.serialNumber.empty() &&
+                m_deviceInfo.serialNumber.find("realsense_") == 0) {
+                std::string serialNum = m_deviceInfo.serialNumber.substr(10); // Remove "realsense_" prefix
+                m_config_rs->enable_device(serialNum);
+            }
         }
-        
-        // Enable specific device if serial number is provided
-        if (!m_deviceInfo.serialNumber.empty() && 
-            m_deviceInfo.serialNumber.find("realsense_") == 0) {
-            std::string serialNum = m_deviceInfo.serialNumber.substr(10); // Remove "realsense_" prefix
-            m_config_rs->enable_device(serialNum);
-        }
-        
+
         return true;
     } catch (const rs2::error& e) {
         UpdateLastError(std::string("RealSense error: ") + e.what());
@@ -302,6 +314,23 @@ bool RealSenseCameraSource::IsRealSenseAvailable() {
     return true; // Available if compiled with RealSense support
 }
 
+bool RealSenseCameraSource::IsBagFile(const std::string& path) {
+    if (path.empty()) {
+        return false;
+    }
+
+    // Check file extension
+    size_t lastDot = path.find_last_of('.');
+    if (lastDot == std::string::npos) {
+        return false;
+    }
+
+    std::string extension = path.substr(lastDot);
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    return extension == ".bag";
+}
+
 #else // !HAVE_REALSENSE
 
 // Stub implementation when RealSense is not available
@@ -350,6 +379,23 @@ std::vector<CameraDeviceInfo> RealSenseCameraSource::EnumerateDevices() {
 
 bool RealSenseCameraSource::IsRealSenseAvailable() {
     return false;
+}
+
+bool RealSenseCameraSource::IsBagFile(const std::string& path) {
+    if (path.empty()) {
+        return false;
+    }
+
+    // Check file extension
+    size_t lastDot = path.find_last_of('.');
+    if (lastDot == std::string::npos) {
+        return false;
+    }
+
+    std::string extension = path.substr(lastDot);
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    return extension == ".bag";
 }
 
 #endif // HAVE_REALSENSE

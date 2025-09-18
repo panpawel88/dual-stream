@@ -20,14 +20,15 @@ enum class CameraSourceType {
 struct CameraDeviceInfo {
     int deviceIndex;            // Device index (for OpenCV) or serial number hash
     std::string deviceName;     // Human-readable device name
-    std::string serialNumber;   // Device serial number (if available)
+    std::string serialNumber;   // Device serial number (if available) or BAG file path
     CameraSourceType type;      // Type of camera source
     int maxWidth, maxHeight;    // Maximum supported resolution
     double maxFrameRate;        // Maximum supported frame rate
     bool supportsDepth;         // Whether device supports depth data
-    
+    bool isBagFile;             // Whether this represents a RealSense BAG file
+
     CameraDeviceInfo() : deviceIndex(-1), type(CameraSourceType::OPENCV_WEBCAM),
-                        maxWidth(0), maxHeight(0), maxFrameRate(0.0), supportsDepth(false) {}
+                        maxWidth(0), maxHeight(0), maxFrameRate(0.0), supportsDepth(false), isBagFile(false) {}
 };
 
 /**
