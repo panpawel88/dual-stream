@@ -17,10 +17,12 @@ bool CameraFramePublisher::Start() {
     m_running = true;
 
     // Start all existing listener processors
-    std::lock_guard<std::mutex> processorsLock(m_processorsMutex);
-    for (auto& [listenerId, processor] : m_processors) {
-        if (processor && !processor->IsRunning()) {
-            processor->Start();
+    {
+        std::lock_guard<std::mutex> processorsLock(m_processorsMutex);
+        for (auto& [listenerId, processor] : m_processors) {
+            if (processor && !processor->IsRunning()) {
+                processor->Start();
+            }
         }
     }
 
