@@ -382,21 +382,21 @@ ListenerProcessorConfig CameraFramePublisher::CreateProcessorConfig(CameraFrameL
         if (preferredQueueSize > 0) {
             config.queueSize = preferredQueueSize;
         } else {
-            config.queueSize = m_config.maxFrameQueueSize;
+            config.queueSize = m_config.defaultListenerConfig.queueSize;
         }
 
         config.overflowPolicy = listener->GetPreferredOverflowPolicy();
         config.maxFrameAgeMs = listener->GetPreferredMaxFrameAgeMs();
     } else {
         // Use global defaults
-        config.queueSize = m_config.maxFrameQueueSize;
-        config.maxFrameAgeMs = m_config.maxFrameAgeMs;
-        config.overflowPolicy = OverflowPolicy::DROP_OLDEST;
+        config.queueSize = m_config.defaultListenerConfig.queueSize;
+        config.maxFrameAgeMs = m_config.defaultListenerConfig.maxFrameAgeMs;
+        config.overflowPolicy = m_config.defaultListenerConfig.overflowPolicy;
     }
 
     // Copy global settings
     config.enableStatistics = true;
-    config.enableFrameAgeCheck = true;
+    config.enableFrameAgeCheck = m_config.defaultListenerConfig.enableFrameAgeCheck;
 
     return config;
 }

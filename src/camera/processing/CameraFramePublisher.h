@@ -21,13 +21,6 @@ struct PublisherConfig {
 
     // Global publisher settings
     bool useListenerPreferences = true;    // Use listener-specific queue preferences
-    bool enablePerformanceLogging = false; // Log performance statistics
-    double statsReportIntervalMs = 5000.0; // Statistics reporting interval
-
-    // Backward compatibility settings
-    size_t maxFrameQueueSize = 3;          // Default queue size for listeners (deprecated)
-    double maxFrameAgeMs = 100.0;          // Default max frame age (deprecated)
-    bool enableFrameSkipping = true;       // Default frame skipping setting (deprecated)
 };
 
 /**

@@ -53,13 +53,6 @@ PublisherConfig CameraManager::CreatePublisherConfigFromGlobal() {
 
     // Global publisher settings
     publisherConfig.useListenerPreferences = config->GetBool("frame_publisher.use_listener_preferences", true);
-    publisherConfig.enablePerformanceLogging = config->GetBool("frame_publisher.enable_performance_logging", false);
-    publisherConfig.statsReportIntervalMs = config->GetDouble("frame_publisher.stats_report_interval_ms", 5000.0);
-
-    // Backward compatibility settings (deprecated but kept for transition)
-    publisherConfig.maxFrameQueueSize = publisherConfig.defaultListenerConfig.queueSize;
-    publisherConfig.maxFrameAgeMs = publisherConfig.defaultListenerConfig.maxFrameAgeMs;
-    publisherConfig.enableFrameSkipping = publisherConfig.defaultListenerConfig.enableFrameAgeCheck;
 
     return publisherConfig;
 }
