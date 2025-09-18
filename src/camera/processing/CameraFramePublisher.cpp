@@ -13,17 +13,18 @@ bool CameraFramePublisher::Start() {
     if (m_running) {
         return true;
     }
-    
-    m_shouldStop = false;
+
     m_running = true;
-    
-    // Create worker threads
-    for (size_t i = 0; i < m_config.maxWorkerThreads; ++i) {
-        m_workerThreads.push_back(
-            std::make_unique<std::thread>(&CameraFramePublisher::WorkerThreadFunc, this, static_cast<int>(i))
-        );
+
+    // Start all existing listener processors
+    std::lock_guard<std::mutex> processorsLock(m_processorsMutex);
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor && !processor->IsRunning()) {
+            processor->Start();
+        }
     }
-    
+
+    UpdateStatsCounts();
     return true;
 }
 
@@ -31,221 +32,113 @@ void CameraFramePublisher::Stop() {
     if (!m_running) {
         return;
     }
-    
-    m_shouldStop = true;
+
     m_running = false;
-    
-    // Wake up all worker threads
-    m_queueCondition.notify_all();
-    
-    // Wait for worker threads to finish
-    for (auto& thread : m_workerThreads) {
-        if (thread && thread->joinable()) {
-            thread->join();
-        }
-    }
-    m_workerThreads.clear();
-    
-    // Clear remaining frames
-    ClearQueue();
+    StopAllProcessors();
 }
 
 bool CameraFramePublisher::PublishFrame(const CameraFrame& frame) {
     if (!m_running || !frame.IsValid()) {
         return false;
     }
-    
+
     auto startTime = std::chrono::steady_clock::now();
-    
-    // Get listeners that can process this frame format
-    auto targetListeners = GetListenersForFormat(frame.format);
-    if (targetListeners.empty()) {
-        return true; // No listeners interested in this format
-    }
-    
-    // Check queue size and drop old frames if necessary
+
+    // Get all processors that can handle this frame format
+    std::vector<ListenerProcessor*> targetProcessors;
     {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        
-        // Remove expired frames
-        RemoveExpiredFrames();
-        
-        // Check if queue is full
-        if (m_frameQueue.size() >= m_config.maxFrameQueueSize) {
-            if (m_config.enableFrameSkipping) {
-                // Drop oldest frame to make room
-                m_frameQueue.pop();
-                {
-                    std::lock_guard<std::mutex> statsLock(m_statsMutex);
-                    m_stats.framesDroppedQueue++;
-                }
-            } else {
-                return false; // Queue full and skipping disabled
+        std::lock_guard<std::mutex> lock(m_processorsMutex);
+        for (auto& [listenerId, processor] : m_processors) {
+            if (processor && processor->IsRunning() &&
+                processor->IsEnabled() &&
+                processor->CanProcessFormat(frame.format)) {
+                targetProcessors.push_back(processor.get());
             }
         }
-        
-        // Add new delivery task to queue
-        m_frameQueue.emplace(frame, targetListeners);
     }
-    
-    // Notify worker threads
-    m_queueCondition.notify_one();
-    
+
+    if (targetProcessors.empty()) {
+        return true; // No listeners interested in this format - not an error
+    }
+
+    // Enqueue frame to all eligible processors
+    size_t successfulEnqueues = 0;
+    size_t totalEnqueues = 0;
+
+    for (auto* processor : targetProcessors) {
+        totalEnqueues++;
+        if (processor->EnqueueFrame(frame)) {
+            successfulEnqueues++;
+        }
+    }
+
     // Update statistics
     auto endTime = std::chrono::steady_clock::now();
     auto publishTime = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     UpdatePublishStats(publishTime.count() / 1000.0);
-    
+
     {
         std::lock_guard<std::mutex> lock(m_statsMutex);
         m_stats.framesPublished++;
+        m_stats.totalFrameEnqueues += totalEnqueues;
+        m_stats.successfulEnqueues += successfulEnqueues;
+        m_stats.failedEnqueues += (totalEnqueues - successfulEnqueues);
     }
-    
-    return true;
-}
 
-void CameraFramePublisher::WorkerThreadFunc(int threadId) {
-    while (!m_shouldStop) {
-        std::unique_lock<std::mutex> lock(m_queueMutex);
-        
-        // Wait for frames or stop signal
-        m_queueCondition.wait(lock, [this]() {
-            return m_shouldStop || !m_frameQueue.empty();
-        });
-        
-        if (m_shouldStop) {
-            break;
-        }
-        
-        // Get next delivery task
-        if (m_frameQueue.empty()) {
-            continue;
-        }
-        
-        FrameDeliveryTask task = std::move(m_frameQueue.front());
-        m_frameQueue.pop();
-        lock.unlock();
-        
-        // Check if frame is too old
-        if (ShouldDropFrame(task)) {
-            std::lock_guard<std::mutex> statsLock(m_statsMutex);
-            m_stats.framesDroppedAge++;
-            continue;
-        }
-        
-        // Process the delivery task
-        ProcessDeliveryTask(task, threadId);
-    }
-}
-
-void CameraFramePublisher::ProcessDeliveryTask(const FrameDeliveryTask& task, int threadId) {
-    auto startTime = std::chrono::steady_clock::now();
-    
-    // Sort listeners by priority if enabled
-    auto listeners = task.listeners;
-    if (m_config.enablePriorityProcessing) {
-        SortListenersByPriority(listeners);
-    }
-    
-    // Deliver frame to each listener
-    for (auto& listener : listeners) {
-        if (!listener || !listener->IsEnabled()) {
-            continue;
-        }
-        
-        auto listenerStartTime = std::chrono::steady_clock::now();
-        
-        try {
-            FrameProcessingResult result = listener->ProcessFrame(task.frame);
-            
-            // Handle critical errors
-            if (result == FrameProcessingResult::CRITICAL_ERROR) {
-                // Disable listener on critical error
-                try {
-                    listener->SetEnabled(false);
-                } catch (...) {
-                    // Ignore errors when trying to disable listener
-                }
-            }
-            
-        } catch (const std::exception& e) {
-            // Handle listener exceptions gracefully
-            try {
-                listener->SetEnabled(false);
-            } catch (...) {
-                // Ignore errors when trying to disable listener
-            }
-        }
-        
-        auto listenerEndTime = std::chrono::steady_clock::now();
-        auto processingTime = std::chrono::duration_cast<std::chrono::microseconds>(
-            listenerEndTime - listenerStartTime);
-        
-        {
-            std::lock_guard<std::mutex> lock(m_statsMutex);
-            m_stats.totalListenerCalls++;
-        }
-    }
-    
-    auto endTime = std::chrono::steady_clock::now();
-    auto totalTime = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    
-    // Log performance if enabled
-    if (m_config.enablePerformanceLogging && totalTime.count() > 10000) { // > 10ms
-        // Could log slow processing here
-    }
+    return successfulEnqueues > 0;
 }
 
 bool CameraFramePublisher::RegisterListener(CameraFrameListenerPtr listener) {
     if (!listener) {
         return false;
     }
-    
-    std::lock_guard<std::mutex> lock(m_listenersMutex);
-    
+
+    std::lock_guard<std::mutex> listenersLock(m_listenersMutex);
+
     // Check if listener already registered
     auto it = std::find_if(m_listeners.begin(), m_listeners.end(),
         [&listener](const CameraFrameListenerPtr& existing) {
             return existing->GetListenerId() == listener->GetListenerId();
         });
-    
+
     if (it != m_listeners.end()) {
         return false; // Already registered
     }
-    
+
+    // Add to listeners list
     m_listeners.push_back(listener);
     listener->OnRegistered();
-    
-    {
-        std::lock_guard<std::mutex> statsLock(m_statsMutex);
-        m_stats.activeListeners = static_cast<int>(m_listeners.size());
-        m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
-    }
-    
-    return true;
+
+    // Start processor for this listener
+    bool processorStarted = StartListenerProcessor(listener);
+
+    // Update statistics
+    UpdateStatsCounts();
+
+    return processorStarted;
 }
 
 bool CameraFramePublisher::UnregisterListener(const std::string& listenerId) {
-    std::lock_guard<std::mutex> lock(m_listenersMutex);
-    
+    std::lock_guard<std::mutex> listenersLock(m_listenersMutex);
+
     auto it = std::find_if(m_listeners.begin(), m_listeners.end(),
         [&listenerId](const CameraFrameListenerPtr& listener) {
             return listener->GetListenerId() == listenerId;
         });
-    
+
     if (it != m_listeners.end()) {
         (*it)->OnUnregistered();
         m_listeners.erase(it);
-        
-        {
-            std::lock_guard<std::mutex> statsLock(m_statsMutex);
-            m_stats.activeListeners = static_cast<int>(m_listeners.size());
-            m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
-        }
-        
+
+        // Stop and remove processor
+        StopListenerProcessor(listenerId);
+
+        // Update statistics
+        UpdateStatsCounts();
+
         return true;
     }
-    
+
     return false;
 }
 
@@ -263,31 +156,26 @@ std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetListeners() const {
 
 CameraFrameListenerPtr CameraFramePublisher::GetListener(const std::string& listenerId) const {
     std::lock_guard<std::mutex> lock(m_listenersMutex);
-    
+
     auto it = std::find_if(m_listeners.begin(), m_listeners.end(),
         [&listenerId](const CameraFrameListenerPtr& listener) {
             return listener->GetListenerId() == listenerId;
         });
-    
+
     return (it != m_listeners.end()) ? *it : nullptr;
 }
 
 bool CameraFramePublisher::SetListenerEnabled(const std::string& listenerId, bool enabled) {
-    std::lock_guard<std::mutex> lock(m_listenersMutex);
-    
+    std::lock_guard<std::mutex> listenersLock(m_listenersMutex);
+
     auto it = std::find_if(m_listeners.begin(), m_listeners.end(),
         [&listenerId](const CameraFrameListenerPtr& listener) {
             return listener->GetListenerId() == listenerId;
         });
-    
+
     if (it != m_listeners.end()) {
         (*it)->SetEnabled(enabled);
-        
-        {
-            std::lock_guard<std::mutex> statsLock(m_statsMutex);
-            m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
-        }
-        
+        UpdateStatsCounts();
         return true;
     }
     return false;
@@ -302,34 +190,32 @@ std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetEnabledListenersInt
     // This method assumes m_listenersMutex is already locked by the caller
     std::vector<CameraFrameListenerPtr> enabledListeners;
     for (const auto& listener : m_listeners) {
-        // Defensive check: ensure listener is valid before accessing its methods
         if (!listener) {
-            continue; // Skip null pointers
+            continue;
         }
-        
+
         try {
             if (listener->IsEnabled()) {
                 enabledListeners.push_back(listener);
             }
         } catch (const std::exception& e) {
-            // Log the error but continue processing other listeners
-            // Note: In a real implementation, we might want to remove invalid listeners
+            // Skip listeners that throw exceptions
             continue;
         }
     }
-    
+
     return enabledListeners;
 }
 
 std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetListenersForFormat(CameraFormat format) const {
     auto enabledListeners = GetEnabledListeners();
-    
+
     std::vector<CameraFrameListenerPtr> compatibleListeners;
     for (const auto& listener : enabledListeners) {
         if (!listener) {
-            continue; // Skip null pointers
+            continue;
         }
-        
+
         try {
             if (listener->CanProcessFormat(format)) {
                 compatibleListeners.push_back(listener);
@@ -339,49 +225,8 @@ std::vector<CameraFrameListenerPtr> CameraFramePublisher::GetListenersForFormat(
             continue;
         }
     }
-    
+
     return compatibleListeners;
-}
-
-bool CameraFramePublisher::ShouldDropFrame(const FrameDeliveryTask& task) const {
-    return task.GetAgeMs() > m_config.maxFrameAgeMs;
-}
-
-void CameraFramePublisher::UpdatePublishStats(double processingTimeMs) {
-    std::lock_guard<std::mutex> lock(m_statsMutex);
-    
-    m_stats.maxPublishTimeMs = std::max(m_stats.maxPublishTimeMs, processingTimeMs);
-    
-    if (m_stats.framesPublished > 1) {
-        m_stats.averagePublishTimeMs = (m_stats.averagePublishTimeMs * 0.9) + 
-                                      (processingTimeMs * 0.1);
-    } else {
-        m_stats.averagePublishTimeMs = processingTimeMs;
-    }
-}
-
-void CameraFramePublisher::SortListenersByPriority(std::vector<CameraFrameListenerPtr>& listeners) const {
-    std::sort(listeners.begin(), listeners.end(),
-        [](const CameraFrameListenerPtr& a, const CameraFrameListenerPtr& b) {
-            return static_cast<int>(a->GetPriority()) > static_cast<int>(b->GetPriority());
-        });
-}
-
-void CameraFramePublisher::RemoveExpiredFrames() {
-    // This should be called with m_queueMutex already locked
-    std::queue<FrameDeliveryTask> validFrames;
-    
-    while (!m_frameQueue.empty()) {
-        auto& task = m_frameQueue.front();
-        if (!ShouldDropFrame(task)) {
-            validFrames.push(std::move(task));
-        } else {
-            m_stats.framesDroppedAge++;
-        }
-        m_frameQueue.pop();
-    }
-    
-    m_frameQueue = std::move(validFrames);
 }
 
 PublisherConfig CameraFramePublisher::GetConfig() const {
@@ -389,16 +234,22 @@ PublisherConfig CameraFramePublisher::GetConfig() const {
 }
 
 bool CameraFramePublisher::UpdateConfig(const PublisherConfig& config) {
-    bool needsRestart = (config.maxWorkerThreads != m_config.maxWorkerThreads);
-    
-    if (needsRestart && m_running) {
-        Stop();
-        m_config = config;
-        return Start();
-    } else {
-        m_config = config;
-        return true;
+    m_config = config;
+
+    // Update all processor configurations if needed
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            // Create new config for this processor
+            auto listener = GetListener(listenerId);
+            if (listener) {
+                auto newProcessorConfig = CreateProcessorConfig(listener);
+                processor->UpdateConfig(newProcessorConfig);
+            }
+        }
     }
+
+    return true;
 }
 
 PublisherStats CameraFramePublisher::GetStats() const {
@@ -409,28 +260,213 @@ PublisherStats CameraFramePublisher::GetStats() const {
 void CameraFramePublisher::ResetStats() {
     std::lock_guard<std::mutex> statsLock(m_statsMutex);
     std::lock_guard<std::mutex> listenersLock(m_listenersMutex);
-    
+
     m_stats.Reset();
-    m_stats.activeListeners = static_cast<int>(m_listeners.size());
-    m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
+    UpdateStatsCounts();
+
+    // Reset all processor stats
+    std::lock_guard<std::mutex> processorsLock(m_processorsMutex);
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            processor->ResetStats();
+        }
+    }
 }
 
-size_t CameraFramePublisher::GetQueueSize() const {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
-    return m_frameQueue.size();
+std::optional<ListenerProcessorStats> CameraFramePublisher::GetListenerStats(const std::string& listenerId) const {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    auto it = m_processors.find(listenerId);
+    if (it != m_processors.end() && it->second) {
+        return it->second->GetStats();
+    }
+
+    return std::nullopt;
 }
 
-void CameraFramePublisher::ClearQueue() {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
-    std::queue<FrameDeliveryTask> empty;
-    m_frameQueue.swap(empty);
+std::unordered_map<std::string, ListenerProcessorStats> CameraFramePublisher::GetAllListenerStats() const {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    std::unordered_map<std::string, ListenerProcessorStats> allStats;
+    for (const auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            allStats[listenerId] = processor->GetStats();
+        }
+    }
+
+    return allStats;
+}
+
+size_t CameraFramePublisher::GetTotalQueueSize() const {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    size_t totalSize = 0;
+    for (const auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            totalSize += processor->GetQueueSize();
+        }
+    }
+
+    return totalSize;
+}
+
+size_t CameraFramePublisher::GetListenerQueueSize(const std::string& listenerId) const {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    auto it = m_processors.find(listenerId);
+    if (it != m_processors.end() && it->second) {
+        return it->second->GetQueueSize();
+    }
+
+    return 0;
+}
+
+void CameraFramePublisher::ClearAllQueues() {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            processor->ClearQueue();
+        }
+    }
+}
+
+bool CameraFramePublisher::ClearListenerQueue(const std::string& listenerId) {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    auto it = m_processors.find(listenerId);
+    if (it != m_processors.end() && it->second) {
+        it->second->ClearQueue();
+        return true;
+    }
+
+    return false;
 }
 
 void CameraFramePublisher::NotifyConfigChange(const CameraConfig& config) {
-    auto listeners = GetListeners();
-    for (auto& listener : listeners) {
-        if (listener) {
-            listener->OnCameraConfigChanged(config);
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            processor->NotifyConfigChange(config);
         }
     }
+}
+
+void CameraFramePublisher::UpdatePublishStats(double processingTimeMs) {
+    std::lock_guard<std::mutex> lock(m_statsMutex);
+
+    m_stats.maxPublishTimeMs = std::max(m_stats.maxPublishTimeMs, processingTimeMs);
+
+    if (m_stats.framesPublished > 1) {
+        m_stats.averagePublishTimeMs = (m_stats.averagePublishTimeMs * 0.9) +
+                                      (processingTimeMs * 0.1);
+    } else {
+        m_stats.averagePublishTimeMs = processingTimeMs;
+    }
+}
+
+void CameraFramePublisher::LogPerformanceStats() {
+    // Performance logging implementation could go here
+    // For now, this is a placeholder
+}
+
+ListenerProcessorConfig CameraFramePublisher::CreateProcessorConfig(CameraFrameListenerPtr listener) const {
+    ListenerProcessorConfig config;
+
+    if (m_config.useListenerPreferences && listener) {
+        // Use individual preference methods
+        size_t preferredQueueSize = listener->GetPreferredQueueSize();
+        if (preferredQueueSize > 0) {
+            config.queueSize = preferredQueueSize;
+        } else {
+            config.queueSize = m_config.maxFrameQueueSize;
+        }
+
+        config.overflowPolicy = listener->GetPreferredOverflowPolicy();
+        config.maxFrameAgeMs = listener->GetPreferredMaxFrameAgeMs();
+    } else {
+        // Use global defaults
+        config.queueSize = m_config.maxFrameQueueSize;
+        config.maxFrameAgeMs = m_config.maxFrameAgeMs;
+        config.overflowPolicy = OverflowPolicy::DROP_OLDEST;
+    }
+
+    // Copy global settings
+    config.enableStatistics = true;
+    config.enableFrameAgeCheck = true;
+
+    return config;
+}
+
+bool CameraFramePublisher::StartListenerProcessor(CameraFrameListenerPtr listener) {
+    if (!listener) {
+        return false;
+    }
+
+    std::string listenerId = listener->GetListenerId();
+
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    // Check if processor already exists
+    auto it = m_processors.find(listenerId);
+    if (it != m_processors.end()) {
+        return it->second->IsRunning();
+    }
+
+    // Create processor configuration
+    auto config = CreateProcessorConfig(listener);
+
+    // Create and start processor
+    auto processor = std::make_unique<ListenerProcessor>(listener, config);
+    bool started = false;
+
+    if (m_running) {
+        started = processor->Start();
+    }
+
+    m_processors[listenerId] = std::move(processor);
+
+    return started || !m_running; // Success if started or publisher not running yet
+}
+
+void CameraFramePublisher::StopListenerProcessor(const std::string& listenerId) {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    auto it = m_processors.find(listenerId);
+    if (it != m_processors.end()) {
+        if (it->second) {
+            it->second->Stop();
+        }
+        m_processors.erase(it);
+    }
+}
+
+void CameraFramePublisher::StopAllProcessors() {
+    std::lock_guard<std::mutex> lock(m_processorsMutex);
+
+    for (auto& [listenerId, processor] : m_processors) {
+        if (processor) {
+            processor->Stop();
+        }
+    }
+    // Don't clear processors here - they may be restarted
+}
+
+void CameraFramePublisher::UpdateStatsCounts() {
+    // This should be called with m_listenersMutex already locked
+    std::lock_guard<std::mutex> statsLock(m_statsMutex);
+    std::lock_guard<std::mutex> processorsLock(m_processorsMutex);
+
+    m_stats.activeListeners = static_cast<int>(m_listeners.size());
+    m_stats.enabledListeners = static_cast<int>(GetEnabledListenersInternal().size());
+
+    // Count running processors
+    int runningProcessors = 0;
+    for (const auto& [listenerId, processor] : m_processors) {
+        if (processor && processor->IsRunning()) {
+            runningProcessors++;
+        }
+    }
+    m_stats.runningProcessors = runningProcessors;
 }
