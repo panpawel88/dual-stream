@@ -133,33 +133,33 @@ bool OpenCVCameraSource::IsCapturing() const {
     return m_isCapturing;
 }
 
-bool OpenCVCameraSource::CaptureFrame(CameraFrame& frame) {
+std::shared_ptr<CameraFrame> OpenCVCameraSource::CaptureFrame() {
     if (!m_isCapturing) {
         UpdateLastError("Camera not capturing");
-        return false;
+        return nullptr;
     }
-    
+
     std::unique_lock<std::mutex> lock(m_frameMutex);
-    
+
     // Wait for new frame with timeout
-    if (!m_frameCondition.wait_for(lock, std::chrono::milliseconds(100), 
+    if (!m_frameCondition.wait_for(lock, std::chrono::milliseconds(100),
                                   [this]() { return m_hasNewFrame || m_shouldStop; })) {
         UpdateLastError("Timeout waiting for frame");
-        return false;
+        return nullptr;
     }
-    
+
     if (m_shouldStop) {
-        return false;
+        return nullptr;
     }
-    
+
     if (m_hasNewFrame && !m_currentFrame.empty()) {
-        frame = ConvertMatToFrame(m_currentFrame);
+        auto frame = ConvertMatToFrame(m_currentFrame);
         m_hasNewFrame = false;
-        return frame.IsValid();
+        return frame;
     }
-    
+
     UpdateLastError("No frame available");
-    return false;
+    return nullptr;
 }
 
 void OpenCVCameraSource::SetFrameCallback(FrameCallback callback) {
@@ -200,8 +200,8 @@ void OpenCVCameraSource::CaptureThreadFunc() {
         
         // Call async callback if set
         if (m_frameCallback) {
-            CameraFrame cameraFrame = ConvertMatToFrame(frame);
-            if (cameraFrame.IsValid()) {
+            auto cameraFrame = ConvertMatToFrame(frame);
+            if (cameraFrame && cameraFrame->IsValid()) {
                 m_frameCallback(cameraFrame);
             }
         }
@@ -213,11 +213,11 @@ void OpenCVCameraSource::CaptureThreadFunc() {
     }
 }
 
-CameraFrame OpenCVCameraSource::ConvertMatToFrame(const cv::Mat& mat) {
+std::shared_ptr<CameraFrame> OpenCVCameraSource::ConvertMatToFrame(const cv::Mat& mat) {
     if (mat.empty()) {
-        return CameraFrame{};
+        return nullptr;
     }
-    
+
     // Determine format based on channels
     CameraFormat format;
     if (mat.channels() == 1) {
@@ -227,9 +227,9 @@ CameraFrame OpenCVCameraSource::ConvertMatToFrame(const cv::Mat& mat) {
     } else if (mat.channels() == 4) {
         format = CameraFormat::BGRA8;
     } else {
-        return CameraFrame{};  // Unsupported format
+        return nullptr;  // Unsupported format
     }
-    
+
     return CameraFrame::CreateFromMat(mat, format);
 }
 

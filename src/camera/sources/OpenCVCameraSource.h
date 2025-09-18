@@ -21,7 +21,7 @@ public:
     bool StartCapture() override;
     void StopCapture() override;
     bool IsCapturing() const override;
-    bool CaptureFrame(CameraFrame& frame) override;
+    std::shared_ptr<CameraFrame> CaptureFrame() override;
     void SetFrameCallback(FrameCallback callback) override;
     CameraConfig GetConfig() const override;
     bool UpdateConfig(const CameraConfig& config) override;
@@ -71,7 +71,7 @@ private:
     bool InitializeCapture();
     bool ConfigureCamera();
     void CaptureThreadFunc();
-    CameraFrame ConvertMatToFrame(const cv::Mat& mat);
+    std::shared_ptr<CameraFrame> ConvertMatToFrame(const cv::Mat& mat);
     bool ValidateConfig(const CameraConfig& config);
     void UpdateLastError(const std::string& error);
     

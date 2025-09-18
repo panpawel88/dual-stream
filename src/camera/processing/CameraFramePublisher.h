@@ -83,7 +83,7 @@ public:
      * @param frame Frame to publish
      * @return true if frame was queued for delivery to at least one listener
      */
-    bool PublishFrame(const CameraFrame& frame);
+    bool PublishFrame(std::shared_ptr<const CameraFrame> frame);
     
     /**
      * Register a listener for frame delivery.

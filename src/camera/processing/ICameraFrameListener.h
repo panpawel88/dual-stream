@@ -66,11 +66,11 @@ public:
     /**
      * Process a camera frame.
      * This method will be called from a background thread to avoid blocking camera capture.
-     * 
+     *
      * @param frame Camera frame to process
      * @return Processing result indicating success/failure/skip status
      */
-    virtual FrameProcessingResult ProcessFrame(const CameraFrame& frame) = 0;
+    virtual FrameProcessingResult ProcessFrame(std::shared_ptr<const CameraFrame> frame) = 0;
     
     /**
      * Get the listener's priority for processing order.

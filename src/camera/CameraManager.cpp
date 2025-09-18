@@ -115,7 +115,7 @@ bool CameraManager::InitializeInternal(const CameraDeviceInfo& deviceInfo,
     }
     
     // Set up camera frame callback
-    m_cameraSource->SetFrameCallback([this](const CameraFrame& frame) {
+    m_cameraSource->SetFrameCallback([this](std::shared_ptr<const CameraFrame> frame) {
         OnCameraFrame(frame);
     });
     
@@ -232,15 +232,15 @@ bool CameraManager::SetListenerEnabled(const std::string& listenerId, bool enabl
     return m_publisher->SetListenerEnabled(listenerId, enabled);
 }
 
-bool CameraManager::CaptureFrame(CameraFrame& frame) {
+std::shared_ptr<CameraFrame> CameraManager::CaptureFrame() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     if (!m_cameraSource) {
         UpdateLastError("Camera source not initialized");
-        return false;
+        return nullptr;
     }
-    
-    return m_cameraSource->CaptureFrame(frame);
+
+    return m_cameraSource->CaptureFrame();
 }
 
 CameraConfig CameraManager::GetCameraConfig() const {
@@ -363,9 +363,9 @@ std::vector<CameraDeviceInfo> CameraManager::EnumerateDevices(CameraSourceType s
     return CameraSourceFactory::EnumerateDevices(sourceType);
 }
 
-void CameraManager::OnCameraFrame(const CameraFrame& frame) {
+void CameraManager::OnCameraFrame(std::shared_ptr<const CameraFrame> frame) {
     // This callback is called from camera source thread
-    if (m_publisher && frame.IsValid()) {
+    if (m_publisher && frame && frame->IsValid()) {
         m_publisher->PublishFrame(frame);
     }
 }

@@ -29,7 +29,7 @@ public:
     bool StartCapture() override;
     void StopCapture() override;
     bool IsCapturing() const override;
-    bool CaptureFrame(CameraFrame& frame) override;
+    std::shared_ptr<CameraFrame> CaptureFrame() override;
     void SetFrameCallback(FrameCallback callback) override;
     CameraConfig GetConfig() const override;
     bool UpdateConfig(const CameraConfig& config) override;
@@ -79,8 +79,8 @@ private:
     // Private methods
     bool InitializePipeline();
     void CaptureThreadFunc();
-    CameraFrame ConvertFramesetToFrame(const rs2::frameset& frameset);
-    CameraFrame ConvertRGBFrame(const rs2::frame& rgbFrame);
+    std::shared_ptr<CameraFrame> ConvertFramesetToFrame(const rs2::frameset& frameset);
+    std::shared_ptr<CameraFrame> ConvertRGBFrame(const rs2::frame& rgbFrame);
     bool ValidateConfig(const CameraConfig& config);
     void UpdateLastError(const std::string& error);
     CameraFormat GetRealSenseFormat(int format);

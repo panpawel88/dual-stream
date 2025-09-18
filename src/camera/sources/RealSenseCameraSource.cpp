@@ -108,45 +108,43 @@ bool RealSenseCameraSource::IsCapturing() const {
     return m_isCapturing;
 }
 
-bool RealSenseCameraSource::CaptureFrame(CameraFrame& frame) {
+std::shared_ptr<CameraFrame> RealSenseCameraSource::CaptureFrame() {
     if (!m_isCapturing) {
         UpdateLastError("Camera not capturing");
-        return false;
+        return nullptr;
     }
-    
+
     std::unique_lock<std::mutex> lock(m_frameMutex);
-    
+
     // Wait for new frame with timeout
-    if (!m_frameCondition.wait_for(lock, std::chrono::milliseconds(100), 
+    if (!m_frameCondition.wait_for(lock, std::chrono::milliseconds(100),
                                   [this]() { return m_hasNewFrame || m_shouldStop; })) {
         UpdateLastError("Timeout waiting for frame");
-        return false;
+        return nullptr;
     }
-    
+
     if (m_shouldStop) {
-        return false;
+        return nullptr;
     }
-    
+
     if (m_hasNewFrame && !m_currentRGBFrame.empty()) {
-        // Create frame from current RGB data
-        frame = CameraFrame::CreateCPUFrame(m_frameWidth, m_frameHeight, 
-                                           m_config.format, 
-                                           m_currentRGBFrame.data(), 
-                                           m_frameWidth * 3); // BGR8 format
-        
-        // Add depth data if available
+        // Create frame from current RGB data using cv::Mat
+        cv::Mat rgbMat(m_frameHeight, m_frameWidth, CV_8UC3, m_currentRGBFrame.data());
+
+        // Create depth Mat if available
+        std::optional<cv::Mat> depthMat;
         if (!m_currentDepthFrame.empty()) {
-            frame.realsense.depthData = reinterpret_cast<const uint8_t*>(m_currentDepthFrame.data());
-            frame.realsense.depthWidth = m_depthWidth;
-            frame.realsense.depthHeight = m_depthHeight;
+            depthMat = cv::Mat(m_frameHeight, m_frameWidth, CV_16UC1, m_currentDepthFrame.data());
         }
-        
+
+        auto frame = CameraFrame::CreateFromMat(rgbMat, m_config.format, depthMat);
+
         m_hasNewFrame = false;
-        return frame.IsValid();
+        return frame;
     }
-    
+
     UpdateLastError("No frame available");
-    return false;
+    return nullptr;
 }
 
 void RealSenseCameraSource::SetFrameCallback(FrameCallback callback) {
@@ -200,8 +198,8 @@ void RealSenseCameraSource::CaptureThreadFunc() {
                     
                     // Call async callback if set
                     if (m_frameCallback) {
-                        CameraFrame cameraFrame = ConvertFramesetToFrame(frames);
-                        if (cameraFrame.IsValid()) {
+                        auto cameraFrame = ConvertFramesetToFrame(frames);
+                        if (cameraFrame && cameraFrame->IsValid()) {
                             m_frameCallback(cameraFrame);
                         }
                     }
@@ -215,25 +213,31 @@ void RealSenseCameraSource::CaptureThreadFunc() {
     }
 }
 
-CameraFrame RealSenseCameraSource::ConvertFramesetToFrame(const rs2::frameset& frameset) {
-    rs2::frame colorFrame = frameset.get_color_frame();
+std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertFramesetToFrame(const rs2::frameset& frameset) {
+    rs2::video_frame colorFrame = frameset.get_color_frame();
     if (!colorFrame) {
-        return CameraFrame{};
+        return nullptr;
     }
-    
-    return ConvertRGBFrame(colorFrame);
+
+    // Get depth frame if available
+    rs2::depth_frame depthFrame = frameset.get_depth_frame();
+    rs2::depth_frame* depthPtr = depthFrame ? &depthFrame : nullptr;
+
+    // Use template specialization
+    return CameraFrame::CreateFromRealSense(colorFrame, depthPtr);
 }
 
-CameraFrame RealSenseCameraSource::ConvertRGBFrame(const rs2::frame& rgbFrame) {
+std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertRGBFrame(const rs2::frame& rgbFrame) {
     int width = rgbFrame.as<rs2::video_frame>().get_width();
     int height = rgbFrame.as<rs2::video_frame>().get_height();
-    int stride = rgbFrame.as<rs2::video_frame>().get_stride_in_bytes();
-    
+
     CameraFormat format = GetRealSenseFormat(rgbFrame.get_profile().format());
-    
-    return CameraFrame::CreateCPUFrame(width, height, format,
-                                      static_cast<const uint8_t*>(rgbFrame.get_data()),
-                                      stride);
+
+    // Create cv::Mat from RealSense data
+    cv::Mat mat(height, width, CameraFrame::GetOpenCVType(format),
+                const_cast<void*>(rgbFrame.get_data()));
+
+    return CameraFrame::CreateFromMat(mat, format);
 }
 
 CameraFormat RealSenseCameraSource::GetRealSenseFormat(int format) {
@@ -323,21 +327,21 @@ bool RealSenseCameraSource::IsCapturing() const {
     return false; 
 }
 
-bool RealSenseCameraSource::CaptureFrame(CameraFrame&) {
+std::shared_ptr<CameraFrame> RealSenseCameraSource::CaptureFrame() {
     UpdateLastError("RealSense SDK not available");
-    return false;
+    return nullptr;
 }
 
 void RealSenseCameraSource::SetFrameCallback(FrameCallback) {}
 
 void RealSenseCameraSource::CaptureThreadFunc() {}
 
-CameraFrame RealSenseCameraSource::ConvertFramesetToFrame(const rs2::frameset&) {
-    return CameraFrame{};
+std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertFramesetToFrame(const rs2::frameset&) {
+    return nullptr;
 }
 
-CameraFrame RealSenseCameraSource::ConvertRGBFrame(const rs2::frame&) {
-    return CameraFrame{};
+std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertRGBFrame(const rs2::frame&) {
+    return nullptr;
 }
 
 std::vector<CameraDeviceInfo> RealSenseCameraSource::EnumerateDevices() {
