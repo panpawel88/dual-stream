@@ -139,6 +139,11 @@ std::shared_ptr<CameraFrame> OpenCVCameraSource::CaptureFrame() {
         return nullptr;
     }
 
+    if (!m_config.enableSyncCapture) {
+        UpdateLastError("Synchronous capture is disabled");
+        return nullptr;
+    }
+
     std::unique_lock<std::mutex> lock(m_frameMutex);
 
     // Wait for new frame with timeout
@@ -189,14 +194,16 @@ void OpenCVCameraSource::CaptureThreadFunc() {
         
         UpdateFrameRateStats();
         
-        // Update frame buffer for synchronous capture
-        {
-            std::lock_guard<std::mutex> lock(m_frameMutex);
-            frame.copyTo(m_currentFrame);
-            m_frameTimestamp = std::chrono::steady_clock::now();
-            m_hasNewFrame = true;
+        // Update frame buffer for synchronous capture only if enabled
+        if (m_config.enableSyncCapture) {
+            {
+                std::lock_guard<std::mutex> lock(m_frameMutex);
+                frame.copyTo(m_currentFrame);
+                m_frameTimestamp = std::chrono::steady_clock::now();
+                m_hasNewFrame = true;
+            }
+            m_frameCondition.notify_one();
         }
-        m_frameCondition.notify_one();
         
         // Call async callback if set
         if (m_frameCallback) {

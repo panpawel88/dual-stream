@@ -67,13 +67,14 @@ struct CameraConfig {
     CameraFormat format = CameraFormat::BGR8;  // Desired frame format
     bool enableDepth = false;           // Enable depth capture (RealSense only)
     int bufferSize = 3;                 // Internal frame buffer size
-    
+    bool enableSyncCapture = false;     // Enable synchronous CaptureFrame() support
+
     // OpenCV specific settings
     CameraBackend backend = CameraBackend::AUTO;  // Camera backend selection
     int brightness = -1;                // Camera brightness (-1 = auto)
     int contrast = -1;                  // Camera contrast (-1 = auto)
     int exposure = -1;                  // Camera exposure (-1 = auto)
-    
+
     // RealSense specific settings
     bool enableAutoExposure = true;     // Enable auto exposure
     bool enableEmitter = true;          // Enable IR emitter for depth
@@ -137,7 +138,7 @@ public:
     
     /**
      * Capture a single frame (synchronous).
-     * @return shared_ptr to captured frame, nullptr if capture failed
+     * @return shared_ptr to captured frame, nullptr if capture failed or sync capture disabled
      */
     virtual std::shared_ptr<CameraFrame> CaptureFrame() = 0;
     

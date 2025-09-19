@@ -37,6 +37,7 @@ CameraConfig CameraManager::CreateCameraConfigFromGlobal() {
     
     cameraConfig.brightness = config->GetInt("camera.brightness", -1);
     cameraConfig.enableDepth = config->GetBool("camera.enable_depth", false);
+    cameraConfig.enableSyncCapture = config->GetBool("camera.enable_sync_capture", false);
 
     // Parse RealSense stream type from string
     std::string streamTypeStr = config->GetString("camera.realsense_stream_type", "color");

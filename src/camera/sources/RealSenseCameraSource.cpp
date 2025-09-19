@@ -138,6 +138,11 @@ std::shared_ptr<CameraFrame> RealSenseCameraSource::CaptureFrame() {
         return nullptr;
     }
 
+    if (!m_config.enableSyncCapture) {
+        UpdateLastError("Synchronous capture is disabled");
+        return nullptr;
+    }
+
     std::unique_lock<std::mutex> lock(m_frameMutex);
 
     // Wait for new frame with timeout
@@ -214,34 +219,36 @@ void RealSenseCameraSource::CaptureThreadFunc() {
                     int height = primaryFrame.as<rs2::video_frame>().get_height();
                     int stride = primaryFrame.as<rs2::video_frame>().get_stride_in_bytes();
                     
-                    // Update frame buffer
-                    {
-                        std::lock_guard<std::mutex> lock(m_frameMutex);
-                        
-                        m_frameWidth = width;
-                        m_frameHeight = height;
-                        
-                        size_t dataSize = stride * height;
-                        m_currentPrimaryFrame.resize(dataSize);
-                        std::memcpy(m_currentPrimaryFrame.data(), primaryFrame.get_data(), dataSize);
-                        
-                        // Process depth frame if available
-                        if (m_config.enableDepth) {
-                            rs2::frame depthFrame = frames.get_depth_frame();
-                            if (depthFrame) {
-                                m_depthWidth = depthFrame.as<rs2::video_frame>().get_width();
-                                m_depthHeight = depthFrame.as<rs2::video_frame>().get_height();
-                                
-                                size_t depthSize = m_depthWidth * m_depthHeight * sizeof(uint16_t);
-                                m_currentDepthFrame.resize(m_depthWidth * m_depthHeight);
-                                std::memcpy(m_currentDepthFrame.data(), depthFrame.get_data(), depthSize);
+                    // Update frame buffer only if sync capture is enabled
+                    if (m_config.enableSyncCapture) {
+                        {
+                            std::lock_guard<std::mutex> lock(m_frameMutex);
+
+                            m_frameWidth = width;
+                            m_frameHeight = height;
+
+                            size_t dataSize = stride * height;
+                            m_currentPrimaryFrame.resize(dataSize);
+                            std::memcpy(m_currentPrimaryFrame.data(), primaryFrame.get_data(), dataSize);
+
+                            // Process depth frame if available
+                            if (m_config.enableDepth) {
+                                rs2::frame depthFrame = frames.get_depth_frame();
+                                if (depthFrame) {
+                                    m_depthWidth = depthFrame.as<rs2::video_frame>().get_width();
+                                    m_depthHeight = depthFrame.as<rs2::video_frame>().get_height();
+
+                                    size_t depthSize = m_depthWidth * m_depthHeight * sizeof(uint16_t);
+                                    m_currentDepthFrame.resize(m_depthWidth * m_depthHeight);
+                                    std::memcpy(m_currentDepthFrame.data(), depthFrame.get_data(), depthSize);
+                                }
                             }
+
+                            m_frameTimestamp = std::chrono::steady_clock::now();
+                            m_hasNewFrame = true;
                         }
-                        
-                        m_frameTimestamp = std::chrono::steady_clock::now();
-                        m_hasNewFrame = true;
+                        m_frameCondition.notify_one();
                     }
-                    m_frameCondition.notify_one();
                     
                     // Call async callback if set
                     if (m_frameCallback) {
