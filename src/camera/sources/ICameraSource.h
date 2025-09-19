@@ -99,6 +99,56 @@ struct CameraStats {
 };
 
 /**
+ * Camera property types for runtime control
+ */
+enum class CameraPropertyType {
+    BRIGHTNESS,         // Camera brightness (0-100)
+    CONTRAST,           // Camera contrast (0-100)
+    EXPOSURE,           // Camera exposure (0-100)
+    SATURATION,         // Camera saturation (0-100)
+    GAIN                // Camera gain (0-100)
+};
+
+/**
+ * Camera property range information
+ */
+struct CameraPropertyRange {
+    int min = 0;                    // Minimum value
+    int max = 100;                  // Maximum value
+    int defaultValue = 50;          // Default value
+    int step = 1;                   // Step size
+    bool supported = false;         // Whether property is supported
+
+    CameraPropertyRange() = default;
+    CameraPropertyRange(int minVal, int maxVal, int defVal, int stepVal = 1, bool isSupported = true)
+        : min(minVal), max(maxVal), defaultValue(defVal), step(stepVal), supported(isSupported) {}
+};
+
+/**
+ * Camera properties structure for batch operations
+ */
+struct CameraProperties {
+    int brightness = -1;            // -1 means unchanged/auto
+    int contrast = -1;              // -1 means unchanged/auto
+    int exposure = -1;              // -1 means unchanged/auto
+    int saturation = -1;            // -1 means unchanged/auto
+    int gain = -1;                  // -1 means unchanged/auto
+
+    CameraProperties() = default;
+
+    // Check if any property is set (not -1)
+    bool HasChanges() const {
+        return brightness != -1 || contrast != -1 || exposure != -1 ||
+               saturation != -1 || gain != -1;
+    }
+
+    // Reset all properties to unchanged state
+    void Reset() {
+        brightness = contrast = exposure = saturation = gain = -1;
+    }
+};
+
+/**
  * Frame callback function type for asynchronous frame delivery
  */
 using FrameCallback = std::function<void(std::shared_ptr<const CameraFrame> frame)>;
@@ -211,6 +261,42 @@ public:
      * @return Human-readable source name
      */
     virtual std::string GetSourceName() const = 0;
+
+    /**
+     * Set a camera property at runtime.
+     * @param property Property type to set
+     * @param value Property value (typically 0-100 range)
+     * @return true if property was set successfully
+     */
+    virtual bool SetCameraProperty(CameraPropertyType property, int value) = 0;
+
+    /**
+     * Get current value of a camera property.
+     * @param property Property type to get
+     * @param value Output parameter for property value
+     * @return true if property was retrieved successfully
+     */
+    virtual bool GetCameraProperty(CameraPropertyType property, int& value) const = 0;
+
+    /**
+     * Set multiple camera properties at once.
+     * @param properties Structure containing properties to set
+     * @return true if all properties were set successfully
+     */
+    virtual bool SetCameraProperties(const CameraProperties& properties) = 0;
+
+    /**
+     * Get all current camera properties.
+     * @return Structure containing all current property values
+     */
+    virtual CameraProperties GetCameraProperties() const = 0;
+
+    /**
+     * Get property range information.
+     * @param property Property type to query
+     * @return Range information for the property
+     */
+    virtual CameraPropertyRange GetPropertyRange(CameraPropertyType property) const = 0;
     
 protected:
     CameraDeviceInfo m_deviceInfo;

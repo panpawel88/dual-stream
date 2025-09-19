@@ -233,11 +233,52 @@ public:
     
     /**
      * Enumerate devices for specific source type.
-     * 
+     *
      * @param sourceType Source type to enumerate
      * @return Vector of available devices
      */
     static std::vector<CameraDeviceInfo> EnumerateDevices(CameraSourceType sourceType);
+
+    /**
+     * Set a camera property at runtime.
+     *
+     * @param property Property type to set
+     * @param value Property value (typically 0-100 range)
+     * @return true if property was set successfully
+     */
+    bool SetCameraProperty(CameraPropertyType property, int value);
+
+    /**
+     * Get current value of a camera property.
+     *
+     * @param property Property type to get
+     * @param value Output parameter for property value
+     * @return true if property was retrieved successfully
+     */
+    bool GetCameraProperty(CameraPropertyType property, int& value) const;
+
+    /**
+     * Set multiple camera properties at once.
+     *
+     * @param properties Structure containing properties to set
+     * @return true if all properties were set successfully
+     */
+    bool SetCameraProperties(const CameraProperties& properties);
+
+    /**
+     * Get all current camera properties.
+     *
+     * @return Structure containing all current property values
+     */
+    CameraProperties GetAllCameraProperties() const;
+
+    /**
+     * Get property range information.
+     *
+     * @param property Property type to query
+     * @return Range information for the property
+     */
+    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const;
 
 private:
     mutable std::mutex m_mutex;
