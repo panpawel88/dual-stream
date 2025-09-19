@@ -648,16 +648,18 @@ cv::Mat FaceDetectionSwitchingTrigger::CreatePreviewFrame(const cv::Mat& frame, 
         previewFrame = frame.clone();
     }
     
-    // Draw face rectangles
-    for (const auto& face : faces) {
-        // Draw main face rectangle in green
-        cv::rectangle(previewFrame, face, cv::Scalar(0, 255, 0), 2);
-        
-        // Add face size text
-        std::string sizeText = std::to_string(face.width) + "x" + std::to_string(face.height);
-        cv::putText(previewFrame, sizeText, 
-                   cv::Point(face.x, face.y - 10), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+    // Draw face rectangles only if visualization is enabled
+    if (m_config.enableVisualization) {
+        for (const auto& face : faces) {
+            // Draw main face rectangle in green
+            cv::rectangle(previewFrame, face, cv::Scalar(0, 255, 0), 2);
+
+            // Add face size text
+            std::string sizeText = std::to_string(face.width) + "x" + std::to_string(face.height);
+            cv::putText(previewFrame, sizeText,
+                       cv::Point(face.x, face.y - 10),
+                       cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+        }
     }
     
     // Add status information overlay
