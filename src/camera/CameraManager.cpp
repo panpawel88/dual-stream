@@ -37,7 +37,17 @@ CameraConfig CameraManager::CreateCameraConfigFromGlobal() {
     
     cameraConfig.brightness = config->GetInt("camera.brightness", -1);
     cameraConfig.enableDepth = config->GetBool("camera.enable_depth", false);
-    
+
+    // Parse RealSense stream type from string
+    std::string streamTypeStr = config->GetString("camera.realsense_stream_type", "color");
+    if (streamTypeStr == "infrared_left") {
+        cameraConfig.realsenseStreamType = RealSenseStreamType::INFRARED_LEFT;
+    } else if (streamTypeStr == "infrared_right") {
+        cameraConfig.realsenseStreamType = RealSenseStreamType::INFRARED_RIGHT;
+    } else {
+        cameraConfig.realsenseStreamType = RealSenseStreamType::COLOR; // Default
+    }
+
     return cameraConfig;
 }
 

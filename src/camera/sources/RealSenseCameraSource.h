@@ -78,7 +78,7 @@ private:
     std::mutex m_frameMutex;
     
     // Frame buffer for synchronous capture
-    std::vector<uint8_t> m_currentRGBFrame;
+    std::vector<uint8_t> m_currentPrimaryFrame;
     std::vector<uint16_t> m_currentDepthFrame;
     int m_frameWidth = 0;
     int m_frameHeight = 0;

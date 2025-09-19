@@ -15,6 +15,15 @@ enum class CameraSourceType {
 };
 
 /**
+ * RealSense stream type selection for primary frame
+ */
+enum class RealSenseStreamType {
+    COLOR,              // RGB/BGR color stream (default)
+    INFRARED_LEFT,      // Left infrared stream (grayscale)
+    INFRARED_RIGHT      // Right infrared stream (grayscale)
+};
+
+/**
  * Camera device information structure
  */
 struct CameraDeviceInfo {
@@ -68,6 +77,7 @@ struct CameraConfig {
     // RealSense specific settings
     bool enableAutoExposure = true;     // Enable auto exposure
     bool enableEmitter = true;          // Enable IR emitter for depth
+    RealSenseStreamType realsenseStreamType = RealSenseStreamType::COLOR;  // Primary stream selection
 };
 
 /**

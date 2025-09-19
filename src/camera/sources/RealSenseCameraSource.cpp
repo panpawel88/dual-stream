@@ -48,11 +48,23 @@ bool RealSenseCameraSource::InitializePipeline() {
             // Configure for BAG file playback
             m_config_rs->enable_device_from_file(m_bagFilePath, true); // true = realtime playback
         } else {
-            // Configure RGB stream for live camera
-            m_config_rs->enable_stream(RS2_STREAM_COLOR, m_config.width, m_config.height,
-                                     RS2_FORMAT_BGR8, static_cast<int>(m_config.frameRate));
+            // Configure primary stream based on realsenseStreamType
+            switch (m_config.realsenseStreamType) {
+                case RealSenseStreamType::COLOR:
+                    m_config_rs->enable_stream(RS2_STREAM_COLOR, m_config.width, m_config.height,
+                                             RS2_FORMAT_BGR8, static_cast<int>(m_config.frameRate));
+                    break;
+                case RealSenseStreamType::INFRARED_LEFT:
+                    m_config_rs->enable_stream(RS2_STREAM_INFRARED, 1, m_config.width, m_config.height,
+                                             RS2_FORMAT_Y8, static_cast<int>(m_config.frameRate));
+                    break;
+                case RealSenseStreamType::INFRARED_RIGHT:
+                    m_config_rs->enable_stream(RS2_STREAM_INFRARED, 2, m_config.width, m_config.height,
+                                             RS2_FORMAT_Y8, static_cast<int>(m_config.frameRate));
+                    break;
+            }
 
-            // Configure depth stream if enabled
+            // Configure depth stream if enabled (independent of primary stream)
             if (m_config.enableDepth && m_deviceInfo.supportsDepth) {
                 m_config_rs->enable_stream(RS2_STREAM_DEPTH, m_config.width, m_config.height,
                                          RS2_FORMAT_Z16, static_cast<int>(m_config.frameRate));
@@ -139,9 +151,20 @@ std::shared_ptr<CameraFrame> RealSenseCameraSource::CaptureFrame() {
         return nullptr;
     }
 
-    if (m_hasNewFrame && !m_currentRGBFrame.empty()) {
-        // Create frame from current RGB data using cv::Mat
-        cv::Mat rgbMat(m_frameHeight, m_frameWidth, CV_8UC3, m_currentRGBFrame.data());
+    if (m_hasNewFrame && !m_currentPrimaryFrame.empty()) {
+        // Create frame from current data using cv::Mat with appropriate format
+        cv::Mat primaryMat;
+        CameraFormat format;
+
+        if (m_config.realsenseStreamType == RealSenseStreamType::COLOR) {
+            // Color frame (BGR8)
+            primaryMat = cv::Mat(m_frameHeight, m_frameWidth, CV_8UC3, m_currentPrimaryFrame.data());
+            format = m_config.format;
+        } else {
+            // IR frame (GRAY8)
+            primaryMat = cv::Mat(m_frameHeight, m_frameWidth, CV_8UC1, m_currentPrimaryFrame.data());
+            format = CameraFormat::GRAY8;
+        }
 
         // Create depth Mat if available
         std::optional<cv::Mat> depthMat;
@@ -149,7 +172,7 @@ std::shared_ptr<CameraFrame> RealSenseCameraSource::CaptureFrame() {
             depthMat = cv::Mat(m_frameHeight, m_frameWidth, CV_16UC1, m_currentDepthFrame.data());
         }
 
-        auto frame = CameraFrame::CreateFromMat(rgbMat, m_config.format, depthMat);
+        auto frame = CameraFrame::CreateFromMat(primaryMat, format, depthMat);
 
         m_hasNewFrame = false;
         return frame;
@@ -172,12 +195,24 @@ void RealSenseCameraSource::CaptureThreadFunc() {
             if (frames) {
                 UpdateFrameRateStats();
                 
-                // Process RGB frame
-                rs2::frame colorFrame = frames.get_color_frame();
-                if (colorFrame) {
-                    int width = colorFrame.as<rs2::video_frame>().get_width();
-                    int height = colorFrame.as<rs2::video_frame>().get_height();
-                    int stride = colorFrame.as<rs2::video_frame>().get_stride_in_bytes();
+                // Process primary frame based on stream type
+                rs2::frame primaryFrame;
+                switch (m_config.realsenseStreamType) {
+                    case RealSenseStreamType::COLOR:
+                        primaryFrame = frames.get_color_frame();
+                        break;
+                    case RealSenseStreamType::INFRARED_LEFT:
+                        primaryFrame = frames.get_infrared_frame(1);
+                        break;
+                    case RealSenseStreamType::INFRARED_RIGHT:
+                        primaryFrame = frames.get_infrared_frame(2);
+                        break;
+                }
+
+                if (primaryFrame) {
+                    int width = primaryFrame.as<rs2::video_frame>().get_width();
+                    int height = primaryFrame.as<rs2::video_frame>().get_height();
+                    int stride = primaryFrame.as<rs2::video_frame>().get_stride_in_bytes();
                     
                     // Update frame buffer
                     {
@@ -187,8 +222,8 @@ void RealSenseCameraSource::CaptureThreadFunc() {
                         m_frameHeight = height;
                         
                         size_t dataSize = stride * height;
-                        m_currentRGBFrame.resize(dataSize);
-                        std::memcpy(m_currentRGBFrame.data(), colorFrame.get_data(), dataSize);
+                        m_currentPrimaryFrame.resize(dataSize);
+                        std::memcpy(m_currentPrimaryFrame.data(), primaryFrame.get_data(), dataSize);
                         
                         // Process depth frame if available
                         if (m_config.enableDepth) {
@@ -226,8 +261,21 @@ void RealSenseCameraSource::CaptureThreadFunc() {
 }
 
 std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertFramesetToFrame(const rs2::frameset& frameset) {
-    rs2::video_frame colorFrame = frameset.get_color_frame();
-    if (!colorFrame) {
+    // Get primary frame based on stream type
+    std::optional<rs2::video_frame> primaryFrame;
+    switch (m_config.realsenseStreamType) {
+        case RealSenseStreamType::COLOR:
+            primaryFrame = frameset.get_color_frame();
+            break;
+        case RealSenseStreamType::INFRARED_LEFT:
+            primaryFrame = frameset.get_infrared_frame(1);
+            break;
+        case RealSenseStreamType::INFRARED_RIGHT:
+            primaryFrame = frameset.get_infrared_frame(2);
+            break;
+    }
+
+    if (!primaryFrame) {
         return nullptr;
     }
 
@@ -236,7 +284,7 @@ std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertFramesetToFrame(const
     rs2::depth_frame* depthPtr = depthFrame ? &depthFrame : nullptr;
 
     // Use template specialization
-    return CameraFrame::CreateFromRealSense(colorFrame, depthPtr);
+    return CameraFrame::CreateFromRealSense(*primaryFrame, depthPtr);
 }
 
 std::shared_ptr<CameraFrame> RealSenseCameraSource::ConvertRGBFrame(const rs2::frame& rgbFrame) {
