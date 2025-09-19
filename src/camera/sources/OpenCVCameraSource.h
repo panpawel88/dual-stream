@@ -32,6 +32,13 @@ public:
     std::string GetLastError() const override;
     bool IsAvailable() const override;
     std::string GetSourceName() const override;
+
+    // Runtime property control
+    bool SetCameraProperty(CameraPropertyType property, int value) override;
+    bool GetCameraProperty(CameraPropertyType property, int& value) const override;
+    bool SetCameraProperties(const CameraProperties& properties) override;
+    CameraProperties GetCameraProperties() const override;
+    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const override;
     
     /**
      * Enumerate available OpenCV camera devices.
@@ -58,7 +65,9 @@ private:
     std::unique_ptr<std::thread> m_captureThread;
     mutable std::mutex m_configMutex;
     mutable std::mutex m_statsMutex;
+    mutable std::mutex m_propertyMutex;
     std::atomic<bool> m_shouldStop{false};
+    std::atomic<bool> m_hasPendingProperties{false};
     std::condition_variable m_frameCondition;
     std::mutex m_frameMutex;
     
@@ -66,6 +75,10 @@ private:
     cv::Mat m_currentFrame;
     bool m_hasNewFrame = false;
     std::chrono::steady_clock::time_point m_frameTimestamp;
+
+    // Property management
+    CameraProperties m_pendingProperties;
+    CameraProperties m_currentProperties;
     
     // Private methods
     bool InitializeCapture();
@@ -76,8 +89,13 @@ private:
     void UpdateLastError(const std::string& error);
     
     // OpenCV property helpers
-    double GetCameraProperty(int propId) const;
-    bool SetCameraProperty(int propId, double value);
+    double GetOpenCVProperty(int propId) const;
+    bool SetOpenCVProperty(int propId, double value);
+
+    // Property management helpers
+    void ApplyPendingProperties();
+    int ConvertPropertyTypeToOpenCV(CameraPropertyType property) const;
+    bool ValidatePropertyValue(CameraPropertyType property, int value) const;
     
     // Backend conversion and selection helpers
     int ConvertBackendToOpenCV(CameraBackend backend) const;

@@ -40,6 +40,13 @@ public:
     std::string GetLastError() const override;
     bool IsAvailable() const override;
     std::string GetSourceName() const override;
+
+    // Runtime property control
+    bool SetCameraProperty(CameraPropertyType property, int value) override;
+    bool GetCameraProperty(CameraPropertyType property, int& value) const override;
+    bool SetCameraProperties(const CameraProperties& properties) override;
+    CameraProperties GetCameraProperties() const override;
+    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const override;
     
     /**
      * Enumerate available RealSense devices.

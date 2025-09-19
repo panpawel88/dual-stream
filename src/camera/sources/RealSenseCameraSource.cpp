@@ -529,3 +529,36 @@ bool RealSenseCameraSource::ValidateConfig(const CameraConfig& config) {
 void RealSenseCameraSource::UpdateLastError(const std::string& error) {
     m_lastError = error;
 }
+
+// Runtime property control implementation
+bool RealSenseCameraSource::SetCameraProperty(CameraPropertyType property, int value) {
+    // RealSense cameras typically don't support runtime property changes
+    // in the same way as OpenCV cameras. This would require using
+    // rs2::sensor.set_option() calls which are device-specific.
+    UpdateLastError("Runtime property control not supported for RealSense cameras");
+    return false;
+}
+
+bool RealSenseCameraSource::GetCameraProperty(CameraPropertyType property, int& value) const {
+    // RealSense cameras don't maintain cached property values like OpenCV
+    // Would need to query rs2::sensor.get_option() for actual implementation
+    return false;
+}
+
+bool RealSenseCameraSource::SetCameraProperties(const CameraProperties& properties) {
+    // Could be implemented to set multiple RealSense options at once
+    // For now, not supported
+    UpdateLastError("Batch property control not supported for RealSense cameras");
+    return false;
+}
+
+CameraProperties RealSenseCameraSource::GetCameraProperties() const {
+    // Return empty properties since RealSense doesn't currently support this
+    return CameraProperties{};
+}
+
+CameraPropertyRange RealSenseCameraSource::GetPropertyRange(CameraPropertyType property) const {
+    // RealSense property ranges would need to be queried from rs2::sensor.get_option_range()
+    // For now, return unsupported
+    return CameraPropertyRange{0, 100, 50, 1, false};
+}
