@@ -21,9 +21,9 @@ FaceDetectionSwitchingTrigger::FaceDetectionConfig FaceDetectionSwitchingTrigger
     faceConfig.enableVisualization = config->GetBool("face_detection.enable_visualization", false);
     faceConfig.enablePreview = config->GetBool("face_detection.enable_preview", false);
     
-    // Switching thresholds
-    faceConfig.singleFaceThreshold = config->GetInt("face_detection.single_face_threshold", 1);
-    faceConfig.multipleFaceThreshold = config->GetInt("face_detection.multiple_face_threshold", 2);
+    // Video switching thresholds
+    faceConfig.video1FaceCount = config->GetInt("face_detection.video1_face_count", 1);
+    faceConfig.video2FaceCount = config->GetInt("face_detection.video2_face_count", 2);
     
     // Haar Cascade specific parameters
     faceConfig.minFaceSize = config->GetInt("face_detection.min_face_size", 30);
@@ -248,21 +248,25 @@ void FaceDetectionSwitchingTrigger::UpdateSwitchingState(int faceCount) {
     if (IsInSwitchCooldown()) {
         return;
     }
-    
+
     bool shouldTrigger = false;
     bool triggerVideo1 = false;
-    
+
     // Determine switching action based on face count
-    if (faceCount >= m_config.multipleFaceThreshold && m_lastStableFaceCount != faceCount) {
-        // Multiple faces detected → switch to Video 2
-        shouldTrigger = true;
-        triggerVideo1 = false;
-    } else if (faceCount == m_config.singleFaceThreshold && m_lastStableFaceCount != faceCount) {
-        // Single face detected → switch to Video 1
+    if (faceCount == 0 && m_lastStableFaceCount != faceCount) {
+        // No faces detected → switch to Video 1 (index 0)
         shouldTrigger = true;
         triggerVideo1 = true;
+    } else if (faceCount == m_config.video1FaceCount && m_lastStableFaceCount != faceCount) {
+        // Single face detected → switch to Video 2 (index 1)
+        shouldTrigger = true;
+        triggerVideo1 = false;
+    } else if (faceCount >= m_config.video2FaceCount && m_lastStableFaceCount != faceCount) {
+        // Multiple faces detected → switch to Video 2 (index 1)
+        shouldTrigger = true;
+        triggerVideo1 = false;
     }
-    
+
     if (shouldTrigger) {
         if (triggerVideo1) {
             m_shouldSwitchToVideo1 = true;
@@ -271,7 +275,7 @@ void FaceDetectionSwitchingTrigger::UpdateSwitchingState(int faceCount) {
             m_shouldSwitchToVideo1 = false;
             m_shouldSwitchToVideo2 = true;
         }
-        
+
         m_lastSwitchTime = std::chrono::steady_clock::now();
         m_lastStableFaceCount = faceCount;
     }

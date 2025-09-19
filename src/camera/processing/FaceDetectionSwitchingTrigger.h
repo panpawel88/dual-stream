@@ -21,9 +21,9 @@
  * This class bridges the camera system with the existing video switching system.
  * 
  * Switching Logic:
- * - Single face detected → Switch to Video 1
- * - Multiple faces detected → Switch to Video 2
- * - No faces detected → No switching action
+ * - No faces detected (0) → Switch to Video 1 (index 0)
+ * - Single face detected (1) → Switch to Video 2 (index 1)
+ * - Multiple faces detected (2+) → Switch to Video 2 (index 1)
  * 
  * Preview Feature:
  * When enablePreview is set to true, displays a real-time preview window showing:
@@ -68,9 +68,9 @@ public:
         bool enableVisualization = false;   // Draw face rectangles on frames
         bool enablePreview = false;         // Show face detection preview window
         
-        // Switching thresholds
-        int singleFaceThreshold = 1;        // Faces needed for Video 1
-        int multipleFaceThreshold = 2;      // Faces needed for Video 2
+        // Video switching thresholds
+        int video1FaceCount = 1;            // Face count that triggers switch to Video 1
+        int video2FaceCount = 2;            // Face count that triggers switch to Video 2
         
         // Haar Cascade specific parameters
         int minFaceSize = 30;               // Minimum face size in pixels
