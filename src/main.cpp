@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
         
         // Register the trigger as a frame listener with the camera manager
         if (cameraManager && faceDetectionTrigger) {
-            cameraManager->RegisterFrameListener(faceDetectionTrigger);
+            cameraManager->RegisterFrameListener(faceDetectionTrigger.get());
         }
     }
     

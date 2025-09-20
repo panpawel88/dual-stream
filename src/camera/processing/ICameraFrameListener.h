@@ -248,9 +248,9 @@ protected:
 };
 
 /**
- * Shared pointer type for camera frame listeners to enable safe multi-threaded access
+ * Pointer type for camera frame listeners
  */
-using CameraFrameListenerPtr = std::shared_ptr<ICameraFrameListener>;
+using CameraFrameListenerPtr = ICameraFrameListener*;
 
 // Forward declare OverflowPolicy enum - defined in CircularBuffer.h
 // Default implementation for GetPreferredOverflowPolicy - defined in cpp file if needed
