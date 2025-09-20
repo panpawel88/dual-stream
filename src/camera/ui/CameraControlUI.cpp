@@ -10,10 +10,10 @@ CameraControlUI::CameraControlUI()
     , m_renderer(nullptr)
     , m_frameTexture(nullptr)
     , m_previewEnabled(true)
-    , m_brightness(50)
-    , m_contrast(50)
-    , m_saturation(50)
-    , m_gain(50)
+    , m_brightness(0.5f)
+    , m_contrast(0.5f)
+    , m_saturation(0.5f)
+    , m_gain(0.5f)
     , m_currentFrame(nullptr)
     , m_hasNewFrame(false)
     , m_previewFPS(10.0)
@@ -139,26 +139,26 @@ void CameraControlUI::DrawCameraProperties() {
     bool propertyChanged = false;
 
     // Brightness
-    if (ImGui::SliderInt("Brightness", &m_brightness, 0, 100)) {
+    if (ImGui::SliderFloat("Brightness", &m_brightness, 0.0f, 1.0f, "%.3f")) {
         UpdateCameraProperty(CameraPropertyType::BRIGHTNESS, m_brightness);
         propertyChanged = true;
     }
 
     // Contrast
-    if (ImGui::SliderInt("Contrast", &m_contrast, 0, 100)) {
+    if (ImGui::SliderFloat("Contrast", &m_contrast, 0.0f, 1.0f, "%.3f")) {
         UpdateCameraProperty(CameraPropertyType::CONTRAST, m_contrast);
         propertyChanged = true;
     }
 
 
     // Saturation
-    if (ImGui::SliderInt("Saturation", &m_saturation, 0, 100)) {
+    if (ImGui::SliderFloat("Saturation", &m_saturation, 0.0f, 1.0f, "%.3f")) {
         UpdateCameraProperty(CameraPropertyType::SATURATION, m_saturation);
         propertyChanged = true;
     }
 
     // Gain
-    if (ImGui::SliderInt("Gain", &m_gain, 0, 100)) {
+    if (ImGui::SliderFloat("Gain", &m_gain, 0.0f, 1.0f, "%.3f")) {
         UpdateCameraProperty(CameraPropertyType::GAIN, m_gain);
         propertyChanged = true;
     }
@@ -283,17 +283,14 @@ bool CameraControlUI::CanProcessFormat(CameraFormat format) const {
     }
 }
 
-void CameraControlUI::UpdateCameraProperty(CameraPropertyType property, int value) {
+void CameraControlUI::UpdateCameraProperty(CameraPropertyType property, float value) {
     if (!m_cameraManager) {
         return;
     }
 
-    // Convert UI percentage (0-100) to normalized value (0.0-1.0)
-    double normalizedValue = value / 100.0;
+    LOG_DEBUG("CameraControlUI: Updating property ", static_cast<int>(property), " to ", value);
 
-    LOG_DEBUG("CameraControlUI: Updating property ", static_cast<int>(property), " to ", value, "% (normalized: ", normalizedValue, ")");
-
-    if (m_cameraManager->SetCameraProperty(property, normalizedValue)) {
+    if (m_cameraManager->SetCameraProperty(property, static_cast<double>(value))) {
         LOG_DEBUG("CameraControlUI: Successfully updated property ", static_cast<int>(property), " to ", value);
 
         // For property changes that affect UI state
@@ -314,17 +311,17 @@ void CameraControlUI::ResetPropertiesToDefaults() {
         return;
     }
 
-    // Set UI values to 50% (reasonable default)
-    m_brightness = 50;
-    m_contrast = 50;
-    m_saturation = 50;
-    m_gain = 50;
+    // Set UI values to 0.5 (reasonable default)
+    m_brightness = 0.5f;
+    m_contrast = 0.5f;
+    m_saturation = 0.5f;
+    m_gain = 0.5f;
 
-    LOG_INFO("Resetting camera properties to defaults: All properties set to 50%");
+    LOG_INFO("Resetting camera properties to defaults: All properties set to 0.5");
 
-    // Apply the default properties (convert to normalized values)
+    // Apply the default properties
     CameraProperties defaultProps;
-    defaultProps.brightness = 0.5;  // 50% = 0.5 normalized
+    defaultProps.brightness = 0.5;
     defaultProps.contrast = 0.5;
     defaultProps.saturation = 0.5;
     defaultProps.gain = 0.5;
@@ -344,23 +341,23 @@ void CameraControlUI::SyncUIWithCameraProperties() {
 
     auto properties = m_cameraManager->GetAllCameraProperties();
 
-    // Convert normalized values (0.0-1.0) to UI percentage (0-100)
+    // Directly use normalized values (0.0-1.0) in UI
     // Only update UI values if they're valid (not NaN)
     if (!std::isnan(properties.brightness)) {
-        m_brightness = static_cast<int>(properties.brightness * 100.0);
-        LOG_DEBUG("Synced brightness to ", m_brightness, "% (normalized: ", properties.brightness, ")");
+        m_brightness = static_cast<float>(properties.brightness);
+        LOG_DEBUG("Synced brightness to ", m_brightness);
     }
     if (!std::isnan(properties.contrast)) {
-        m_contrast = static_cast<int>(properties.contrast * 100.0);
-        LOG_DEBUG("Synced contrast to ", m_contrast, "% (normalized: ", properties.contrast, ")");
+        m_contrast = static_cast<float>(properties.contrast);
+        LOG_DEBUG("Synced contrast to ", m_contrast);
     }
     if (!std::isnan(properties.saturation)) {
-        m_saturation = static_cast<int>(properties.saturation * 100.0);
-        LOG_DEBUG("Synced saturation to ", m_saturation, "% (normalized: ", properties.saturation, ")");
+        m_saturation = static_cast<float>(properties.saturation);
+        LOG_DEBUG("Synced saturation to ", m_saturation);
     }
     if (!std::isnan(properties.gain)) {
-        m_gain = static_cast<int>(properties.gain * 100.0);
-        LOG_DEBUG("Synced gain to ", m_gain, "% (normalized: ", properties.gain, ")");
+        m_gain = static_cast<float>(properties.gain);
+        LOG_DEBUG("Synced gain to ", m_gain);
     }
 
 
