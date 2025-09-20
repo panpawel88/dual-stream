@@ -731,6 +731,9 @@ bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, double v
         case CameraPropertyType::GAIN:
             m_pendingProperties.gain = value;
             break;
+        case CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT:
+            UpdateLastError("AE Mean Intensity Setpoint not supported by OpenCV cameras");
+            return false;
         default:
             UpdateLastError("Unsupported property type");
             return false;
@@ -757,6 +760,8 @@ bool OpenCVCameraSource::GetCameraProperty(CameraPropertyType property, double& 
         case CameraPropertyType::GAIN:
             value = m_currentProperties.gain;
             return !std::isnan(m_currentProperties.gain);
+        case CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT:
+            return false; // Not supported by OpenCV cameras
         default:
             return false;
     }
@@ -784,6 +789,10 @@ bool OpenCVCameraSource::SetCameraProperties(const CameraProperties& properties)
     }
     if (!std::isnan(properties.gain) && !ValidatePropertyValue(CameraPropertyType::GAIN, properties.gain)) {
         UpdateLastError("Invalid gain value: " + std::to_string(properties.gain));
+        return false;
+    }
+    if (!std::isnan(properties.ae_mean_intensity_setpoint)) {
+        UpdateLastError("AE Mean Intensity Setpoint not supported by OpenCV cameras");
         return false;
     }
 
@@ -941,6 +950,8 @@ int OpenCVCameraSource::ConvertPropertyTypeToOpenCV(CameraPropertyType property)
             return cv::CAP_PROP_SATURATION;
         case CameraPropertyType::GAIN:
             return cv::CAP_PROP_GAIN;
+        case CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT:
+            return -1; // Not supported by OpenCV cameras
         default:
             return -1;
     }
@@ -952,9 +963,11 @@ bool OpenCVCameraSource::ValidatePropertyValue(CameraPropertyType property, doub
         case CameraPropertyType::CONTRAST:
         case CameraPropertyType::SATURATION:
         case CameraPropertyType::GAIN:
-        default:
+        case CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT:
             // All properties use 0.0-1.0 normalized range
             return value >= 0.0 && value <= 1.0;
+        default:
+            return false;
     }
 }
 
