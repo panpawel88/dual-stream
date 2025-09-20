@@ -23,11 +23,12 @@ The application has evolved far beyond its original requirements into a comprehe
 
 ### User Interface
 - **Advanced Window Management:** Resizable windows with dynamic renderer adjustment
-- **Fullscreen Support:** F11 toggle with state preservation  
+- **Fullscreen Support:** F11 toggle with state preservation
 - **ImGui Integration:** Comprehensive overlay system with debug UI and notifications
 - **Global Input Handling:** Centralized input processing for UI and application hotkeys
 - **Component Registry System:** Dynamic UI component registration and management
 - **Toast Notifications:** Non-intrusive user feedback system
+- **Camera Control UI:** Live camera preview and runtime property adjustment
 
 ### Advanced Configuration
 - **Command Line Interface:** Rich parameter support for all features
@@ -36,13 +37,15 @@ The application has evolved far beyond its original requirements into a comprehe
 - **Debug Logging:** Comprehensive logging with configurable verbosity
 - **Post-Processing Pipeline:** Configurable render pass chain with multiple effects
 - **Camera Integration:** Face detection-based automatic video switching
+- **Camera Property Control:** Runtime adjustment of brightness, contrast, saturation, and gain
+- **Live Camera Preview:** Real-time camera feed display with configurable refresh rate
 
 ## Architecture Overview
 
 ```
 DualStream Video Player
 ├── src/                           # Complete source code
-│   ├── main.cpp                   # Application orchestration  
+│   ├── main.cpp                   # Application orchestration
 │   ├── core/                      # Foundation services
 │   │   ├── CommandLineParser      # Advanced CLI processing
 │   │   ├── Logger                 # Centralized logging system
@@ -51,7 +54,7 @@ DualStream Video Player
 │   │   └── Window                 # Win32 window with modern features
 │   ├── video/                     # Video processing pipeline
 │   │   ├── VideoManager           # Central coordination
-│   │   ├── VideoValidator         # File validation  
+│   │   ├── VideoValidator         # File validation
 │   │   ├── demux/                 # Container parsing
 │   │   │   └── VideoDemuxer       # MP4 demuxing
 │   │   ├── decode/                # Video decoding
@@ -67,6 +70,13 @@ DualStream Video Player
 │   │       ├── ISwitchingTrigger  # Trigger interface
 │   │       ├── KeyboardSwitchingTrigger      # Keyboard input
 │   │       └── SwitchingTriggerFactory       # Trigger creation
+│   ├── camera/                    # Camera system with computer vision
+│   │   ├── CameraManager          # Central camera coordination
+│   │   ├── sources/               # Camera source implementations
+│   │   ├── processing/            # Frame processing and CV integration
+│   │   └── ui/                    # Camera control UI components
+│   │       ├── CameraControlUI    # ImGui-based camera control
+│   │       └── CameraFrameTexture # Camera frame-to-texture conversion
 │   └── rendering/                 # Multi-backend rendering
 │       ├── IRenderer              # Renderer interface
 │       ├── RendererFactory        # Renderer creation
@@ -100,14 +110,25 @@ DualStream Video Player
 # Debug logging
 ./dual_stream video1.mp4 video2.mp4 --debug
 
+# Camera integration with face detection
+./dual_stream video1.mp4 video2.mp4 --trigger=face-detection
+./dual_stream video1.mp4 video2.mp4 --enable-camera
+
 # Combined options
 ./dual_stream video1.mp4 video2.mp4 -a predecoded -s 2.0 -d
 ```
 
 ### Runtime Controls
 - **1/2 Keys:** Switch between videos
-- **F11:** Toggle fullscreen mode  
+- **F11:** Toggle fullscreen mode
+- **F1:** Toggle debug UI overlay (includes camera controls)
 - **ESC:** Exit application
+
+### Camera Control UI
+- **Live Preview:** Real-time camera feed display with configurable resolution
+- **Property Adjustment:** Runtime control of brightness, contrast, saturation, and gain
+- **Smart Ranges:** Automatic detection of camera capability ranges
+- **Multi-Camera Support:** OpenCV and Intel RealSense camera sources
 
 ## Switching Algorithms
 
@@ -244,6 +265,7 @@ Each directory contains detailed technical documentation:
 - **[src/camera/CLAUDE.md](src/camera/CLAUDE.md)** - Complete camera system with computer vision integration
 - **[src/camera/sources/CLAUDE.md](src/camera/sources/CLAUDE.md)** - Camera source abstraction and implementations
 - **[src/camera/processing/CLAUDE.md](src/camera/processing/CLAUDE.md)** - Multi-threaded frame processing and CV integration
+- **[src/camera/ui/CLAUDE.md](src/camera/ui/CLAUDE.md)** - Camera control UI system with live preview and property adjustment
 
 ### Rendering System
 - **[src/rendering/CLAUDE.md](src/rendering/CLAUDE.md)** - Multi-backend rendering with comprehensive render pass system
@@ -266,6 +288,10 @@ Each directory contains detailed technical documentation:
 - [x] Variable playback speed control
 - [x] Comprehensive error handling and logging
 - [x] Complete documentation system
+- [x] Camera control UI with live preview
+- [x] Runtime camera property adjustment system
+- [x] Normalized camera property values (0.0-1.0)
+- [x] Multi-backend camera frame rendering (D3D11/OpenGL)
 
 ### 🚀 Architecture Highlights
 - **Clean Separation:** Strategy patterns for switching algorithms and triggers
