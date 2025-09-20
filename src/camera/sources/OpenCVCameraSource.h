@@ -14,13 +14,6 @@
  */
 class OpenCVCameraSource : public ICameraSource {
 public:
-    // Property range information
-    struct PropertyRange {
-        double min = 0.0;
-        double max = 1.0;
-        double current = 0.5;
-        bool detected = false;
-    };
     OpenCVCameraSource();
     virtual ~OpenCVCameraSource();
     
@@ -91,7 +84,7 @@ private:
     static constexpr int PROPERTY_UPDATE_INTERVAL_MS = 100; // Limit property updates to avoid FPS drops
 
     // Property range cache (mutable for const methods)
-    mutable std::map<int, PropertyRange> m_propertyRangeCache;
+    mutable std::map<int, CameraPropertyRange> m_propertyRangeCache;
     
     // Private methods
     bool InitializeCapture();
@@ -106,9 +99,9 @@ private:
     bool SetOpenCVProperty(int propId, double value);
 
     // Property range detection
-    PropertyRange DetectPropertyRange(int openCVPropId) const;
-    double ConvertToUIValue(double cameraValue, const PropertyRange& range) const;
-    double ConvertFromUIValue(int uiValue, const PropertyRange& range) const;
+    CameraPropertyRange DetectPropertyRange(int openCVPropId) const;
+    double ConvertToUIValue(double cameraValue, const CameraPropertyRange& range) const;
+    double ConvertFromUIValue(int uiValue, const CameraPropertyRange& range) const;
 
     // Property management helpers
     void ApplyPendingProperties();
