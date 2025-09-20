@@ -136,38 +136,51 @@ void CameraControlUI::DrawCameraInfo() {
 void CameraControlUI::DrawCameraProperties() {
     ImGui::Text("Camera Properties");
 
+    if (m_supportedProperties.empty()) {
+        ImGui::Text("No adjustable properties available for this camera");
+        return;
+    }
+
     bool propertyChanged = false;
 
-    // Brightness
-    if (ImGui::SliderFloat("Brightness", &m_brightness, 0.0f, 1.0f, "%.3f")) {
-        UpdateCameraProperty(CameraPropertyType::BRIGHTNESS, m_brightness);
-        propertyChanged = true;
+    // Brightness - only show if supported
+    if (m_supportedProperties.count(CameraPropertyType::BRIGHTNESS)) {
+        if (ImGui::SliderFloat("Brightness", &m_brightness, 0.0f, 1.0f, "%.3f")) {
+            UpdateCameraProperty(CameraPropertyType::BRIGHTNESS, m_brightness);
+            propertyChanged = true;
+        }
     }
 
-    // Contrast
-    if (ImGui::SliderFloat("Contrast", &m_contrast, 0.0f, 1.0f, "%.3f")) {
-        UpdateCameraProperty(CameraPropertyType::CONTRAST, m_contrast);
-        propertyChanged = true;
+    // Contrast - only show if supported
+    if (m_supportedProperties.count(CameraPropertyType::CONTRAST)) {
+        if (ImGui::SliderFloat("Contrast", &m_contrast, 0.0f, 1.0f, "%.3f")) {
+            UpdateCameraProperty(CameraPropertyType::CONTRAST, m_contrast);
+            propertyChanged = true;
+        }
     }
 
-
-    // Saturation
-    if (ImGui::SliderFloat("Saturation", &m_saturation, 0.0f, 1.0f, "%.3f")) {
-        UpdateCameraProperty(CameraPropertyType::SATURATION, m_saturation);
-        propertyChanged = true;
+    // Saturation - only show if supported
+    if (m_supportedProperties.count(CameraPropertyType::SATURATION)) {
+        if (ImGui::SliderFloat("Saturation", &m_saturation, 0.0f, 1.0f, "%.3f")) {
+            UpdateCameraProperty(CameraPropertyType::SATURATION, m_saturation);
+            propertyChanged = true;
+        }
     }
 
-    // Gain
-    if (ImGui::SliderFloat("Gain", &m_gain, 0.0f, 1.0f, "%.3f")) {
-        UpdateCameraProperty(CameraPropertyType::GAIN, m_gain);
-        propertyChanged = true;
+    // Gain - only show if supported
+    if (m_supportedProperties.count(CameraPropertyType::GAIN)) {
+        if (ImGui::SliderFloat("Gain", &m_gain, 0.0f, 1.0f, "%.3f")) {
+            UpdateCameraProperty(CameraPropertyType::GAIN, m_gain);
+            propertyChanged = true;
+        }
     }
 
-
-    // Reset button
-    if (ImGui::Button("Reset to Defaults")) {
-        ResetPropertiesToDefaults();
-        propertyChanged = true;
+    // Reset button - only show if at least one property is supported
+    if (!m_supportedProperties.empty()) {
+        if (ImGui::Button("Reset to Defaults")) {
+            ResetPropertiesToDefaults();
+            propertyChanged = true;
+        }
     }
 
     if (propertyChanged) {
@@ -311,26 +324,35 @@ void CameraControlUI::ResetPropertiesToDefaults() {
         return;
     }
 
-    // Set UI values to 0.5 (reasonable default)
-    m_brightness = 0.5f;
-    m_contrast = 0.5f;
-    m_saturation = 0.5f;
-    m_gain = 0.5f;
-
-    LOG_INFO("Resetting camera properties to defaults: All properties set to 0.5");
-
-    // Apply the default properties
+    // Create properties structure with only supported properties set to defaults
     CameraProperties defaultProps;
-    defaultProps.brightness = 0.5;
-    defaultProps.contrast = 0.5;
-    defaultProps.saturation = 0.5;
-    defaultProps.gain = 0.5;
 
+    if (m_supportedProperties.count(CameraPropertyType::BRIGHTNESS)) {
+        m_brightness = 0.5f;
+        defaultProps.brightness = 0.5;
+    }
+    if (m_supportedProperties.count(CameraPropertyType::CONTRAST)) {
+        m_contrast = 0.5f;
+        defaultProps.contrast = 0.5;
+    }
+    if (m_supportedProperties.count(CameraPropertyType::SATURATION)) {
+        m_saturation = 0.5f;
+        defaultProps.saturation = 0.5;
+    }
+    if (m_supportedProperties.count(CameraPropertyType::GAIN)) {
+        m_gain = 0.5f;
+        defaultProps.gain = 0.5;
+    }
 
-    if (!m_cameraManager->SetCameraProperties(defaultProps)) {
-        LOG_WARNING("Failed to reset some camera properties to defaults");
-        // Sync UI with actual camera values
-        SyncUIWithCameraProperties();
+    if (defaultProps.HasChanges()) {
+        LOG_INFO("Resetting supported camera properties to defaults");
+        if (!m_cameraManager->SetCameraProperties(defaultProps)) {
+            LOG_WARNING("Failed to reset some camera properties to defaults");
+            // Sync UI with actual camera values
+            SyncUIWithCameraProperties();
+        }
+    } else {
+        LOG_INFO("No supported properties to reset");
     }
 }
 
@@ -338,6 +360,9 @@ void CameraControlUI::SyncUIWithCameraProperties() {
     if (!m_cameraManager) {
         return;
     }
+
+    // Update supported properties cache
+    m_supportedProperties = m_cameraManager->GetSupportedProperties();
 
     auto properties = m_cameraManager->GetAllCameraProperties();
 

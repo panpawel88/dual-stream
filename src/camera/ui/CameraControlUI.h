@@ -81,6 +81,9 @@ private:
     // Stats tracking
     FrameProcessingStats m_stats;
 
+    // Supported properties cache
+    std::set<CameraPropertyType> m_supportedProperties;
+
     // UI drawing methods
     void DrawCameraProperties();
     void DrawFramePreview();
