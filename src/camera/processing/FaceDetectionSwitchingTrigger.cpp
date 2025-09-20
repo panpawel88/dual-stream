@@ -11,6 +11,8 @@ FaceDetectionSwitchingTrigger::FaceDetectionConfig FaceDetectionSwitchingTrigger
     std::string algorithmStr = config->GetString("face_detection.algorithm", "haar_cascade");
     if (algorithmStr == "yunet") {
         faceConfig.algorithm = FaceDetectionAlgorithm::YUNET;
+    } else if (algorithmStr == "centerface") {
+        faceConfig.algorithm = FaceDetectionAlgorithm::CENTERFACE;
     } else {
         faceConfig.algorithm = FaceDetectionAlgorithm::HAAR_CASCADE;
     }
@@ -38,6 +40,13 @@ FaceDetectionSwitchingTrigger::FaceDetectionConfig FaceDetectionSwitchingTrigger
     int inputWidth = config->GetInt("face_detection.input_width", 320);
     int inputHeight = config->GetInt("face_detection.input_height", 320);
     faceConfig.inputSize = cv::Size(inputWidth, inputHeight);
+
+    // CenterFace specific parameters
+    int centerfaceInputWidth = config->GetInt("face_detection.centerface_input_width", 640);
+    int centerfaceInputHeight = config->GetInt("face_detection.centerface_input_height", 640);
+    faceConfig.centerfaceInputSize = cv::Size(centerfaceInputWidth, centerfaceInputHeight);
+    faceConfig.centerfaceScoreThreshold = config->GetFloat("face_detection.centerface_score_threshold", 0.5f);
+    faceConfig.centerfaceNmsThreshold = config->GetFloat("face_detection.centerface_nms_threshold", 0.2f);
 #endif
     
     return faceConfig;
@@ -75,6 +84,8 @@ bool FaceDetectionSwitchingTrigger::InitializeFaceDetection(const std::string& m
 #if defined(HAVE_OPENCV_DNN)
         case FaceDetectionAlgorithm::YUNET:
             return InitializeYuNetDetection(modelPath);
+        case FaceDetectionAlgorithm::CENTERFACE:
+            return InitializeCenterFaceDetection(modelPath);
 #endif
         default:
             LOG_ERROR("Unknown face detection algorithm");
@@ -168,6 +179,8 @@ std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFaces(const cv::Mat& 
 #if defined(HAVE_OPENCV_DNN)
         case FaceDetectionAlgorithm::YUNET:
             return DetectFacesYuNet(frame);
+        case FaceDetectionAlgorithm::CENTERFACE:
+            return DetectFacesCenterFace(frame);
 #endif
         default:
             return std::vector<cv::Rect>();
@@ -181,6 +194,8 @@ cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrame(const cv::Mat& frame) {
 #if defined(HAVE_OPENCV_DNN)
         case FaceDetectionAlgorithm::YUNET:
             return PreprocessFrameYuNet(frame);
+        case FaceDetectionAlgorithm::CENTERFACE:
+            return PreprocessFrameCenterFace(frame);
 #endif
         default:
             return frame.clone();
@@ -366,6 +381,11 @@ std::string FaceDetectionSwitchingTrigger::GetDefaultYuNetModelPath() {
     // Return path to default YuNet model file in data directory
     return "data/yunet/face_detection_yunet_2023mar.onnx";
 }
+
+std::string FaceDetectionSwitchingTrigger::GetDefaultCenterFaceModelPath() {
+    // Return path to default CenterFace model file in data directory
+    return "data/centerface/centerface.onnx";
+}
 #endif
 
 bool FaceDetectionSwitchingTrigger::InitializeHaarCascade(const std::string& cascadePath) {
@@ -465,6 +485,48 @@ bool FaceDetectionSwitchingTrigger::InitializeYuNetDetection(const std::string& 
     }
 }
 
+bool FaceDetectionSwitchingTrigger::InitializeCenterFaceDetection(const std::string& modelPath) {
+    std::string actualPath = modelPath.empty() ? GetDefaultCenterFaceModelPath() : modelPath;
+
+    // Validate that the model file exists and is not empty
+    std::ifstream modelFile(actualPath, std::ios::binary | std::ios::ate);
+    if (!modelFile.is_open()) {
+        LOG_ERROR("CenterFace model file does not exist: ", actualPath);
+        return false;
+    }
+
+    std::streamsize fileSize = modelFile.tellg();
+    modelFile.close();
+
+    if (fileSize == 0) {
+        LOG_ERROR("CenterFace model file is empty (0 bytes): ", actualPath);
+        LOG_ERROR("The model may not have been downloaded correctly. Try downloading centerface.onnx model.");
+        return false;
+    }
+
+    try {
+        // Load the ONNX model using OpenCV DNN
+        m_centerfaceNet = cv::dnn::readNetFromONNX(actualPath);
+
+        if (m_centerfaceNet.empty()) {
+            LOG_ERROR("Failed to load CenterFace model from: ", actualPath);
+            return false;
+        }
+
+        // Set backend and target for inference
+        m_centerfaceNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        m_centerfaceNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+
+        LOG_INFO("Successfully loaded CenterFace model: ", actualPath);
+        m_detectionInitialized = true;
+        return true;
+
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during CenterFace initialization: ", e.what());
+        return false;
+    }
+}
+
 std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFacesHaar(const cv::Mat& frame) {
     std::lock_guard<std::mutex> lock(m_detectionMutex);
     
@@ -553,6 +615,157 @@ cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrameYuNet(const cv::Mat& frame
     }
     
     return processed;
+}
+
+std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFacesCenterFace(const cv::Mat& frame) {
+    std::lock_guard<std::mutex> lock(m_detectionMutex);
+
+    std::vector<cv::Rect> faces;
+
+    if (m_centerfaceNet.empty()) {
+        return faces;
+    }
+
+    try {
+        // Preprocess frame for CenterFace
+        cv::Mat preprocessed = PreprocessFrameCenterFace(frame);
+
+        // Create blob from image
+        cv::Mat blob;
+        cv::dnn::blobFromImage(preprocessed, blob, 1.0/255.0, m_config.centerfaceInputSize, cv::Scalar(0, 0, 0), true, false);
+
+        // Set input to the network
+        m_centerfaceNet.setInput(blob);
+
+        // Run forward pass
+        std::vector<cv::Mat> outputs;
+        m_centerfaceNet.forward(outputs, m_centerfaceNet.getUnconnectedOutLayersNames());
+
+        // Post-process outputs to get bounding boxes
+        faces = PostprocessCenterFaceOutput(outputs, frame.cols, frame.rows);
+
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during CenterFace detection: ", e.what());
+        return faces;
+    }
+
+    return faces;
+}
+
+cv::Mat FaceDetectionSwitchingTrigger::PreprocessFrameCenterFace(const cv::Mat& frame) {
+    cv::Mat processed;
+
+    // CenterFace expects BGR format
+    if (frame.channels() == 4) {
+        // Convert BGRA to BGR
+        cv::cvtColor(frame, processed, cv::COLOR_BGRA2BGR);
+    } else if (frame.channels() == 1) {
+        // Convert grayscale to BGR
+        cv::cvtColor(frame, processed, cv::COLOR_GRAY2BGR);
+    } else if (frame.channels() == 3) {
+        // Already BGR, just clone
+        processed = frame.clone();
+    } else {
+        // Fallback
+        processed = frame.clone();
+    }
+
+    return processed;
+}
+
+std::vector<cv::Rect> FaceDetectionSwitchingTrigger::PostprocessCenterFaceOutput(const std::vector<cv::Mat>& outputs, int originalWidth, int originalHeight) {
+    std::vector<cv::Rect> faces;
+
+    if (outputs.size() < 4) {
+        LOG_ERROR("CenterFace model should output 4 tensors (heatmap, scale, offset, landmarks), got: ", outputs.size());
+        return faces;
+    }
+
+    const cv::Mat& heatmap = outputs[0];  // (1, 1, H/4, W/4) - face center heatmap
+    const cv::Mat& scale = outputs[1];    // (1, 2, H/4, W/4) - bbox scales
+    const cv::Mat& offset = outputs[2];   // (1, 2, H/4, W/4) - center offsets
+    // const cv::Mat& landmarks = outputs[3]; // (1, 10, H/4, W/4) - facial landmarks (not used for face count)
+
+    float scoreThreshold = m_config.centerfaceScoreThreshold;
+    float nmsThreshold = m_config.centerfaceNmsThreshold;
+
+    // Calculate scaling factors
+    float scaleX = static_cast<float>(originalWidth) / m_config.centerfaceInputSize.width;
+    float scaleY = static_cast<float>(originalHeight) / m_config.centerfaceInputSize.height;
+
+    // Extract face candidates from heatmap
+    std::vector<cv::Rect> candidateBoxes;
+    std::vector<float> confidences;
+
+    // Access heatmap data (assuming NCHW format: N=1, C=1, H=height/4, W=width/4)
+    const float* heatmapData = (const float*)heatmap.data;
+    const float* scaleData = (const float*)scale.data;
+    const float* offsetData = (const float*)offset.data;
+
+    int heatmapHeight = heatmap.size[2];
+    int heatmapWidth = heatmap.size[3];
+
+    for (int y = 0; y < heatmapHeight; y++) {
+        for (int x = 0; x < heatmapWidth; x++) {
+            int index = y * heatmapWidth + x;
+            float confidence = heatmapData[index];
+
+            if (confidence > scoreThreshold) {
+                // Get scale and offset for this position
+                float scaleW = scaleData[index]; // Scale width
+                float scaleH = scaleData[heatmapHeight * heatmapWidth + index]; // Scale height
+                float offsetX = offsetData[index]; // X offset
+                float offsetY = offsetData[heatmapHeight * heatmapWidth + index]; // Y offset
+
+                // Calculate center position (downsampling factor is 4)
+                float centerX = (x + offsetX) * 4.0f;
+                float centerY = (y + offsetY) * 4.0f;
+
+                // Calculate bounding box size
+                float width = scaleW * 4.0f;
+                float height = scaleH * 4.0f;
+
+                // Convert to bounding box coordinates
+                float x1 = centerX - width / 2.0f;
+                float y1 = centerY - height / 2.0f;
+                float x2 = centerX + width / 2.0f;
+                float y2 = centerY + height / 2.0f;
+
+                // Scale back to original image coordinates
+                x1 *= scaleX;
+                y1 *= scaleY;
+                x2 *= scaleX;
+                y2 *= scaleY;
+
+                // Clamp to image boundaries
+                x1 = std::max(0.0f, std::min(x1, (float)originalWidth));
+                y1 = std::max(0.0f, std::min(y1, (float)originalHeight));
+                x2 = std::max(0.0f, std::min(x2, (float)originalWidth));
+                y2 = std::max(0.0f, std::min(y2, (float)originalHeight));
+
+                // Create rectangle
+                cv::Rect bbox(static_cast<int>(x1), static_cast<int>(y1),
+                             static_cast<int>(x2 - x1), static_cast<int>(y2 - y1));
+
+                // Validate bounding box
+                if (bbox.width > 10 && bbox.height > 10) {
+                    candidateBoxes.push_back(bbox);
+                    confidences.push_back(confidence);
+                }
+            }
+        }
+    }
+
+    // Apply Non-Maximum Suppression
+    std::vector<int> indices;
+    cv::dnn::NMSBoxes(candidateBoxes, confidences, scoreThreshold, nmsThreshold, indices);
+
+    // Extract final detections
+    for (int idx : indices) {
+        faces.push_back(candidateBoxes[idx]);
+    }
+
+    return faces;
 }
 #endif
 

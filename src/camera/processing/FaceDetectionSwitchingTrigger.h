@@ -50,7 +50,8 @@
 enum class FaceDetectionAlgorithm {
     HAAR_CASCADE,  // Traditional Haar cascade classifier
 #if defined(HAVE_OPENCV_DNN)
-    YUNET         // Modern YuNet face detector using DNN
+    YUNET,         // Modern YuNet face detector using DNN
+    CENTERFACE     // CenterFace detector using DNN (joint face detection and alignment)
 #endif
 };
 
@@ -83,6 +84,11 @@ public:
         float scoreThreshold = 0.9f;        // Confidence score threshold
         float nmsThreshold = 0.3f;          // Non-maximum suppression threshold
         cv::Size inputSize = cv::Size(320, 320); // Input size for YuNet model
+
+        // CenterFace specific parameters
+        cv::Size centerfaceInputSize = cv::Size(640, 640); // Input size for CenterFace model
+        float centerfaceScoreThreshold = 0.5f;             // Confidence score threshold for CenterFace
+        float centerfaceNmsThreshold = 0.2f;               // Non-maximum suppression threshold for CenterFace
 #endif
     };
 
@@ -182,6 +188,7 @@ private:
     cv::CascadeClassifier m_faceClassifier;          // Haar cascade detector
 #if defined(HAVE_OPENCV_DNN)
     cv::Ptr<cv::FaceDetectorYN> m_yunetDetector;     // YuNet detector
+    cv::dnn::Net m_centerfaceNet;                    // CenterFace DNN model
 #endif
     bool m_detectionInitialized = false;
     
@@ -221,6 +228,13 @@ private:
     bool InitializeYuNetDetection(const std::string& modelPath);
     cv::Mat PreprocessFrameYuNet(const cv::Mat& frame);
     std::string GetDefaultYuNetModelPath();
+
+    // CenterFace methods
+    std::vector<cv::Rect> DetectFacesCenterFace(const cv::Mat& frame);
+    bool InitializeCenterFaceDetection(const std::string& modelPath);
+    cv::Mat PreprocessFrameCenterFace(const cv::Mat& frame);
+    std::string GetDefaultCenterFaceModelPath();
+    std::vector<cv::Rect> PostprocessCenterFaceOutput(const std::vector<cv::Mat>& outputs, int originalWidth, int originalHeight);
 #endif
     bool InitializeHaarCascade(const std::string& cascadePath);
     bool IsFrameStable(int faceCount);
