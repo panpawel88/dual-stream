@@ -42,11 +42,11 @@ public:
     std::string GetSourceName() const override;
 
     // Runtime property control
-    bool SetCameraProperty(CameraPropertyType property, int value) override;
-    bool GetCameraProperty(CameraPropertyType property, int& value) const override;
+    bool SetCameraProperty(CameraPropertyType property, double value) override;
+    bool GetCameraProperty(CameraPropertyType property, double& value) const override;
     bool SetCameraProperties(const CameraProperties& properties) override;
     CameraProperties GetCameraProperties() const override;
-    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const override;
+    std::set<CameraPropertyType> GetSupportedProperties() const override;
     
     /**
      * Enumerate available RealSense devices.

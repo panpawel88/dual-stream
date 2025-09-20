@@ -3,6 +3,7 @@
 #include "../../core/Config.h"
 #include <imgui.h>
 #include <algorithm>
+#include <cmath>
 
 CameraControlUI::CameraControlUI()
     : m_cameraManager(nullptr)
@@ -287,9 +288,12 @@ void CameraControlUI::UpdateCameraProperty(CameraPropertyType property, int valu
         return;
     }
 
-    LOG_DEBUG("CameraControlUI: Updating property ", static_cast<int>(property), " to ", value);
+    // Convert UI percentage (0-100) to normalized value (0.0-1.0)
+    double normalizedValue = value / 100.0;
 
-    if (m_cameraManager->SetCameraProperty(property, value)) {
+    LOG_DEBUG("CameraControlUI: Updating property ", static_cast<int>(property), " to ", value, "% (normalized: ", normalizedValue, ")");
+
+    if (m_cameraManager->SetCameraProperty(property, normalizedValue)) {
         LOG_DEBUG("CameraControlUI: Successfully updated property ", static_cast<int>(property), " to ", value);
 
         // For property changes that affect UI state
@@ -310,29 +314,20 @@ void CameraControlUI::ResetPropertiesToDefaults() {
         return;
     }
 
-    // Get actual camera default values from property ranges
-    auto brightnessRange = m_cameraManager->GetPropertyRange(CameraPropertyType::BRIGHTNESS);
-    auto contrastRange = m_cameraManager->GetPropertyRange(CameraPropertyType::CONTRAST);
-    auto saturationRange = m_cameraManager->GetPropertyRange(CameraPropertyType::SATURATION);
-    auto gainRange = m_cameraManager->GetPropertyRange(CameraPropertyType::GAIN);
+    // Set UI values to 50% (reasonable default)
+    m_brightness = 50;
+    m_contrast = 50;
+    m_saturation = 50;
+    m_gain = 50;
 
-    // Use actual camera defaults, not hardcoded 50%
-    m_brightness = brightnessRange.supported ? brightnessRange.defaultValue : 50;
-    m_contrast = contrastRange.supported ? contrastRange.defaultValue : 50;
-    m_saturation = saturationRange.supported ? saturationRange.defaultValue : 50;
-    m_gain = gainRange.supported ? gainRange.defaultValue : 50;
+    LOG_INFO("Resetting camera properties to defaults: All properties set to 50%");
 
-    LOG_INFO("Resetting camera properties to actual defaults: Brightness=", m_brightness,
-             ", Contrast=", m_contrast,
-             ", Saturation=", m_saturation, ", Gain=", m_gain
-             );
-
-    // Apply the actual default properties
+    // Apply the default properties (convert to normalized values)
     CameraProperties defaultProps;
-    defaultProps.brightness = m_brightness;
-    defaultProps.contrast = m_contrast;
-    defaultProps.saturation = m_saturation;
-    defaultProps.gain = m_gain;
+    defaultProps.brightness = 0.5;  // 50% = 0.5 normalized
+    defaultProps.contrast = 0.5;
+    defaultProps.saturation = 0.5;
+    defaultProps.gain = 0.5;
 
 
     if (!m_cameraManager->SetCameraProperties(defaultProps)) {
@@ -349,22 +344,23 @@ void CameraControlUI::SyncUIWithCameraProperties() {
 
     auto properties = m_cameraManager->GetAllCameraProperties();
 
-    // Only update UI values if they're valid (>= 0)
-    if (properties.brightness >= 0) {
-        m_brightness = properties.brightness;
-        LOG_DEBUG("Synced brightness to ", m_brightness);
+    // Convert normalized values (0.0-1.0) to UI percentage (0-100)
+    // Only update UI values if they're valid (not NaN)
+    if (!std::isnan(properties.brightness)) {
+        m_brightness = static_cast<int>(properties.brightness * 100.0);
+        LOG_DEBUG("Synced brightness to ", m_brightness, "% (normalized: ", properties.brightness, ")");
     }
-    if (properties.contrast >= 0) {
-        m_contrast = properties.contrast;
-        LOG_DEBUG("Synced contrast to ", m_contrast);
+    if (!std::isnan(properties.contrast)) {
+        m_contrast = static_cast<int>(properties.contrast * 100.0);
+        LOG_DEBUG("Synced contrast to ", m_contrast, "% (normalized: ", properties.contrast, ")");
     }
-    if (properties.saturation >= 0) {
-        m_saturation = properties.saturation;
-        LOG_DEBUG("Synced saturation to ", m_saturation);
+    if (!std::isnan(properties.saturation)) {
+        m_saturation = static_cast<int>(properties.saturation * 100.0);
+        LOG_DEBUG("Synced saturation to ", m_saturation, "% (normalized: ", properties.saturation, ")");
     }
-    if (properties.gain >= 0) {
-        m_gain = properties.gain;
-        LOG_DEBUG("Synced gain to ", m_gain);
+    if (!std::isnan(properties.gain)) {
+        m_gain = static_cast<int>(properties.gain * 100.0);
+        LOG_DEBUG("Synced gain to ", m_gain, "% (normalized: ", properties.gain, ")");
     }
 
 

@@ -35,11 +35,11 @@ public:
     std::string GetSourceName() const override;
 
     // Runtime property control
-    bool SetCameraProperty(CameraPropertyType property, int value) override;
-    bool GetCameraProperty(CameraPropertyType property, int& value) const override;
+    bool SetCameraProperty(CameraPropertyType property, double value) override;
+    bool GetCameraProperty(CameraPropertyType property, double& value) const override;
     bool SetCameraProperties(const CameraProperties& properties) override;
     CameraProperties GetCameraProperties() const override;
-    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const override;
+    std::set<CameraPropertyType> GetSupportedProperties() const override;
     
     /**
      * Enumerate available OpenCV camera devices.
@@ -83,6 +83,19 @@ private:
     std::chrono::steady_clock::time_point m_lastPropertyUpdate;
     static constexpr int PROPERTY_UPDATE_INTERVAL_MS = 100; // Limit property updates to avoid FPS drops
 
+    // Property range information (internal implementation detail)
+    struct CameraPropertyRange {
+        int min = 0;
+        int max = 100;
+        int defaultValue = 50;
+        int step = 1;
+        bool supported = false;
+
+        CameraPropertyRange() = default;
+        CameraPropertyRange(int minVal, int maxVal, int defVal, int stepVal = 1, bool isSupported = true)
+            : min(minVal), max(maxVal), defaultValue(defVal), step(stepVal), supported(isSupported) {}
+    };
+
     // Property range cache (mutable for const methods)
     mutable std::map<int, CameraPropertyRange> m_propertyRangeCache;
     
@@ -98,15 +111,15 @@ private:
     double GetOpenCVProperty(int propId) const;
     bool SetOpenCVProperty(int propId, double value);
 
-    // Property range detection
-    CameraPropertyRange DetectPropertyRange(int openCVPropId) const;
-    double ConvertToUIValue(double cameraValue, const CameraPropertyRange& range) const;
-    double ConvertFromUIValue(int uiValue, const CameraPropertyRange& range) const;
+    // Property range detection and conversion (internal use only)
+    OpenCVCameraSource::CameraPropertyRange DetectPropertyRange(int openCVPropId) const;
+    double ConvertToNormalizedValue(double cameraValue, const CameraPropertyRange& range) const;
+    double ConvertFromNormalizedValue(double normalizedValue, const CameraPropertyRange& range) const;
 
     // Property management helpers
     void ApplyPendingProperties();
     int ConvertPropertyTypeToOpenCV(CameraPropertyType property) const;
-    bool ValidatePropertyValue(CameraPropertyType property, int value) const;
+    bool ValidatePropertyValue(CameraPropertyType property, double value) const;
     
     // Backend conversion and selection helpers
     int ConvertBackendToOpenCV(CameraBackend backend) const;

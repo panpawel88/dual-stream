@@ -413,7 +413,7 @@ void CameraManager::SetState(CameraManagerState state) {
 }
 
 // Runtime property control implementation
-bool CameraManager::SetCameraProperty(CameraPropertyType property, int value) {
+bool CameraManager::SetCameraProperty(CameraPropertyType property, double value) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_state != CameraManagerState::INITIALIZED && m_state != CameraManagerState::CAPTURING) {
@@ -434,7 +434,7 @@ bool CameraManager::SetCameraProperty(CameraPropertyType property, int value) {
     return result;
 }
 
-bool CameraManager::GetCameraProperty(CameraPropertyType property, int& value) const {
+bool CameraManager::GetCameraProperty(CameraPropertyType property, double& value) const {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_state != CameraManagerState::INITIALIZED && m_state != CameraManagerState::CAPTURING) {
@@ -483,16 +483,16 @@ CameraProperties CameraManager::GetAllCameraProperties() const {
     return m_cameraSource->GetCameraProperties();
 }
 
-CameraPropertyRange CameraManager::GetPropertyRange(CameraPropertyType property) const {
+std::set<CameraPropertyType> CameraManager::GetSupportedProperties() const {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_state != CameraManagerState::INITIALIZED && m_state != CameraManagerState::CAPTURING) {
-        return CameraPropertyRange{0, 100, 50, 1, false}; // Not supported when not initialized
+        return {}; // No properties supported when not initialized
     }
 
     if (!m_cameraSource) {
-        return CameraPropertyRange{0, 100, 50, 1, false};
+        return {};
     }
 
-    return m_cameraSource->GetPropertyRange(property);
+    return m_cameraSource->GetSupportedProperties();
 }
