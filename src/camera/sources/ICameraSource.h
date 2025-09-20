@@ -75,8 +75,8 @@ struct CameraConfig {
 
     // OpenCV specific settings
     CameraBackend backend = CameraBackend::AUTO;  // Camera backend selection
-    int brightness = -1;                // Camera brightness (-1 = auto)
-    int contrast = -1;                  // Camera contrast (-1 = auto)
+    double brightness = -1.0;             // Camera brightness (-1.0 = auto, 0.0-1.0 normalized)
+    double contrast = -1.0;               // Camera contrast (-1.0 = auto, 0.0-1.0 normalized)
 
     // RealSense specific settings
     bool enableEmitter = true;          // Enable IR emitter for depth

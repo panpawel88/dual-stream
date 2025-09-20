@@ -117,6 +117,7 @@ private:
     double ConvertFromNormalizedValue(double normalizedValue, const CameraPropertyRange& range) const;
 
     // Property management helpers
+    void ConfigureProperty(CameraPropertyType property, double configValue, double& currentValue);
     void ApplyPendingProperties();
     int ConvertPropertyTypeToOpenCV(CameraPropertyType property) const;
     bool ValidatePropertyValue(CameraPropertyType property, double value) const;
