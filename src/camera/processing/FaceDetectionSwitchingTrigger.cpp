@@ -909,6 +909,9 @@ cv::Mat FaceDetectionSwitchingTrigger::CreatePreviewFrame(const cv::Mat& frame, 
         case FaceDetectionAlgorithm::YUNET:
             algoText += "YuNet";
             break;
+        case FaceDetectionAlgorithm::CENTERFACE:
+            algoText += "CenterFace";
+            break;
 #endif
         default:
             algoText += "Unknown";
