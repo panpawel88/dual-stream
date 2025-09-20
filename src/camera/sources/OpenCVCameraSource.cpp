@@ -94,45 +94,63 @@ bool OpenCVCameraSource::ConfigureCamera() {
     double autoExpValue = GetOpenCVProperty(cv::CAP_PROP_AUTO_EXPOSURE);
     if (autoExpValue >= 0) {
         m_currentProperties.autoExposure = (autoExpValue > 0.5) ? 1 : 0;
+        LOG_INFO("Initial auto-exposure state: ", m_currentProperties.autoExposure ? "enabled" : "disabled", " (camera value: ", autoExpValue, ")");
+    } else {
+        LOG_INFO("Camera does not support auto-exposure control - exposure properties disabled");
+        m_currentProperties.autoExposure = -1; // Indicate not supported
     }
 
     // Initialize actual property values from camera using proper range conversion
     double actualBrightness = GetOpenCVProperty(cv::CAP_PROP_BRIGHTNESS);
     if (actualBrightness >= 0) {
-        PropertyRange range = DetectPropertyRange(cv::CAP_PROP_BRIGHTNESS);
+        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_BRIGHTNESS);
         m_currentProperties.brightness = static_cast<int>(ConvertToUIValue(actualBrightness, range));
         LOG_DEBUG("Initial brightness: camera value=", actualBrightness, ", UI value=", m_currentProperties.brightness, "%");
     }
 
     double actualContrast = GetOpenCVProperty(cv::CAP_PROP_CONTRAST);
     if (actualContrast >= 0) {
-        PropertyRange range = DetectPropertyRange(cv::CAP_PROP_CONTRAST);
+        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_CONTRAST);
         m_currentProperties.contrast = static_cast<int>(ConvertToUIValue(actualContrast, range));
         LOG_DEBUG("Initial contrast: camera value=", actualContrast, ", UI value=", m_currentProperties.contrast, "%");
     }
 
     double actualSaturation = GetOpenCVProperty(cv::CAP_PROP_SATURATION);
     if (actualSaturation >= 0) {
-        PropertyRange range = DetectPropertyRange(cv::CAP_PROP_SATURATION);
+        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_SATURATION);
         m_currentProperties.saturation = static_cast<int>(ConvertToUIValue(actualSaturation, range));
         LOG_DEBUG("Initial saturation: camera value=", actualSaturation, ", UI value=", m_currentProperties.saturation, "%");
     }
 
     double actualGain = GetOpenCVProperty(cv::CAP_PROP_GAIN);
     if (actualGain >= 0) {
-        PropertyRange range = DetectPropertyRange(cv::CAP_PROP_GAIN);
+        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_GAIN);
         m_currentProperties.gain = static_cast<int>(ConvertToUIValue(actualGain, range));
         LOG_DEBUG("Initial gain: camera value=", actualGain, ", UI value=", m_currentProperties.gain, "%");
     }
 
-    // For exposure, only read if auto-exposure is disabled
-    if (m_currentProperties.autoExposure == 0) {
+    // Only try to read exposure if auto-exposure control is supported
+    if (m_currentProperties.autoExposure != -1) {
         double actualExposure = GetOpenCVProperty(cv::CAP_PROP_EXPOSURE);
         if (actualExposure >= 0) {
-            PropertyRange range = DetectPropertyRange(cv::CAP_PROP_EXPOSURE);
-            m_currentProperties.exposure = static_cast<int>(ConvertToUIValue(actualExposure, range));
-            LOG_DEBUG("Initial exposure: camera value=", actualExposure, ", UI value=", m_currentProperties.exposure, "%");
+            LOG_INFO("Current camera exposure value: ", actualExposure);
+
+            // Only set manual exposure if auto-exposure is disabled
+            if (m_currentProperties.autoExposure == 0) {
+                CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_EXPOSURE);
+                m_currentProperties.exposure = static_cast<int>(ConvertToUIValue(actualExposure, range));
+                LOG_INFO("Manual exposure mode - UI value: ", m_currentProperties.exposure, "%");
+            } else {
+                LOG_INFO("Auto-exposure mode - not setting manual exposure value");
+                m_currentProperties.exposure = -1; // Indicate auto mode
+            }
+        } else {
+            LOG_INFO("Camera exposure property not readable - disabling exposure control");
+            m_currentProperties.exposure = -1;
         }
+    } else {
+        LOG_INFO("Exposure control not supported by camera - skipping exposure initialization");
+        m_currentProperties.exposure = -1;
     }
     
     // Verify actual settings
@@ -511,8 +529,8 @@ bool OpenCVCameraSource::SetOpenCVProperty(int propId, double value) {
     return success;
 }
 
-OpenCVCameraSource::PropertyRange OpenCVCameraSource::DetectPropertyRange(int openCVPropId) const {
-    PropertyRange range;
+CameraPropertyRange OpenCVCameraSource::DetectPropertyRange(int openCVPropId) const {
+    CameraPropertyRange range;
 
     if (!m_capture.isOpened()) {
         return range;
@@ -530,53 +548,71 @@ OpenCVCameraSource::PropertyRange OpenCVCameraSource::DetectPropertyRange(int op
         return range; // Property not supported
     }
 
-    range.current = currentValue;
+    // Store current value for default calculation
+    double currentAsDefault = currentValue;
 
     // Use property-specific heuristics to determine range
-    // Special handling for saturation which often uses 0-255 even with low initial values
-    if (openCVPropId == cv::CAP_PROP_SATURATION) {
+    // Special handling for exposure property due to auto-exposure behavior
+    if (openCVPropId == cv::CAP_PROP_EXPOSURE) {
+        // For exposure, check if auto-exposure is currently enabled
+        double autoExpValue = m_capture.get(cv::CAP_PROP_AUTO_EXPOSURE);
+        bool autoEnabled = (autoExpValue > 0.5);
+
+        // For exposure, always use normalized range (0-1) which is most common
+        // Don't try to distinguish between auto/manual here since this affects conversion
+        range.min = 0;
+        range.max = 1;
+        LOG_DEBUG("Exposure: using normalized range [0, 1] (most common for cameras)");
+    } else if (openCVPropId == cv::CAP_PROP_SATURATION) {
         // Most webcams use 0-255 range for saturation, even if they start with low values
         // Use 0-255 as default unless the current value is clearly in a different range
         if (currentValue >= 1000) {
             // Very high values suggest extended range
-            range.min = 0.0;
-            range.max = 10000.0;
+            range.min = 0;
+            range.max = 10000;
         } else if (currentValue > 255.0) {
             // Above 255 suggests larger range
-            range.min = 0.0;
-            range.max = 1000.0;
+            range.min = 0;
+            range.max = 1000;
         } else {
             // Default to 0-255 for saturation (most common)
-            range.min = 0.0;
-            range.max = 255.0;
+            range.min = 0;
+            range.max = 255;
         }
     } else {
         // General heuristics for other properties based on current value
         if (currentValue >= 10000) {
             // Large values suggest 16-bit range (0-65535)
-            range.min = 0.0;
-            range.max = 65535.0;
+            range.min = 0;
+            range.max = 65535;
         } else if (currentValue >= 1000) {
             // Medium-large values suggest extended range (0-10000)
-            range.min = 0.0;
-            range.max = 10000.0;
+            range.min = 0;
+            range.max = 10000;
         } else if (currentValue >= 100) {
             // Medium values suggest 8-bit range (0-255)
-            range.min = 0.0;
-            range.max = 255.0;
+            range.min = 0;
+            range.max = 255;
         } else if (currentValue >= 10) {
             // Smaller values suggest percentage range (0-100)
-            range.min = 0.0;
-            range.max = 100.0;
+            range.min = 0;
+            range.max = 100;
         } else {
             // Small values suggest normalized range (0-1)
-            range.min = 0.0;
-            range.max = 1.0;
+            range.min = 0;
+            range.max = 1;
         }
     }
 
-    range.detected = true;
-    LOG_DEBUG("Estimated property ", openCVPropId, " range: [", range.min, ", ", range.max, "], current: ", range.current);
+    range.supported = true;
+    range.step = 1;
+
+    // Calculate default value manually to avoid circular dependency
+    double normalized = (currentAsDefault - static_cast<double>(range.min)) / (static_cast<double>(range.max) - static_cast<double>(range.min));
+    normalized = std::max(0.0, std::min(1.0, normalized)); // Clamp to [0,1]
+    range.defaultValue = static_cast<int>(normalized * 100.0);
+
+    LOG_DEBUG("Estimated property ", openCVPropId, " range: [", range.min, ", ", range.max, "], default: ", range.defaultValue);
 
     // Cache the result
     m_propertyRangeCache[openCVPropId] = range;
@@ -584,27 +620,27 @@ OpenCVCameraSource::PropertyRange OpenCVCameraSource::DetectPropertyRange(int op
     return range;
 }
 
-double OpenCVCameraSource::ConvertToUIValue(double cameraValue, const PropertyRange& range) const {
-    if (!range.detected || range.max <= range.min) {
+double OpenCVCameraSource::ConvertToUIValue(double cameraValue, const CameraPropertyRange& range) const {
+    if (!range.supported || range.max <= range.min) {
         // Fallback: assume 0-1 range
         return cameraValue * 100.0;
     }
 
     // Map camera range to 0-100 UI range
-    double normalized = (cameraValue - range.min) / (range.max - range.min);
+    double normalized = (cameraValue - static_cast<double>(range.min)) / (static_cast<double>(range.max) - static_cast<double>(range.min));
     normalized = std::max(0.0, std::min(1.0, normalized)); // Clamp to [0,1]
     return normalized * 100.0;
 }
 
-double OpenCVCameraSource::ConvertFromUIValue(int uiValue, const PropertyRange& range) const {
-    if (!range.detected || range.max <= range.min) {
+double OpenCVCameraSource::ConvertFromUIValue(int uiValue, const CameraPropertyRange& range) const {
+    if (!range.supported || range.max <= range.min) {
         // Fallback: assume 0-1 range
         return uiValue / 100.0;
     }
 
     // Map UI range (0-100) to camera range
     double normalized = uiValue / 100.0;
-    return range.min + normalized * (range.max - range.min);
+    return static_cast<double>(range.min) + normalized * (static_cast<double>(range.max) - static_cast<double>(range.min));
 }
 
 int OpenCVCameraSource::ConvertBackendToOpenCV(CameraBackend backend) const {
@@ -911,9 +947,9 @@ CameraPropertyRange OpenCVCameraSource::GetPropertyRange(CameraPropertyType prop
             // Query actual current value using proper range detection
             int openCVProp = ConvertPropertyTypeToOpenCV(property);
             if (openCVProp != -1) {
-                PropertyRange range = DetectPropertyRange(openCVProp);
-                if (range.detected) {
-                    int currentAsInt = static_cast<int>(ConvertToUIValue(range.current, range));
+                CameraPropertyRange range = DetectPropertyRange(openCVProp);
+                if (range.supported) {
+                    int currentAsInt = range.defaultValue;
                     return CameraPropertyRange{0, 100, currentAsInt, 1, true};
                 }
             }
@@ -931,9 +967,9 @@ CameraPropertyRange OpenCVCameraSource::GetPropertyRange(CameraPropertyType prop
                 // Manual exposure - query current value using proper range detection
                 int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::EXPOSURE);
                 if (openCVProp != -1) {
-                    PropertyRange range = DetectPropertyRange(openCVProp);
-                    if (range.detected) {
-                        int currentAsInt = static_cast<int>(ConvertToUIValue(range.current, range));
+                    CameraPropertyRange range = DetectPropertyRange(openCVProp);
+                    if (range.supported) {
+                        int currentAsInt = range.defaultValue;
                         return CameraPropertyRange{0, 100, currentAsInt, 1, true};
                     }
                 }
@@ -966,7 +1002,7 @@ void OpenCVCameraSource::ApplyPendingProperties() {
     if (m_pendingProperties.brightness != -1) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::BRIGHTNESS);
         if (openCVProp != -1) {
-            PropertyRange range = DetectPropertyRange(openCVProp);
+            CameraPropertyRange range = DetectPropertyRange(openCVProp);
             double setValue = ConvertFromUIValue(m_pendingProperties.brightness, range);
 
             LOG_DEBUG("Setting brightness: UI value=", m_pendingProperties.brightness, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
@@ -986,7 +1022,7 @@ void OpenCVCameraSource::ApplyPendingProperties() {
     if (m_pendingProperties.contrast != -1) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::CONTRAST);
         if (openCVProp != -1) {
-            PropertyRange range = DetectPropertyRange(openCVProp);
+            CameraPropertyRange range = DetectPropertyRange(openCVProp);
             double setValue = ConvertFromUIValue(m_pendingProperties.contrast, range);
 
             LOG_DEBUG("Setting contrast: UI value=", m_pendingProperties.contrast, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
@@ -1006,7 +1042,7 @@ void OpenCVCameraSource::ApplyPendingProperties() {
     if (m_pendingProperties.saturation != -1) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::SATURATION);
         if (openCVProp != -1) {
-            PropertyRange range = DetectPropertyRange(openCVProp);
+            CameraPropertyRange range = DetectPropertyRange(openCVProp);
             double setValue = ConvertFromUIValue(m_pendingProperties.saturation, range);
 
             LOG_DEBUG("Setting saturation: UI value=", m_pendingProperties.saturation, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
@@ -1026,7 +1062,7 @@ void OpenCVCameraSource::ApplyPendingProperties() {
     if (m_pendingProperties.gain != -1) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::GAIN);
         if (openCVProp != -1) {
-            PropertyRange range = DetectPropertyRange(openCVProp);
+            CameraPropertyRange range = DetectPropertyRange(openCVProp);
             double setValue = ConvertFromUIValue(m_pendingProperties.gain, range);
 
             LOG_DEBUG("Setting gain: UI value=", m_pendingProperties.gain, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
@@ -1044,9 +1080,14 @@ void OpenCVCameraSource::ApplyPendingProperties() {
     }
 
     // Handle auto-exposure first, as it affects manual exposure
-    if (m_pendingProperties.autoExposure != -1) {
+    // Only if camera supports exposure control
+    if (m_pendingProperties.autoExposure != -1 && m_currentProperties.autoExposure != -1) {
         bool autoExpEnabled = (m_pendingProperties.autoExposure > 0);
         LOG_DEBUG("Setting auto-exposure to ", autoExpEnabled ? "enabled" : "disabled");
+
+        // Clear exposure range cache when auto-exposure mode changes
+        // This ensures fresh range detection based on the new mode
+        m_propertyRangeCache.erase(cv::CAP_PROP_EXPOSURE);
 
         if (autoExpEnabled) {
             // Enable auto-exposure
@@ -1054,6 +1095,12 @@ void OpenCVCameraSource::ApplyPendingProperties() {
                 m_currentProperties.autoExposure = 1;
                 m_currentProperties.exposure = -1; // Reset to auto
                 LOG_INFO("Auto-exposure enabled successfully");
+
+                // Read current auto-exposure value if available (for display purposes)
+                double currentAutoExposure = GetOpenCVProperty(cv::CAP_PROP_EXPOSURE);
+                if (currentAutoExposure >= 0) {
+                    LOG_DEBUG("Current auto-exposure value: ", currentAutoExposure);
+                }
             } else {
                 LOG_WARNING("Failed to enable auto-exposure");
             }
@@ -1084,23 +1131,30 @@ void OpenCVCameraSource::ApplyPendingProperties() {
                 m_currentProperties.autoExposure = 0; // Update UI state
             }
         }
+    } else if (m_pendingProperties.autoExposure != -1) {
+        // Auto-exposure control not supported by camera
+        LOG_DEBUG("Ignoring auto-exposure setting - camera does not support auto-exposure control");
+        m_pendingProperties.autoExposure = -1; // Clear the pending value
     }
 
-    if (m_pendingProperties.exposure != -1) {
+    if (m_pendingProperties.exposure != -1 && m_currentProperties.autoExposure != -1) {
         // If auto-exposure is enabled, don't set manual exposure
         if (m_currentProperties.autoExposure == 1) {
             LOG_WARNING("Skipping manual exposure setting because auto-exposure is enabled");
+            // Clear the pending exposure since we can't set it in auto mode
+            m_pendingProperties.exposure = -1;
         } else {
             // Set manual exposure using proper range detection
             int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::EXPOSURE);
             if (openCVProp != -1) {
-                PropertyRange range = DetectPropertyRange(openCVProp);
+                CameraPropertyRange range = DetectPropertyRange(openCVProp);
                 double setValue = ConvertFromUIValue(m_pendingProperties.exposure, range);
 
                 LOG_DEBUG("Setting exposure: UI value=", m_pendingProperties.exposure, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
 
                 if (SetOpenCVProperty(openCVProp, setValue)) {
                     double actualValue = GetOpenCVProperty(openCVProp);
+                    LOG_DEBUG("Setting exposure: actual value=", actualValue);
                     if (actualValue >= 0) {
                         m_currentProperties.exposure = static_cast<int>(ConvertToUIValue(actualValue, range));
                         LOG_INFO("Manual exposure set successfully - target: ", m_pendingProperties.exposure,
@@ -1119,9 +1173,11 @@ void OpenCVCameraSource::ApplyPendingProperties() {
                 LOG_ERROR("Failed to get OpenCV exposure property ID");
             }
         }
+    } else if (m_pendingProperties.exposure != -1) {
+        // Exposure control not supported by camera
+        LOG_DEBUG("Ignoring exposure setting - camera does not support exposure control");
+        m_pendingProperties.exposure = -1; // Clear the pending value
     }
-
-
 
     // Clear pending properties and flag
     m_pendingProperties.Reset();
