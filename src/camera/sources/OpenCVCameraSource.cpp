@@ -87,6 +87,12 @@ bool OpenCVCameraSource::ConfigureCamera() {
             m_currentProperties.exposure = static_cast<int>(actualExposure * 100.0);
         }
     }
+
+    // Initialize auto-exposure state from camera
+    double autoExpValue = GetOpenCVProperty(cv::CAP_PROP_AUTO_EXPOSURE);
+    if (autoExpValue >= 0) {
+        m_currentProperties.autoExposure = (autoExpValue > 0.5) ? 1 : 0;
+    }
     
     // Verify actual settings
     int actualWidth = static_cast<int>(m_capture.get(cv::CAP_PROP_FRAME_WIDTH));
@@ -622,6 +628,9 @@ bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, int valu
         case CameraPropertyType::GAIN:
             m_pendingProperties.gain = value;
             break;
+        case CameraPropertyType::AUTO_EXPOSURE:
+            m_pendingProperties.autoExposure = value;
+            break;
         default:
             UpdateLastError("Unsupported property type");
             return false;
@@ -651,6 +660,9 @@ bool OpenCVCameraSource::GetCameraProperty(CameraPropertyType property, int& val
         case CameraPropertyType::GAIN:
             value = m_currentProperties.gain;
             return m_currentProperties.gain != -1;
+        case CameraPropertyType::AUTO_EXPOSURE:
+            value = m_currentProperties.autoExposure;
+            return m_currentProperties.autoExposure != -1;
         default:
             return false;
     }
@@ -684,6 +696,10 @@ bool OpenCVCameraSource::SetCameraProperties(const CameraProperties& properties)
         UpdateLastError("Invalid gain value: " + std::to_string(properties.gain));
         return false;
     }
+    if (properties.autoExposure != -1 && !ValidatePropertyValue(CameraPropertyType::AUTO_EXPOSURE, properties.autoExposure)) {
+        UpdateLastError("Invalid auto-exposure value: " + std::to_string(properties.autoExposure));
+        return false;
+    }
 
     // Copy valid properties to pending
     if (properties.brightness != -1) {
@@ -700,6 +716,9 @@ bool OpenCVCameraSource::SetCameraProperties(const CameraProperties& properties)
     }
     if (properties.gain != -1) {
         m_pendingProperties.gain = properties.gain;
+    }
+    if (properties.autoExposure != -1) {
+        m_pendingProperties.autoExposure = properties.autoExposure;
     }
 
     // Signal that properties need to be applied
@@ -723,6 +742,9 @@ CameraPropertyRange OpenCVCameraSource::GetPropertyRange(CameraPropertyType prop
         case CameraPropertyType::EXPOSURE:
             // Exposure might have different range depending on camera
             return CameraPropertyRange{0, 100, 50, 1, true};
+        case CameraPropertyType::AUTO_EXPOSURE:
+            // Auto-exposure is a boolean: 0=manual, 1=auto
+            return CameraPropertyRange{0, 1, 1, 1, true};
         default:
             return CameraPropertyRange{0, 100, 50, 1, false};
     }
@@ -759,13 +781,59 @@ void OpenCVCameraSource::ApplyPendingProperties() {
         }
     }
 
+    // Handle auto-exposure first, as it affects manual exposure
+    if (m_pendingProperties.autoExposure != -1) {
+        bool autoExpEnabled = (m_pendingProperties.autoExposure > 0);
+        LOG_DEBUG("Setting auto-exposure to ", autoExpEnabled ? "enabled" : "disabled");
+
+        if (autoExpEnabled) {
+            // Enable auto-exposure
+            if (SetOpenCVProperty(cv::CAP_PROP_AUTO_EXPOSURE, 1.0)) {
+                m_currentProperties.autoExposure = 1;
+                m_currentProperties.exposure = -1; // Reset to auto
+                LOG_INFO("Auto-exposure enabled successfully");
+            } else {
+                LOG_WARNING("Failed to enable auto-exposure");
+            }
+        } else {
+            // Disable auto-exposure - try different platform-specific values
+            bool autoDisabled = false;
+            std::vector<double> autoExpDisableValues = {0.0, 0.25}; // Common values
+
+            for (double disableValue : autoExpDisableValues) {
+                if (SetOpenCVProperty(cv::CAP_PROP_AUTO_EXPOSURE, disableValue)) {
+                    autoDisabled = true;
+                    m_currentProperties.autoExposure = 0;
+                    LOG_INFO("Auto-exposure disabled with value ", disableValue);
+                    break;
+                }
+            }
+
+            if (!autoDisabled) {
+                LOG_WARNING("Failed to disable auto-exposure");
+            }
+        }
+    }
+
     if (m_pendingProperties.exposure != -1) {
-        int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::EXPOSURE);
-        if (openCVProp != -1 && SetOpenCVProperty(openCVProp, m_pendingProperties.exposure / 100.0)) {
-            // Get actual value set by camera
-            double actualValue = GetOpenCVProperty(openCVProp);
-            if (actualValue >= 0) {
-                m_currentProperties.exposure = static_cast<int>(actualValue * 100.0);
+        // If auto-exposure is enabled, don't set manual exposure
+        if (m_currentProperties.autoExposure == 1) {
+            LOG_WARNING("Skipping manual exposure setting because auto-exposure is enabled");
+        } else {
+            // Set manual exposure
+            int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::EXPOSURE);
+            if (openCVProp != -1 && SetOpenCVProperty(openCVProp, m_pendingProperties.exposure / 100.0)) {
+                // Get actual value set by camera
+                double actualValue = GetOpenCVProperty(openCVProp);
+                if (actualValue >= 0) {
+                    m_currentProperties.exposure = static_cast<int>(actualValue * 100.0);
+                    LOG_INFO("Manual exposure set to ", m_currentProperties.exposure, "% (actual: ", actualValue, ")");
+                } else {
+                    LOG_WARNING("Manual exposure set but could not read back actual value");
+                    m_currentProperties.exposure = m_pendingProperties.exposure;
+                }
+            } else {
+                LOG_ERROR("Failed to set manual exposure to ", m_pendingProperties.exposure);
             }
         }
     }
@@ -809,12 +877,25 @@ int OpenCVCameraSource::ConvertPropertyTypeToOpenCV(CameraPropertyType property)
             return cv::CAP_PROP_SATURATION;
         case CameraPropertyType::GAIN:
             return cv::CAP_PROP_GAIN;
+        case CameraPropertyType::AUTO_EXPOSURE:
+            return cv::CAP_PROP_AUTO_EXPOSURE;
         default:
             return -1;
     }
 }
 
 bool OpenCVCameraSource::ValidatePropertyValue(CameraPropertyType property, int value) const {
-    // For now, validate that values are in 0-100 range
-    return value >= 0 && value <= 100;
+    switch (property) {
+        case CameraPropertyType::AUTO_EXPOSURE:
+            // Auto-exposure is boolean: 0 or 1
+            return value >= 0 && value <= 1;
+        case CameraPropertyType::BRIGHTNESS:
+        case CameraPropertyType::CONTRAST:
+        case CameraPropertyType::EXPOSURE:
+        case CameraPropertyType::SATURATION:
+        case CameraPropertyType::GAIN:
+        default:
+            // Other properties use 0-100 range
+            return value >= 0 && value <= 100;
+    }
 }

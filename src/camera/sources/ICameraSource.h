@@ -106,7 +106,8 @@ enum class CameraPropertyType {
     CONTRAST,           // Camera contrast (0-100)
     EXPOSURE,           // Camera exposure (0-100)
     SATURATION,         // Camera saturation (0-100)
-    GAIN                // Camera gain (0-100)
+    GAIN,               // Camera gain (0-100)
+    AUTO_EXPOSURE       // Auto exposure control (0=manual, 1=auto)
 };
 
 /**
@@ -133,18 +134,19 @@ struct CameraProperties {
     int exposure = -1;              // -1 means unchanged/auto
     int saturation = -1;            // -1 means unchanged/auto
     int gain = -1;                  // -1 means unchanged/auto
+    int autoExposure = -1;          // -1 means unchanged, 0=manual, 1=auto
 
     CameraProperties() = default;
 
     // Check if any property is set (not -1)
     bool HasChanges() const {
         return brightness != -1 || contrast != -1 || exposure != -1 ||
-               saturation != -1 || gain != -1;
+               saturation != -1 || gain != -1 || autoExposure != -1;
     }
 
     // Reset all properties to unchanged state
     void Reset() {
-        brightness = contrast = exposure = saturation = gain = -1;
+        brightness = contrast = exposure = saturation = gain = autoExposure = -1;
     }
 };
 
