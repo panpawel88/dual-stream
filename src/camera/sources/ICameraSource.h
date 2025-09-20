@@ -107,7 +107,8 @@ enum class CameraPropertyType {
     BRIGHTNESS,         // Camera brightness (0.0-1.0)
     CONTRAST,           // Camera contrast (0.0-1.0)
     SATURATION,         // Camera saturation (0.0-1.0)
-    GAIN                // Camera gain (0.0-1.0)
+    GAIN,               // Camera gain (0.0-1.0)
+    AE_MEAN_INTENSITY_SETPOINT  // RealSense auto-exposure mean intensity target (0.0-1.0)
 };
 
 
@@ -120,18 +121,20 @@ struct CameraProperties {
     double contrast = std::numeric_limits<double>::quiet_NaN();    // NaN means unchanged/auto
     double saturation = std::numeric_limits<double>::quiet_NaN();  // NaN means unchanged/auto
     double gain = std::numeric_limits<double>::quiet_NaN();        // NaN means unchanged/auto
+    double ae_mean_intensity_setpoint = std::numeric_limits<double>::quiet_NaN();  // RealSense AE target intensity
 
     CameraProperties() = default;
 
     // Check if any property is set (not NaN)
     bool HasChanges() const {
         return !std::isnan(brightness) || !std::isnan(contrast) ||
-               !std::isnan(saturation) || !std::isnan(gain);
+               !std::isnan(saturation) || !std::isnan(gain) ||
+               !std::isnan(ae_mean_intensity_setpoint);
     }
 
     // Reset all properties to unchanged state
     void Reset() {
-        brightness = contrast = saturation = gain = std::numeric_limits<double>::quiet_NaN();
+        brightness = contrast = saturation = gain = ae_mean_intensity_setpoint = std::numeric_limits<double>::quiet_NaN();
     }
 };
 

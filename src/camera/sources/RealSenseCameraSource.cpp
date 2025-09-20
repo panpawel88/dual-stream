@@ -3,6 +3,7 @@
 
 #ifdef HAVE_REALSENSE
 #include <librealsense2/rs.hpp>
+#include <librealsense2/rs_advanced_mode.hpp>
 #include <cstring>
 
 RealSenseCameraSource::RealSenseCameraSource() 
@@ -77,6 +78,9 @@ bool RealSenseCameraSource::InitializePipeline() {
                 m_config_rs->enable_device(serialNum);
             }
         }
+
+        // Try to initialize advanced mode after pipeline configuration
+        InitializeAdvancedMode();
 
         return true;
     } catch (const rs2::error& e) {
@@ -532,33 +536,190 @@ void RealSenseCameraSource::UpdateLastError(const std::string& error) {
 
 // Runtime property control implementation
 bool RealSenseCameraSource::SetCameraProperty(CameraPropertyType property, double value) {
-    // RealSense cameras typically don't support runtime property changes
-    // in the same way as OpenCV cameras. This would require using
-    // rs2::sensor.set_option() calls which are device-specific.
-    m_lastError = "Runtime property control not supported for RealSense cameras";
+    if (property == CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT) {
+        // Validate normalized value range first (before acquiring mutex)
+        if (value < 0.0 || value > 1.0) {
+            m_lastError = "Property value must be in range [0.0, 1.0]";
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(m_propertyMutex);
+
+        if (!IsAdvancedModeAvailable()) {
+            m_lastError = "Advanced mode not available for this device";
+            return false;
+        }
+
+        try {
+            // Convert normalized value to raw AE value
+            int rawValue = DenormalizeAEValue(value);
+
+            // Get current AE control settings
+            STAEControl ae_ctrl = m_advancedMode->get_ae_control();
+
+            // Set the mean intensity setpoint
+            ae_ctrl.meanIntensitySetPoint = rawValue;
+
+            // Apply the new settings
+            m_advancedMode->set_ae_control(ae_ctrl);
+
+            return true;
+
+        } catch (const rs2::error& e) {
+            m_lastError = std::string("Failed to set AE mean intensity: ") + e.what();
+            return false;
+        }
+    }
+
+    // Other properties not supported
+    m_lastError = "Property not supported for RealSense cameras";
     return false;
 }
 
 bool RealSenseCameraSource::GetCameraProperty(CameraPropertyType property, double& value) const {
-    // RealSense cameras don't maintain cached property values like OpenCV
-    // Would need to query rs2::sensor.get_option() for actual implementation
+    if (property == CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT) {
+        std::lock_guard<std::mutex> lock(m_propertyMutex);
+
+        if (!IsAdvancedModeAvailable()) {
+            return false;
+        }
+
+        try {
+            // Get current AE control settings
+            STAEControl ae_ctrl = m_advancedMode->get_ae_control();
+
+            // Convert raw value to normalized value
+            value = NormalizeAEValue(ae_ctrl.meanIntensitySetPoint);
+
+            return true;
+
+        } catch (const rs2::error& e) {
+            return false;
+        }
+    }
+
+    // Other properties not supported
     return false;
 }
 
 bool RealSenseCameraSource::SetCameraProperties(const CameraProperties& properties) {
-    // Could be implemented to set multiple RealSense options at once
-    // For now, not supported
-    m_lastError = "Batch property control not supported for RealSense cameras";
-    return false;
+    if (!properties.HasChanges()) {
+        return true; // No changes to apply
+    }
+
+    // Handle AE mean intensity setpoint if set
+    if (!std::isnan(properties.ae_mean_intensity_setpoint)) {
+        if (!SetCameraProperty(CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT, properties.ae_mean_intensity_setpoint)) {
+            return false;
+        }
+    }
+
+    // Other properties not supported for RealSense
+    bool hasUnsupportedProperties = !std::isnan(properties.brightness) ||
+                                   !std::isnan(properties.contrast) ||
+                                   !std::isnan(properties.saturation) ||
+                                   !std::isnan(properties.gain);
+
+    if (hasUnsupportedProperties) {
+        m_lastError = "Some properties not supported for RealSense cameras";
+        return false;
+    }
+
+    return true;
 }
 
 CameraProperties RealSenseCameraSource::GetCameraProperties() const {
-    // Return empty properties since RealSense doesn't currently support this
-    return CameraProperties{};
+    std::lock_guard<std::mutex> lock(m_propertyMutex);
+
+    CameraProperties properties;
+
+    // Get AE mean intensity setpoint if available (without additional locking since we already hold the mutex)
+    if (IsAdvancedModeAvailable()) {
+        try {
+            STAEControl ae_ctrl = m_advancedMode->get_ae_control();
+            properties.ae_mean_intensity_setpoint = NormalizeAEValue(ae_ctrl.meanIntensitySetPoint);
+        } catch (const rs2::error& e) {
+            // Failed to get property, leave as NaN
+        }
+    }
+
+    return properties;
 }
 
 std::set<CameraPropertyType> RealSenseCameraSource::GetSupportedProperties() const {
-    // RealSense property support would need to be queried from rs2::sensor.get_supported_options()
-    // For now, return empty set (no properties supported)
-    return {};
+    std::lock_guard<std::mutex> lock(m_propertyMutex);
+
+    std::set<CameraPropertyType> supportedProperties;
+
+    // Add AE mean intensity property if advanced mode is available
+    if (IsAdvancedModeAvailable()) {
+        supportedProperties.insert(CameraPropertyType::AE_MEAN_INTENSITY_SETPOINT);
+    }
+
+    return supportedProperties;
+}
+
+// Advanced mode helper methods implementation
+bool RealSenseCameraSource::InitializeAdvancedMode() {
+    try {
+        if (m_isPlayingBagFile) {
+            // Advanced mode not available for BAG files
+            return false;
+        }
+
+        // Get device from pipeline
+        auto devices = m_context->query_devices();
+        if (devices.size() == 0) {
+            return false;
+        }
+
+        rs2::device device = devices[0];
+
+        // Check if device supports advanced mode
+        if (!device.supports(RS2_CAMERA_INFO_ADVANCED_MODE)) {
+            return false;
+        }
+
+        // Create advanced mode instance
+        m_advancedMode = std::make_unique<rs400::advanced_mode>(device);
+
+        // Check if advanced mode is enabled
+        if (!m_advancedMode->is_enabled()) {
+            // Try to enable advanced mode
+            m_advancedMode->toggle_advanced_mode(true);
+        }
+
+        return m_advancedMode->is_enabled();
+
+    } catch (const rs2::error& e) {
+        // Advanced mode not available
+        m_advancedMode.reset();
+        return false;
+    }
+}
+
+bool RealSenseCameraSource::IsAdvancedModeAvailable() const {
+    return m_advancedMode && m_advancedMode->is_enabled();
+}
+
+double RealSenseCameraSource::NormalizeAEValue(int rawValue) const {
+    // Based on research, typical range appears to be 0-4095 (12-bit)
+    // Default value is around 1000
+    constexpr int MIN_AE_VALUE = 0;
+    constexpr int MAX_AE_VALUE = 4095;
+
+    // Clamp and normalize to 0.0-1.0 range
+    int clampedValue = std::max(MIN_AE_VALUE, std::min(MAX_AE_VALUE, rawValue));
+    return static_cast<double>(clampedValue - MIN_AE_VALUE) / (MAX_AE_VALUE - MIN_AE_VALUE);
+}
+
+int RealSenseCameraSource::DenormalizeAEValue(double normalizedValue) const {
+    constexpr int MIN_AE_VALUE = 0;
+    constexpr int MAX_AE_VALUE = 4095;
+
+    // Clamp normalized value to 0.0-1.0 range
+    double clampedValue = std::max(0.0, std::min(1.0, normalizedValue));
+
+    // Convert to raw value
+    return static_cast<int>(MIN_AE_VALUE + clampedValue * (MAX_AE_VALUE - MIN_AE_VALUE));
 }

@@ -15,6 +15,11 @@ namespace rs2 {
     class context;
 }
 
+// Forward declaration for advanced mode
+namespace rs400 {
+    class advanced_mode;
+}
+
 /**
  * Intel RealSense camera source implementation.
  * Supports RGB and depth capture from RealSense devices.
@@ -73,6 +78,9 @@ private:
     std::unique_ptr<rs2::config> m_config_rs;
     std::unique_ptr<rs2::context> m_context;
 
+    // Advanced mode for property control
+    std::unique_ptr<rs400::advanced_mode> m_advancedMode;
+
     // BAG file support
     bool m_isPlayingBagFile{false};
     std::string m_bagFilePath;
@@ -80,6 +88,7 @@ private:
     std::unique_ptr<std::thread> m_captureThread;
     mutable std::mutex m_configMutex;
     mutable std::mutex m_statsMutex;
+    mutable std::mutex m_propertyMutex;
     std::atomic<bool> m_shouldStop{false};
     std::condition_variable m_frameCondition;
     std::mutex m_frameMutex;
@@ -102,5 +111,11 @@ private:
     bool ValidateConfig(const CameraConfig& config);
     void UpdateLastError(const std::string& error);
     CameraFormat GetRealSenseFormat(int format);
+
+    // Advanced mode helper methods
+    bool InitializeAdvancedMode();
+    bool IsAdvancedModeAvailable() const;
+    double NormalizeAEValue(int rawValue) const;
+    int DenormalizeAEValue(double normalizedValue) const;
 };
 
