@@ -185,9 +185,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Initialize camera manager if face detection is requested
+    // Check if camera manager is needed (face detection or camera UI enabled)
+    bool needsCameraManager = (args.triggerType == TriggerType::FACE_DETECTION) ||
+                             config->GetBool("camera_ui.enable_camera_ui", false);
+
+    // Initialize camera manager if needed
     std::unique_ptr<CameraManager> cameraManager;
-    if (args.triggerType == TriggerType::FACE_DETECTION) {
+    if (needsCameraManager) {
         cameraManager = std::make_unique<CameraManager>();
         CameraConfig cameraConfig = CameraManager::CreateCameraConfigFromGlobal();
         PublisherConfig publisherConfig = CameraManager::CreatePublisherConfigFromGlobal();
@@ -225,7 +229,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (!cameraInitialized) {
-            LOG_ERROR("Failed to initialize camera for face detection");
+            LOG_ERROR("Failed to initialize camera");
             return 1;
         }
 
@@ -233,6 +237,8 @@ int main(int argc, char* argv[]) {
             LOG_ERROR("Failed to start camera capture");
             return 1;
         }
+
+        LOG_INFO("Camera initialized successfully");
     }
     
     // Create trigger configuration
@@ -255,10 +261,11 @@ int main(int argc, char* argv[]) {
             LOG_ERROR("Failed to initialize face detection");
             return 1;
         }
-        
+
         // Register the trigger as a frame listener with the camera manager
         if (cameraManager && faceDetectionTrigger) {
             cameraManager->RegisterFrameListener(faceDetectionTrigger.get());
+            LOG_INFO("Face detection trigger registered with camera manager");
         }
     }
     
@@ -281,9 +288,10 @@ int main(int argc, char* argv[]) {
     PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
     UIRegistry::GetInstance().RegisterDrawable(&stats);
 
-    // Register camera control UI if camera is available
+    // Register camera control UI if camera is available and enabled in config
     std::shared_ptr<CameraControlUI> cameraControlUI;
-    if (cameraManager && cameraManager->IsInitialized()) {
+    bool enableCameraUI = config->GetBool("camera_ui.enable_camera_ui", false);
+    if (enableCameraUI && cameraManager && cameraManager->IsInitialized()) {
         cameraControlUI = std::make_shared<CameraControlUI>();
         if (cameraControlUI->Initialize(cameraManager.get(), renderer.get())) {
             UIRegistry::GetInstance().RegisterDrawable(cameraControlUI.get());
