@@ -6,6 +6,7 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <map>
 
 /**
  * OpenCV-based camera source implementation.
@@ -13,6 +14,13 @@
  */
 class OpenCVCameraSource : public ICameraSource {
 public:
+    // Property range information
+    struct PropertyRange {
+        double min = 0.0;
+        double max = 1.0;
+        double current = 0.5;
+        bool detected = false;
+    };
     OpenCVCameraSource();
     virtual ~OpenCVCameraSource();
     
@@ -79,6 +87,11 @@ private:
     // Property management
     CameraProperties m_pendingProperties;
     CameraProperties m_currentProperties;
+    std::chrono::steady_clock::time_point m_lastPropertyUpdate;
+    static constexpr int PROPERTY_UPDATE_INTERVAL_MS = 100; // Limit property updates to avoid FPS drops
+
+    // Property range cache (mutable for const methods)
+    mutable std::map<int, PropertyRange> m_propertyRangeCache;
     
     // Private methods
     bool InitializeCapture();
@@ -91,6 +104,11 @@ private:
     // OpenCV property helpers
     double GetOpenCVProperty(int propId) const;
     bool SetOpenCVProperty(int propId, double value);
+
+    // Property range detection
+    PropertyRange DetectPropertyRange(int openCVPropId) const;
+    double ConvertToUIValue(double cameraValue, const PropertyRange& range) const;
+    double ConvertFromUIValue(int uiValue, const PropertyRange& range) const;
 
     // Property management helpers
     void ApplyPendingProperties();

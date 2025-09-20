@@ -8,6 +8,7 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <thread>
 
 /**
  * ImGui UI component for camera control and live preview.
