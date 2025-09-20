@@ -532,28 +532,47 @@ OpenCVCameraSource::PropertyRange OpenCVCameraSource::DetectPropertyRange(int op
 
     range.current = currentValue;
 
-    // Use heuristics based on current value to estimate range
-    // This avoids modifying the camera in a const method
-    if (currentValue >= 10000) {
-        // Large values suggest 16-bit range (0-65535)
-        range.min = 0.0;
-        range.max = 65535.0;
-    } else if (currentValue >= 1000) {
-        // Medium-large values suggest extended range (0-10000)
-        range.min = 0.0;
-        range.max = 10000.0;
-    } else if (currentValue >= 100) {
-        // Medium values suggest 8-bit range (0-255)
-        range.min = 0.0;
-        range.max = 255.0;
-    } else if (currentValue >= 10) {
-        // Smaller values suggest percentage range (0-100)
-        range.min = 0.0;
-        range.max = 100.0;
+    // Use property-specific heuristics to determine range
+    // Special handling for saturation which often uses 0-255 even with low initial values
+    if (openCVPropId == cv::CAP_PROP_SATURATION) {
+        // Most webcams use 0-255 range for saturation, even if they start with low values
+        // Use 0-255 as default unless the current value is clearly in a different range
+        if (currentValue >= 1000) {
+            // Very high values suggest extended range
+            range.min = 0.0;
+            range.max = 10000.0;
+        } else if (currentValue > 255.0) {
+            // Above 255 suggests larger range
+            range.min = 0.0;
+            range.max = 1000.0;
+        } else {
+            // Default to 0-255 for saturation (most common)
+            range.min = 0.0;
+            range.max = 255.0;
+        }
     } else {
-        // Small values suggest normalized range (0-1)
-        range.min = 0.0;
-        range.max = 1.0;
+        // General heuristics for other properties based on current value
+        if (currentValue >= 10000) {
+            // Large values suggest 16-bit range (0-65535)
+            range.min = 0.0;
+            range.max = 65535.0;
+        } else if (currentValue >= 1000) {
+            // Medium-large values suggest extended range (0-10000)
+            range.min = 0.0;
+            range.max = 10000.0;
+        } else if (currentValue >= 100) {
+            // Medium values suggest 8-bit range (0-255)
+            range.min = 0.0;
+            range.max = 255.0;
+        } else if (currentValue >= 10) {
+            // Smaller values suggest percentage range (0-100)
+            range.min = 0.0;
+            range.max = 100.0;
+        } else {
+            // Small values suggest normalized range (0-1)
+            range.min = 0.0;
+            range.max = 1.0;
+        }
     }
 
     range.detected = true;
@@ -1102,27 +1121,7 @@ void OpenCVCameraSource::ApplyPendingProperties() {
         }
     }
 
-    if (m_pendingProperties.saturation != -1) {
-        int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::SATURATION);
-        if (openCVProp != -1 && SetOpenCVProperty(openCVProp, m_pendingProperties.saturation / 100.0)) {
-            // Get actual value set by camera
-            double actualValue = GetOpenCVProperty(openCVProp);
-            if (actualValue >= 0) {
-                m_currentProperties.saturation = static_cast<int>(actualValue * 100.0);
-            }
-        }
-    }
 
-    if (m_pendingProperties.gain != -1) {
-        int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::GAIN);
-        if (openCVProp != -1 && SetOpenCVProperty(openCVProp, m_pendingProperties.gain / 100.0)) {
-            // Get actual value set by camera
-            double actualValue = GetOpenCVProperty(openCVProp);
-            if (actualValue >= 0) {
-                m_currentProperties.gain = static_cast<int>(actualValue * 100.0);
-            }
-        }
-    }
 
     // Clear pending properties and flag
     m_pendingProperties.Reset();
