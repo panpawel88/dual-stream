@@ -152,9 +152,18 @@ void CameraControlUI::DrawCameraProperties() {
     }
 
     // Exposure
+    // Show exposure as disabled if auto-exposure is on
+    ImGui::BeginDisabled(m_autoExposure);
     if (ImGui::SliderInt("Exposure", &m_exposure, 0, 100)) {
         UpdateCameraProperty(CameraPropertyType::EXPOSURE, m_exposure);
         propertyChanged = true;
+        // Auto-exposure might be disabled by the property update, so sync UI
+        SyncUIWithCameraProperties();
+    }
+    ImGui::EndDisabled();
+    if (m_autoExposure) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(Auto)");
     }
 
     // Saturation
@@ -173,6 +182,8 @@ void CameraControlUI::DrawCameraProperties() {
     if (ImGui::Checkbox("Auto Exposure", &m_autoExposure)) {
         UpdateCameraProperty(CameraPropertyType::AUTO_EXPOSURE, m_autoExposure ? 1 : 0);
         propertyChanged = true;
+        // Sync UI after auto-exposure change
+        SyncUIWithCameraProperties();
     }
 
     // Reset button
@@ -299,32 +310,67 @@ void CameraControlUI::UpdateCameraProperty(CameraPropertyType property, int valu
         return;
     }
 
+    LOG_DEBUG("CameraControlUI: Updating property ", static_cast<int>(property), " to ", value);
+
     if (m_cameraManager->SetCameraProperty(property, value)) {
-        LOG_DEBUG("CameraControlUI: Updated property ", static_cast<int>(property), " to ", value);
+        LOG_DEBUG("CameraControlUI: Successfully updated property ", static_cast<int>(property), " to ", value);
+
+        // For auto-exposure changes, sync immediately to update UI state
+        if (property == CameraPropertyType::AUTO_EXPOSURE || property == CameraPropertyType::EXPOSURE) {
+            // Small delay to allow camera to process the change
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            SyncUIWithCameraProperties();
+        }
     } else {
-        LOG_WARNING("CameraControlUI: Failed to update property ", static_cast<int>(property));
+        LOG_WARNING("CameraControlUI: Failed to update property ", static_cast<int>(property), " to ", value);
         // Sync UI back with actual camera values
         SyncUIWithCameraProperties();
     }
 }
 
 void CameraControlUI::ResetPropertiesToDefaults() {
-    m_brightness = 50;
-    m_contrast = 50;
-    m_exposure = 50;
-    m_saturation = 50;
-    m_gain = 50;
-    m_autoExposure = true;
+    if (!m_cameraManager) {
+        return;
+    }
 
-    if (m_cameraManager) {
-        CameraProperties defaultProps;
-        defaultProps.brightness = m_brightness;
-        defaultProps.contrast = m_contrast;
+    // Get actual camera default values from property ranges
+    auto brightnessRange = m_cameraManager->GetPropertyRange(CameraPropertyType::BRIGHTNESS);
+    auto contrastRange = m_cameraManager->GetPropertyRange(CameraPropertyType::CONTRAST);
+    auto exposureRange = m_cameraManager->GetPropertyRange(CameraPropertyType::EXPOSURE);
+    auto saturationRange = m_cameraManager->GetPropertyRange(CameraPropertyType::SATURATION);
+    auto gainRange = m_cameraManager->GetPropertyRange(CameraPropertyType::GAIN);
+    auto autoExposureRange = m_cameraManager->GetPropertyRange(CameraPropertyType::AUTO_EXPOSURE);
+
+    // Use actual camera defaults, not hardcoded 50%
+    m_brightness = brightnessRange.supported ? brightnessRange.defaultValue : 50;
+    m_contrast = contrastRange.supported ? contrastRange.defaultValue : 50;
+    m_exposure = exposureRange.supported ? exposureRange.defaultValue : 50;
+    m_saturation = saturationRange.supported ? saturationRange.defaultValue : 50;
+    m_gain = gainRange.supported ? gainRange.defaultValue : 50;
+    m_autoExposure = autoExposureRange.supported ? (autoExposureRange.defaultValue > 0) : true;
+
+    LOG_INFO("Resetting camera properties to actual defaults: Brightness=", m_brightness,
+             ", Contrast=", m_contrast, ", Exposure=", m_exposure,
+             ", Saturation=", m_saturation, ", Gain=", m_gain,
+             ", AutoExposure=", m_autoExposure);
+
+    // Apply the actual default properties
+    CameraProperties defaultProps;
+    defaultProps.brightness = m_brightness;
+    defaultProps.contrast = m_contrast;
+    defaultProps.saturation = m_saturation;
+    defaultProps.gain = m_gain;
+    defaultProps.autoExposure = m_autoExposure ? 1 : 0;
+
+    // Only set exposure if auto-exposure is disabled
+    if (!m_autoExposure) {
         defaultProps.exposure = m_exposure;
-        defaultProps.saturation = m_saturation;
-        defaultProps.gain = m_gain;
+    }
 
-        m_cameraManager->SetCameraProperties(defaultProps);
+    if (!m_cameraManager->SetCameraProperties(defaultProps)) {
+        LOG_WARNING("Failed to reset some camera properties to defaults");
+        // Sync UI with actual camera values
+        SyncUIWithCameraProperties();
     }
 }
 
@@ -335,16 +381,38 @@ void CameraControlUI::SyncUIWithCameraProperties() {
 
     auto properties = m_cameraManager->GetAllCameraProperties();
 
-    if (properties.brightness >= 0) m_brightness = properties.brightness;
-    if (properties.contrast >= 0) m_contrast = properties.contrast;
-    if (properties.exposure >= 0) m_exposure = properties.exposure;
-    if (properties.saturation >= 0) m_saturation = properties.saturation;
-    if (properties.gain >= 0) m_gain = properties.gain;
+    // Only update UI values if they're valid (>= 0)
+    if (properties.brightness >= 0) {
+        m_brightness = properties.brightness;
+        LOG_DEBUG("Synced brightness to ", m_brightness);
+    }
+    if (properties.contrast >= 0) {
+        m_contrast = properties.contrast;
+        LOG_DEBUG("Synced contrast to ", m_contrast);
+    }
+    if (properties.saturation >= 0) {
+        m_saturation = properties.saturation;
+        LOG_DEBUG("Synced saturation to ", m_saturation);
+    }
+    if (properties.gain >= 0) {
+        m_gain = properties.gain;
+        LOG_DEBUG("Synced gain to ", m_gain);
+    }
 
-    // Sync auto-exposure state
+    // Sync auto-exposure state first
     int autoExpValue;
     if (m_cameraManager->GetCameraProperty(CameraPropertyType::AUTO_EXPOSURE, autoExpValue)) {
+        bool wasAutoExposure = m_autoExposure;
         m_autoExposure = (autoExpValue > 0);
+        if (wasAutoExposure != m_autoExposure) {
+            LOG_DEBUG("Synced auto-exposure state to ", m_autoExposure);
+        }
+    }
+
+    // Only sync exposure if auto-exposure is disabled
+    if (!m_autoExposure && properties.exposure >= 0) {
+        m_exposure = properties.exposure;
+        LOG_DEBUG("Synced manual exposure to ", m_exposure);
     }
 }
 
