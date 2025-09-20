@@ -13,7 +13,7 @@
  * ImGui UI component for camera control and live preview.
  * Implements IUIDrawable for integration with UIRegistry and ICameraFrameListener for frame preview.
  */
-class CameraControlUI : public IUIDrawable, public ICameraFrameListener, public std::enable_shared_from_this<CameraControlUI> {
+class CameraControlUI : public IUIDrawable, public ICameraFrameListener {
 public:
     CameraControlUI();
     ~CameraControlUI();

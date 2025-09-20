@@ -53,7 +53,7 @@ bool CameraControlUI::Initialize(CameraManager* cameraManager, IRenderer* render
 
     // Register as frame listener
     if (m_cameraManager->IsInitialized()) {
-        m_cameraManager->RegisterFrameListener(shared_from_this());
+        m_cameraManager->RegisterFrameListener(this);
         m_cameraAvailable = true;
 
         // Sync UI with current camera properties
@@ -67,7 +67,7 @@ bool CameraControlUI::Initialize(CameraManager* cameraManager, IRenderer* render
 
 void CameraControlUI::Cleanup() {
     if (m_cameraManager && m_initialized) {
-        m_cameraManager->UnregisterFrameListener(shared_from_this());
+        m_cameraManager->UnregisterFrameListener(this);
     }
 
     if (m_frameTexture) {
@@ -98,7 +98,7 @@ void CameraControlUI::DrawUI() {
         ImGui::Text("Camera not available");
         if (ImGui::Button("Refresh Camera Status")) {
             if (m_cameraManager && m_cameraManager->IsInitialized()) {
-                m_cameraManager->RegisterFrameListener(shared_from_this());
+                m_cameraManager->RegisterFrameListener(this);
                 SyncUIWithCameraProperties();
             }
         }
