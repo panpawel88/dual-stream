@@ -228,8 +228,10 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     # Create data directory structure
     set(HAAR_MODELS_DIR "${CMAKE_BINARY_DIR}/data/haarcascades")
     set(YUNET_MODELS_DIR "${CMAKE_BINARY_DIR}/data/yunet")
+    set(CENTERFACE_MODELS_DIR "${CMAKE_BINARY_DIR}/data/centerface")
     file(MAKE_DIRECTORY "${HAAR_MODELS_DIR}")
     file(MAKE_DIRECTORY "${YUNET_MODELS_DIR}")
+    file(MAKE_DIRECTORY "${CENTERFACE_MODELS_DIR}")
     
     # Define Haar cascade model files to download
     set(OPENCV_MODELS_BASE_URL "https://github.com/opencv/opencv/raw/master/data/haarcascades")
@@ -243,6 +245,12 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
     set(YUNET_MODELS_BASE_URL "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet")
     set(YUNET_MODELS
         "face_detection_yunet_2023mar.onnx"
+    )
+
+    # Define CenterFace model files to download
+    set(CENTERFACE_MODELS_BASE_URL "https://github.com/Star-Clouds/CenterFace/raw/master/models/onnx")
+    set(CENTERFACE_MODELS
+        "centerface.onnx"
     )
     
     # Download Haar cascade models
@@ -258,10 +266,18 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
         set(MODEL_PATH "${YUNET_MODELS_DIR}/${MODEL_FILE}")
         download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_FILE}" 60)
     endforeach()
+
+    # Download CenterFace models
+    foreach(MODEL_FILE ${CENTERFACE_MODELS})
+        set(MODEL_URL "${CENTERFACE_MODELS_BASE_URL}/${MODEL_FILE}")
+        set(MODEL_PATH "${CENTERFACE_MODELS_DIR}/${MODEL_FILE}")
+        download_model_file("${MODEL_URL}" "${MODEL_PATH}" "${MODEL_FILE}" 90)
+    endforeach()
     
     # Store face models directories for later use in executable post-build
     set(HAAR_MODELS_DOWNLOAD_DIR "${HAAR_MODELS_DIR}" CACHE INTERNAL "Haar cascade models directory")
     set(YUNET_MODELS_DOWNLOAD_DIR "${YUNET_MODELS_DIR}" CACHE INTERNAL "YuNet models directory")
+    set(CENTERFACE_MODELS_DOWNLOAD_DIR "${CENTERFACE_MODELS_DIR}" CACHE INTERNAL "CenterFace models directory")
     
 else()
     if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND NOT DOWNLOAD_FACE_DETECTION_MODELS)
@@ -576,6 +592,16 @@ if(ENABLE_CAMERA_SUPPORT AND HAVE_OPENCV AND DOWNLOAD_FACE_DETECTION_MODELS)
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/yunet"
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${YUNET_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/yunet"
             COMMENT "Copying YuNet models to runtime directory"
+            VERBATIM
+        )
+    endif()
+
+    # Copy CenterFace models
+    if(DEFINED CENTERFACE_MODELS_DOWNLOAD_DIR)
+        add_custom_command(TARGET dual_stream POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:dual_stream>/data/centerface"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CENTERFACE_MODELS_DOWNLOAD_DIR}" "$<TARGET_FILE_DIR:dual_stream>/data/centerface"
+            COMMENT "Copying CenterFace models to runtime directory"
             VERBATIM
         )
     endif()

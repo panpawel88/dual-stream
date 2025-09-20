@@ -52,12 +52,22 @@ void Config::LoadDefaults() {
     m_values["face_detection.switch_cooldown_ms"] = "2000";
     m_values["face_detection.single_face_threshold"] = "1";
     m_values["face_detection.multiple_face_threshold"] = "2";
-    m_values["face_detection.enable_preview"] = "false";
-    m_values["face_detection.enable_visualization"] = "false";
+
+    // YuNet specific settings
     m_values["face_detection.score_threshold"] = "0.9";
     m_values["face_detection.nms_threshold"] = "0.3";
     m_values["face_detection.input_width"] = "320";
     m_values["face_detection.input_height"] = "320";
+
+    // CenterFace specific settings
+    m_values["face_detection.centerface_input_width"] = "640";
+    m_values["face_detection.centerface_input_height"] = "640";
+    m_values["face_detection.centerface_score_threshold"] = "0.5";
+    m_values["face_detection.centerface_nms_threshold"] = "0.2";
+
+    // Additional face detection settings
+    m_values["face_detection.enable_preview"] = "false";
+    m_values["face_detection.enable_visualization"] = "false";
     
     // Rendering settings
     m_values["rendering.preferred_backend"] = "auto";
