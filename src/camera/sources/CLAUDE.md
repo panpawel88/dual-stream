@@ -114,7 +114,7 @@ std::unique_ptr<ICameraSource> CreateBestAvailable() {
 **Key Features:**
 - **Wide Compatibility:** Works with most USB cameras and webcams
 - **Format Support:** BGR8, RGB8, GRAY8 color formats
-- **Property Control:** Brightness, contrast, saturation, exposure control
+- **Property Control:** Brightness, contrast, saturation, gain control
 - **Resolution Control:** Dynamic resolution changes
 - **Frame Rate Control:** Configurable capture frame rates
 
@@ -222,11 +222,9 @@ struct CameraConfig {
     int brightness = -1;        # -1 = auto
     int contrast = -1;
     int saturation = -1;
-    int exposure = -1;
-    
+
     // Advanced settings
     bool enableAutoFocus = true;
-    bool enableAutoExposure = true;
     bool enableAutoWhiteBalance = true;
 };
 ```

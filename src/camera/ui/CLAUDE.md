@@ -20,7 +20,7 @@ src/camera/ui/
 **Purpose:** Main ImGui UI component implementing IUIDrawable for camera parameter control
 
 **Key Features:**
-- **Runtime Property Control:** Brightness, contrast, exposure, saturation, gain adjustment
+- **Runtime Property Control:** Brightness, contrast, saturation, gain adjustment
 - **Live Frame Preview:** Real-time camera frame display in ImGui window
 - **Thread-Safe Integration:** Safe interaction with background camera capture
 - **Configuration Persistence:** Settings saved to/loaded from INI configuration
