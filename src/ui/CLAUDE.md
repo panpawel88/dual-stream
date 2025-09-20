@@ -20,6 +20,22 @@ src/ui/
 
 ## Core Components
 
+### IUIDrawable Interface
+**File:** `IUIDrawable.h`
+**Purpose:** Standard interface for all UI components in the system
+
+**Key Interface:**
+```cpp
+class IUIDrawable {
+public:
+    virtual ~IUIDrawable() = default;
+
+    virtual void DrawUI() = 0;  // Render UI elements
+    virtual std::string GetUIName() const = 0;  // Component identifier
+    virtual std::string GetUICategory() const = 0;  // Category for organization
+};
+```
+
 ### Window Class (Foundation)
 **File:** `Window.h/cpp`
 **Purpose:** Complete Win32 window management with modern features
@@ -70,6 +86,17 @@ src/ui/
 - **Draw Interface:** Standardized rendering interface for UI elements
 - **Lifecycle Management:** Automatic UI component cleanup
 - **Debug UI:** Runtime UI component inspection and control
+- **Category Organization:** UI components grouped by category (Camera, Rendering, etc.)
+
+**Camera Control Integration:**
+```cpp
+// Camera UI registration example
+auto cameraControlUI = std::make_shared<CameraControlUI>();
+if (cameraControlUI->Initialize(&cameraManager, renderer.get())) {
+    UIRegistry::GetInstance().RegisterDrawable(cameraControlUI.get());
+    cameraManager.RegisterFrameListener(cameraControlUI); // For live preview
+}
+```
 
 ### Notification System
 **File:** `NotificationManager.h/cpp`
@@ -482,6 +509,14 @@ Win32 Messages → Window::HandleMessage() → GlobalInputHandler
 - **Parameter Editing:** Real-time modification of render pass parameters
 - **Performance Monitoring:** Frame timing and resource usage display
 - **System Status:** Video decoder status, renderer information
+- **Camera Control Panel:** Live camera property adjustment and frame preview
+
+**Camera Control UI Features:**
+- **Live Preview:** Real-time camera feed display with configurable resolution
+- **Property Sliders:** Runtime adjustment of brightness, contrast, saturation, gain
+- **Smart Ranges:** Properties automatically normalized to 0-100% range
+- **Device Information:** Camera name, resolution, FPS, and frame statistics
+- **Multi-Backend Support:** Works with both DirectX 11 and OpenGL renderers
 
 ### Toast Notification System
 **User Feedback:** Non-intrusive status and error notifications
@@ -507,9 +542,14 @@ Application Controls:
 │── ESC Key      ─ Exit application
 │
 UI Controls:
-│── F1 Key       ─ Toggle debug UI registry
+│── F1 Key       ─ Toggle debug UI registry (includes Camera Control)
 │── F2 Key       ─ Toggle notifications
 └── Mouse/Keys   ─ ImGui interaction when overlay active
+
+### Camera UI Controls (when enabled):
+│── Camera Control Panel ─ Live property adjustment
+│── Preview Window      ─ Real-time camera feed
+└── Property Sliders    ─ Brightness, contrast, saturation, gain
 ```
 
 ### ImGui Theme Integration
@@ -519,4 +559,84 @@ UI Controls:
 - **Minimal Chrome:** Clean, minimal window decorations
 - **Video-First:** UI never obscures important video content
 
-This evolved UI system provides a comprehensive modern interface combining robust Win32 window management with advanced ImGui-based overlay functionality for debugging, configuration, and user feedback while maintaining seamless integration with the video processing and rendering systems.
+## Camera Control UI Integration
+
+### CameraControlUI Component
+**Implementation:** Camera control UI follows the established IUIDrawable pattern
+
+**Key Features:**
+- **IUIDrawable Implementation:** Integrates seamlessly with existing UI system
+- **ICameraFrameListener:** Receives camera frames for live preview display
+- **Multi-Backend Texture Conversion:** Automatic texture creation for ImGui display
+- **Thread-Safe Operation:** Safe interaction with background camera capture
+
+**UI Panel Organization:**
+```
+Camera Control Window
+├── Camera Information
+│   ├── Device Name
+│   ├── Resolution & FPS
+│   └── Frame Statistics
+├── Property Controls
+│   ├── Brightness (0-100%)
+│   ├── Contrast (0-100%)
+│   ├── Saturation (0-100%)
+│   └── Gain (0-100%)
+└── Live Preview
+    ├── Real-time Camera Feed
+    ├── Preview Resolution Controls
+    └── Frame Rate Limiting
+```
+
+### Frame-to-Texture Pipeline
+**CameraFrameTexture Component:** Converts camera frames to renderer textures
+
+**Conversion Process:**
+```
+Camera Frame (cv::Mat) → Format Conversion → RGBA Buffer → GPU Texture → ImGui::Image()
+
+Renderer-Specific Paths:
+├── DirectX 11: ID3D11Texture2D + ID3D11ShaderResourceView
+└── OpenGL: glTexture2D with GL_RGBA format
+```
+
+**Performance Optimization:**
+- **Throttled Updates:** Configurable preview refresh rate (default: 10 FPS)
+- **Automatic Scaling:** Large frames scaled for UI display (max 640x480)
+- **Conditional Processing:** Only processes frames when preview is visible
+- **Texture Caching:** Efficient texture reuse and memory management
+
+### Configuration Integration
+**INI Settings:** Camera UI fully configurable via existing configuration system
+
+```ini
+[camera_ui]
+enable_camera_ui = true          # Enable camera UI independently
+preview_enabled = true           # Show live camera preview
+preview_max_width = 640          # Maximum preview resolution
+preview_max_height = 480
+preview_fps = 10.0              # Preview refresh rate
+```
+
+### Thread Safety Architecture
+**Background Integration:** Camera UI safely integrates with camera capture threads
+
+```cpp
+// Frame processing on background thread
+FrameProcessingResult ProcessFrame(std::shared_ptr<const CameraFrame> frame) {
+    std::lock_guard<std::mutex> lock(m_frameMutex);
+    m_currentFrame = frame;  // Safe shared_ptr assignment
+    m_hasNewFrame = true;
+    return FrameProcessingResult::SUCCESS;
+}
+
+// UI updates on main thread during DrawUI()
+void DrawUI() {
+    if (m_hasNewFrame && ShouldUpdatePreview()) {
+        UpdateFrameTexture();  // Convert frame to GPU texture
+    }
+    ImGui::Image(textureID, displaySize);  // Render in ImGui
+}
+```
+
+This evolved UI system provides a comprehensive modern interface combining robust Win32 window management with advanced ImGui-based overlay functionality for debugging, configuration, camera control, and user feedback while maintaining seamless integration with the video processing and rendering systems.

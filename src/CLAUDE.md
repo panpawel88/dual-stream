@@ -4,7 +4,7 @@ This directory contains the complete source code for the DualStream Video Player
 
 ## System Architecture Overview
 
-The application is organized into five major subsystems, each with clear responsibilities and well-defined interfaces:
+The application is organized into six major subsystems, each with clear responsibilities and well-defined interfaces:
 
 ```
 src/
@@ -12,6 +12,7 @@ src/
 ├── core/                # Foundation services (logging, CLI, FFmpeg init)
 ├── ui/                  # Window management and input handling
 ├── video/               # Complete video processing pipeline
+├── camera/              # Camera system with computer vision integration
 └── rendering/           # Multi-backend rendering system
 ```
 
@@ -81,7 +82,10 @@ RendererFactory → IRenderer → Hardware Detection
 // Stage 4: Video Processing
 VideoValidator → VideoManager → Strategy/Trigger Setup
 
-// Stage 5: System Coordination
+// Stage 5: Camera System (Optional)
+CameraManager → Camera UI Registration
+
+// Stage 6: System Coordination
 Main Event Loop → Cooperative Processing
 ```
 
@@ -152,6 +156,14 @@ auto renderer = RendererFactory::CreateRenderer(RendererBackend::Auto);
 - **Resizable Windows:** Dynamic renderer adjustment on size changes
 - **Fullscreen Support:** F11 toggle with state preservation
 - **Multi-Monitor Aware:** Window size limited by display resolution
+- **ImGui Integration:** Debug UI overlay with F1 toggle and camera control panels
+
+### Camera Control UI Integration
+**Live Camera Management:**
+- **Runtime Property Control:** Adjust brightness, contrast, saturation, and gain during operation
+- **Live Frame Preview:** Real-time camera feed display in ImGui overlay
+- **Multi-Backend Support:** Camera frame rendering in both DirectX 11 and OpenGL
+- **Thread-Safe Operation:** UI updates don't interfere with camera capture or video processing
 
 ## Performance Characteristics
 
@@ -255,14 +267,20 @@ if (!VideoValidator::ValidateCompatibility(video1Info, video2Info, compatibility
 3. Update `VideoSwitchingStrategyFactory`
 
 **Adding New Trigger Types:**
-1. Implement `ISwitchingTrigger` interface  
+1. Implement `ISwitchingTrigger` interface
 2. Add to `TriggerType` enum
 3. Update `SwitchingTriggerFactory`
 
 **Adding New Renderers:**
 1. Implement `IRenderer` interface
-2. Add to `RendererType` enum  
+2. Add to `RendererType` enum
 3. Update `RendererFactory` and build system
+
+**Adding New UI Components:**
+1. Implement `IUIDrawable` interface
+2. Register with `UIRegistry::GetInstance()`
+3. Configure in INI file if needed
+4. Integrate with camera system for frame listeners
 
 ## Subsystem Documentation
 
@@ -271,8 +289,8 @@ For detailed implementation information, see the individual subsystem documentat
 ### Core Foundation
 - **[core/CLAUDE.md](core/CLAUDE.md)** - Foundation services (logging, CLI parsing, FFmpeg init)
 
-### User Interface  
-- **[ui/CLAUDE.md](ui/CLAUDE.md)** - Comprehensive UI system with Win32 window management, ImGui overlay integration, global input handling, and notification system
+### User Interface
+- **[ui/CLAUDE.md](ui/CLAUDE.md)** - Comprehensive UI system with Win32 window management, ImGui overlay integration, global input handling, notification system, and camera control UI
 
 ### Video Processing Pipeline
 - **[video/CLAUDE.md](video/CLAUDE.md)** - Complete video system overview
@@ -285,6 +303,7 @@ For detailed implementation information, see the individual subsystem documentat
 - **[camera/CLAUDE.md](camera/CLAUDE.md)** - Complete camera system overview with face detection integration
 - **[camera/sources/CLAUDE.md](camera/sources/CLAUDE.md)** - Camera source abstraction with OpenCV and RealSense support
 - **[camera/processing/CLAUDE.md](camera/processing/CLAUDE.md)** - Multi-threaded frame processing and computer vision integration
+- **[camera/ui/CLAUDE.md](camera/ui/CLAUDE.md)** - Camera control UI system with live preview and property adjustment
 
 ### Rendering System
 - **[rendering/CLAUDE.md](rendering/CLAUDE.md)** - Multi-backend rendering with hardware acceleration, comprehensive render pass system, and ImGui overlay integration

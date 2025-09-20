@@ -21,17 +21,22 @@ src/camera/
 │   ├── CameraFramePublisher.h/cpp       # Multi-threaded frame distribution
 │   ├── FaceDetectionSwitchingTrigger.h/cpp # Example CV processing integration
 │   └── CLAUDE.md                        # Frame processing system documentation
+├── ui/                                  # Camera control UI components
+│   ├── CameraControlUI.h/cpp            # ImGui-based camera control interface
+│   ├── CameraFrameTexture.h/cpp         # Camera frame-to-texture conversion for UI
+│   └── CLAUDE.md                        # Camera UI system documentation
 └── CLAUDE.md                           # This documentation
 ```
 
 ## Core Design Principles
 
 ### 1. CPU-Focused Processing Pipeline
-Unlike the video system's GPU acceleration focus, the camera system is optimized for CPU-based computer vision:
+Unlike the video system's GPU acceleration focus, the camera system is optimized for CPU-based computer vision with UI integration:
 
 - **OpenCV Integration:** Direct `cv::Mat` support for zero-copy processing
 - **CPU Memory Management:** Efficient reference counting for multi-consumer access
 - **No GPU Transfers:** Frames stay in system RAM for CV algorithms
+- **UI Texture Conversion:** Camera frames converted to GPU textures for ImGui display
 
 ### 2. Publisher-Subscriber Pattern
 Thread-safe frame delivery system protects the main rendering thread:
@@ -47,6 +52,8 @@ Follows the existing architecture patterns for consistency:
 - **ICameraSource:** Abstract interface like IRenderer
 - **CameraSourceFactory:** Factory pattern like RendererFactory
 - **Multiple Implementations:** OpenCV and RealSense sources
+- **IUIDrawable Integration:** Camera UI components follow existing UI patterns
+- **Normalized Property System:** 0.0-1.0 range for consistent camera property control
 
 ## Component Details
 
@@ -99,6 +106,10 @@ source->StartCapture();
 ### Frame Processing System
 **Publisher:** `CameraFramePublisher.h` - Multi-threaded frame distribution
 **Listeners:** `ICameraFrameListener.h` - Consumer interface
+
+### Camera Control UI System
+**UI Component:** `CameraControlUI.h` - ImGui-based camera control interface
+**Frame Display:** `CameraFrameTexture.h` - Camera frame-to-texture conversion for live preview
 
 **Processing Pipeline:**
 ```cpp
@@ -165,6 +176,13 @@ cameraManager.RegisterFrameListener(faceDetector);
 
 // Integrate with video switching
 videoManager.SetSwitchingTrigger(std::move(faceDetector));
+
+// Register camera control UI (new feature)
+auto cameraUI = std::make_shared<CameraControlUI>();
+if (cameraUI->Initialize(&cameraManager, renderer.get())) {
+    UIRegistry::GetInstance().RegisterDrawable(cameraUI.get());
+    cameraManager.RegisterFrameListener(cameraUI); // For live preview
+}
 ```
 
 ### Custom Frame Processing
@@ -219,8 +237,40 @@ struct CameraConfig {
     double frameRate = 30.0;            // Capture frame rate
     CameraFormat format = CameraFormat::BGR8; // Frame format
     bool enableDepth = false;           // RealSense depth capture
-    int brightness = -1;                // Camera brightness (-1 = auto)
+    double brightness = -1.0;           // Camera brightness (-1.0 = auto, 0.0-1.0 normalized)
+    double contrast = -1.0;             // Camera contrast (-1.0 = auto, 0.0-1.0 normalized)
 };
+```
+
+### Camera Property Control (New Feature)
+```cpp
+// Runtime property adjustment via normalized values (0.0-1.0)
+cameraManager.SetCameraProperty(CameraPropertyType::BRIGHTNESS, 0.7); // 70% brightness
+cameraManager.SetCameraProperty(CameraPropertyType::CONTRAST, 0.5);   // 50% contrast
+cameraManager.SetCameraProperty(CameraPropertyType::SATURATION, 0.8); // 80% saturation
+
+// Batch property updates
+CameraProperties props;
+props.brightness = 0.6;
+props.contrast = 0.4;
+props.saturation = 0.7;
+cameraManager.SetCameraProperties(props);
+
+// Query supported properties
+std::set<CameraPropertyType> supported = cameraManager.GetSupportedProperties();
+if (supported.count(CameraPropertyType::GAIN)) {
+    // Camera supports gain control
+}
+```
+
+### Camera UI Configuration
+```ini
+[camera_ui]
+enable_camera_ui = true          # Enable camera UI even without face detection
+preview_enabled = true           # Show live camera preview
+preview_max_width = 640          # Maximum preview resolution
+preview_max_height = 480
+preview_fps = 10.0              # Preview refresh rate
 ```
 
 ### Publisher Configuration  
@@ -261,9 +311,13 @@ find_package(OpenCV QUIET COMPONENTS core imgproc objdetect videoio)
 # Intel RealSense support (optional)
 find_package(realsense2 QUIET)
 
+# ImGui integration for camera UI
+find_package(imgui REQUIRED)
+
 # Conditional compilation based on available libraries
 add_definitions(-DHAVE_OPENCV=1)      # If OpenCV found
 add_definitions(-DHAVE_REALSENSE=1)   # If RealSense found
+add_definitions(-DHAVE_CAMERA_UI=1)   # Camera UI always available with ImGui
 ```
 
 ### Dependency Requirements
@@ -293,9 +347,12 @@ add_definitions(-DHAVE_REALSENSE=1)   # If RealSense found
 For comprehensive technical information about each camera subsystem:
 
 ### Camera Source System
-- **[sources/CLAUDE.md](sources/CLAUDE.md)** - Camera source abstraction, device enumeration, OpenCV and RealSense implementations
+- **[sources/CLAUDE.md](sources/CLAUDE.md)** - Camera source abstraction, device enumeration, OpenCV and RealSense implementations, normalized property control system
 
-### Frame Processing System  
+### Frame Processing System
 - **[processing/CLAUDE.md](processing/CLAUDE.md)** - Multi-threaded frame distribution, computer vision integration, face detection switching
+
+### Camera UI System
+- **[ui/CLAUDE.md](ui/CLAUDE.md)** - ImGui-based camera control interface, live preview system, multi-backend frame texture conversion
 
 This camera system provides a robust foundation for computer vision integration while maintaining consistency with the existing video player architecture and protecting the main rendering thread performance.

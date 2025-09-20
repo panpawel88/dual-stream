@@ -46,9 +46,12 @@ public:
     virtual std::string GetDeviceId() const = 0;
     virtual CameraCapabilities GetCapabilities() const = 0;
     
-    // Runtime configuration
-    virtual bool SetProperty(CameraProperty property, double value) = 0;
-    virtual bool GetProperty(CameraProperty property, double& value) const = 0;
+    // Runtime property control (normalized values 0.0-1.0)
+    virtual bool SetCameraProperty(CameraPropertyType property, double value) = 0;
+    virtual bool GetCameraProperty(CameraPropertyType property, double& value) const = 0;
+    virtual bool SetCameraProperties(const CameraProperties& properties) = 0;
+    virtual CameraProperties GetCameraProperties() const = 0;
+    virtual std::set<CameraPropertyType> GetSupportedProperties() const = 0;
 };
 ```
 
@@ -114,9 +117,11 @@ std::unique_ptr<ICameraSource> CreateBestAvailable() {
 **Key Features:**
 - **Wide Compatibility:** Works with most USB cameras and webcams
 - **Format Support:** BGR8, RGB8, GRAY8 color formats
-- **Property Control:** Brightness, contrast, saturation, gain control
+- **Normalized Property Control:** Brightness, contrast, saturation, gain with 0.0-1.0 range
+- **Smart Range Detection:** Automatic detection of camera capability ranges
 - **Resolution Control:** Dynamic resolution changes
 - **Frame Rate Control:** Configurable capture frame rates
+- **Thread-Safe Property Updates:** Runtime property changes without capture interruption
 
 **Implementation Details:**
 ```cpp
@@ -162,6 +167,7 @@ private:
 - **Depth Formats:** 16-bit depth data with millimeter precision
 - **Alignment:** Hardware depth-to-color alignment
 - **Advanced Features:** Motion detection, background subtraction
+- **Experimental Property Support:** Auto-exposure mean intensity control with normalized values
 
 **Implementation Details:**
 ```cpp
@@ -218,10 +224,9 @@ struct CameraConfig {
     bool enableInfrared = false;
     bool alignDepthToColor = true;
     
-    // Camera properties
-    int brightness = -1;        # -1 = auto
-    int contrast = -1;
-    int saturation = -1;
+    // Camera properties (normalized values)
+    double brightness = -1.0;   # -1.0 = auto, 0.0-1.0 normalized range
+    double contrast = -1.0;     # -1.0 = auto, 0.0-1.0 normalized range
 
     // Advanced settings
     bool enableAutoFocus = true;
@@ -246,6 +251,96 @@ struct CameraDeviceInfo {
     bool supportsDepth;
     bool supportsInfrared;
 };
+```
+
+## Normalized Property Control System
+
+### CameraPropertyType Enumeration
+**Property Types:** All supported camera properties with normalized control
+```cpp
+enum class CameraPropertyType {
+    BRIGHTNESS,         // Camera brightness (0.0-1.0)
+    CONTRAST,           // Camera contrast (0.0-1.0)
+    SATURATION,         // Camera saturation (0.0-1.0)
+    GAIN,               // Camera gain (0.0-1.0)
+    AE_MEAN_INTENSITY_SETPOINT  // RealSense auto-exposure target (0.0-1.0)
+};
+```
+
+### CameraProperties Structure
+**Batch Property Updates:** Multiple properties in single operation
+```cpp
+struct CameraProperties {
+    double brightness = std::numeric_limits<double>::quiet_NaN();  // NaN means unchanged
+    double contrast = std::numeric_limits<double>::quiet_NaN();
+    double saturation = std::numeric_limits<double>::quiet_NaN();
+    double gain = std::numeric_limits<double>::quiet_NaN();
+    double ae_mean_intensity_setpoint = std::numeric_limits<double>::quiet_NaN();
+
+    bool HasChanges() const;  // Check if any property is set
+    void Reset();             // Reset all properties to unchanged state
+};
+```
+
+### Property Implementation Details
+**OpenCV Property Mapping:**
+```cpp
+// OpenCV properties use hardware-specific ranges, normalized to 0.0-1.0
+bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, double value) {
+    // Input value is normalized 0.0-1.0, convert to camera's native range
+    double min, max, current;
+    int cvProperty = GetOpenCVProperty(property);
+
+    // Get camera's native range
+    GetPropertyRange(cvProperty, min, max);
+
+    // Convert normalized value to native range
+    double nativeValue = min + (value * (max - min));
+
+    return m_capture->set(cvProperty, nativeValue);
+}
+```
+
+**Smart Range Detection:**
+```cpp
+// Intelligent detection of camera property ranges
+void DetectPropertyRanges() {
+    for (auto property : {CV_CAP_PROP_BRIGHTNESS, CV_CAP_PROP_CONTRAST, CV_CAP_PROP_SATURATION}) {
+        double originalValue = m_capture->get(property);
+
+        // Test range by setting extreme values
+        m_capture->set(property, 0.0);
+        double minValue = m_capture->get(property);
+
+        m_capture->set(property, 1.0);
+        double maxValue = m_capture->get(property);
+
+        // Restore original value
+        m_capture->set(property, originalValue);
+
+        // Store detected range
+        m_propertyRanges[property] = {minValue, maxValue};
+    }
+}
+```
+
+### Property Support Detection
+**Runtime Capability Query:**
+```cpp
+std::set<CameraPropertyType> OpenCVCameraSource::GetSupportedProperties() const {
+    std::set<CameraPropertyType> supported;
+
+    // Test each property by attempting to set/get values
+    if (TestPropertySupport(CV_CAP_PROP_BRIGHTNESS)) {
+        supported.insert(CameraPropertyType::BRIGHTNESS);
+    }
+    if (TestPropertySupport(CV_CAP_PROP_CONTRAST)) {
+        supported.insert(CameraPropertyType::CONTRAST);
+    }
+    // ... test other properties
+
+    return supported;
+}
 ```
 
 ## Frame Processing Integration
@@ -343,12 +438,14 @@ if (!cameraSource) {
     return false;
 }
 
-// Configure camera
+// Configure camera with normalized properties
 CameraConfig config;
 config.width = 640;
 config.height = 480;
 config.frameRate = 30.0;
 config.format = CameraFormat::BGR8;
+config.brightness = 0.7;  // 70% brightness (normalized)
+config.contrast = 0.5;    // 50% contrast (normalized)
 
 if (!cameraSource->Initialize(devices[0], config)) {
     LOG_ERROR("Failed to initialize camera");
@@ -363,6 +460,26 @@ cameraSource->SetFrameCallback([](const CameraFrame& frame) {
 
 // Start capture
 cameraSource->StartCapture();
+
+// Runtime property adjustment (new feature)
+cameraSource->SetCameraProperty(CameraPropertyType::BRIGHTNESS, 0.8); // 80% brightness
+cameraSource->SetCameraProperty(CameraPropertyType::SATURATION, 0.6);  // 60% saturation
+
+// Batch property updates
+CameraProperties props;
+props.brightness = 0.75;
+props.contrast = 0.4;
+props.saturation = 0.8;
+cameraSource->SetCameraProperties(props);
+
+// Query supported properties
+auto supported = cameraSource->GetSupportedProperties();
+for (auto prop : supported) {
+    double value;
+    if (cameraSource->GetCameraProperty(prop, value)) {
+        LOG_INFO("Property value: ", value);
+    }
+}
 ```
 
 ### Multi-Camera Setup
@@ -381,4 +498,4 @@ for (const auto& device : devices) {
 LOG_INFO("Initialized ", cameras.size(), " cameras");
 ```
 
-This camera source system provides a flexible, extensible foundation for camera hardware integration with comprehensive error handling and multi-backend support.
+This camera source system provides a flexible, extensible foundation for camera hardware integration with comprehensive error handling, multi-backend support, and normalized property control for consistent cross-camera operation.
