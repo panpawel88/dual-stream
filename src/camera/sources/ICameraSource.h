@@ -73,10 +73,8 @@ struct CameraConfig {
     CameraBackend backend = CameraBackend::AUTO;  // Camera backend selection
     int brightness = -1;                // Camera brightness (-1 = auto)
     int contrast = -1;                  // Camera contrast (-1 = auto)
-    int exposure = -1;                  // Camera exposure (-1 = auto)
 
     // RealSense specific settings
-    bool enableAutoExposure = true;     // Enable auto exposure
     bool enableEmitter = true;          // Enable IR emitter for depth
     RealSenseStreamType realsenseStreamType = RealSenseStreamType::COLOR;  // Primary stream selection
 };
@@ -104,10 +102,8 @@ struct CameraStats {
 enum class CameraPropertyType {
     BRIGHTNESS,         // Camera brightness (0-100)
     CONTRAST,           // Camera contrast (0-100)
-    EXPOSURE,           // Camera exposure (0-100)
     SATURATION,         // Camera saturation (0-100)
-    GAIN,               // Camera gain (0-100)
-    AUTO_EXPOSURE       // Auto exposure control (0=manual, 1=auto)
+    GAIN                // Camera gain (0-100)
 };
 
 /**
@@ -131,22 +127,20 @@ struct CameraPropertyRange {
 struct CameraProperties {
     int brightness = -1;            // -1 means unchanged/auto
     int contrast = -1;              // -1 means unchanged/auto
-    int exposure = -1;              // -1 means unchanged/auto
     int saturation = -1;            // -1 means unchanged/auto
     int gain = -1;                  // -1 means unchanged/auto
-    int autoExposure = -1;          // -1 means unchanged, 0=manual, 1=auto
 
     CameraProperties() = default;
 
     // Check if any property is set (not -1)
     bool HasChanges() const {
-        return brightness != -1 || contrast != -1 || exposure != -1 ||
-               saturation != -1 || gain != -1 || autoExposure != -1;
+        return brightness != -1 || contrast != -1 ||
+               saturation != -1 || gain != -1;
     }
 
     // Reset all properties to unchanged state
     void Reset() {
-        brightness = contrast = exposure = saturation = gain = autoExposure = -1;
+        brightness = contrast = saturation = gain = -1;
     }
 };
 

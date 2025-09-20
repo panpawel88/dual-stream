@@ -55,10 +55,8 @@ private:
 
     // UI state
     bool m_previewEnabled;
-    bool m_autoExposure;
     int m_brightness;
     int m_contrast;
-    int m_exposure;
     int m_saturation;
     int m_gain;
 
