@@ -8,9 +8,7 @@
 #include <d3d11.h>
 #endif
 
-#ifdef HAVE_OPENGL
-#include <GL/gl.h>
-#endif
+// OpenGL headers are included via CameraFrameTexture.h
 
 CameraFrameTexture::CameraFrameTexture()
     : m_renderer(nullptr)
@@ -78,7 +76,6 @@ bool CameraFrameTexture::InitializeD3D11() {
 }
 
 bool CameraFrameTexture::InitializeOpenGL() {
-#ifdef HAVE_OPENGL
     // Generate OpenGL texture
     glGenTextures(1, &m_glTexture);
     if (m_glTexture == 0) {
@@ -88,10 +85,6 @@ bool CameraFrameTexture::InitializeOpenGL() {
 
     LOG_INFO("CameraFrameTexture: Initialized OpenGL backend with texture ID ", m_glTexture);
     return true;
-#else
-    LOG_ERROR("CameraFrameTexture: OpenGL not available");
-    return false;
-#endif
 }
 
 bool CameraFrameTexture::UpdateTexture(std::shared_ptr<const CameraFrame> frame) {
@@ -204,7 +197,6 @@ bool CameraFrameTexture::UpdateD3D11Texture(const CameraFrame& frame) {
 }
 
 bool CameraFrameTexture::UpdateOpenGLTexture(const CameraFrame& frame) {
-#ifdef HAVE_OPENGL
     if (m_glTexture == 0) {
         return false;
     }
@@ -230,9 +222,6 @@ bool CameraFrameTexture::UpdateOpenGLTexture(const CameraFrame& frame) {
 
     LOG_DEBUG("CameraFrameTexture: Updated OpenGL texture ", width, "x", height);
     return true;
-#else
-    return false;
-#endif
 }
 
 void* CameraFrameTexture::GetImGuiTextureID() const {
@@ -306,12 +295,10 @@ void CameraFrameTexture::CleanupD3D11Resources() {
 }
 
 void CameraFrameTexture::CleanupOpenGLResources() {
-#ifdef HAVE_OPENGL
     if (m_glTexture != 0) {
         glDeleteTextures(1, &m_glTexture);
         m_glTexture = 0;
     }
-#endif
 }
 
 void CameraFrameTexture::CalculateScaledDimensions(int srcWidth, int srcHeight, int& dstWidth, int& dstHeight) {
