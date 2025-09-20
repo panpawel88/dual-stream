@@ -64,46 +64,12 @@ bool OpenCVCameraSource::ConfigureCamera() {
         m_capture.set(cv::CAP_PROP_FPS, m_config.frameRate);
     }
     
-    // Set camera properties if specified (convert from config's 0-100 range to normalized 0-1)
-    if (m_config.brightness >= 0) {
-        double normalizedBrightness = m_config.brightness / 100.0;
-        SetCameraProperty(CameraPropertyType::BRIGHTNESS, normalizedBrightness);
-    }
-    if (m_config.contrast >= 0) {
-        double normalizedContrast = m_config.contrast / 100.0;
-        SetCameraProperty(CameraPropertyType::CONTRAST, normalizedContrast);
-    }
+    // Set camera properties from config (using normalized 0-1 range)
+    ConfigureProperty(CameraPropertyType::BRIGHTNESS, m_config.brightness, m_currentProperties.brightness);
+    ConfigureProperty(CameraPropertyType::CONTRAST, m_config.contrast, m_currentProperties.contrast);
+    ConfigureProperty(CameraPropertyType::SATURATION, -1.0, m_currentProperties.saturation);
+    ConfigureProperty(CameraPropertyType::GAIN, -1.0, m_currentProperties.gain);
 
-    // Initialize actual property values from camera using proper range conversion
-    double actualBrightness = GetOpenCVProperty(cv::CAP_PROP_BRIGHTNESS);
-    if (actualBrightness >= 0) {
-        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_BRIGHTNESS);
-        m_currentProperties.brightness = ConvertToNormalizedValue(actualBrightness, range);
-        LOG_DEBUG("Initial brightness: camera value=", actualBrightness, ", normalized value=", m_currentProperties.brightness);
-    }
-
-    double actualContrast = GetOpenCVProperty(cv::CAP_PROP_CONTRAST);
-    if (actualContrast >= 0) {
-        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_CONTRAST);
-        m_currentProperties.contrast = ConvertToNormalizedValue(actualContrast, range);
-        LOG_DEBUG("Initial contrast: camera value=", actualContrast, ", normalized value=", m_currentProperties.contrast);
-    }
-
-    double actualSaturation = GetOpenCVProperty(cv::CAP_PROP_SATURATION);
-    if (actualSaturation >= 0) {
-        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_SATURATION);
-        m_currentProperties.saturation = ConvertToNormalizedValue(actualSaturation, range);
-        LOG_DEBUG("Initial saturation: camera value=", actualSaturation, ", normalized value=", m_currentProperties.saturation);
-    }
-
-    double actualGain = GetOpenCVProperty(cv::CAP_PROP_GAIN);
-    if (actualGain >= 0) {
-        CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_GAIN);
-        m_currentProperties.gain = ConvertToNormalizedValue(actualGain, range);
-        LOG_DEBUG("Initial gain: camera value=", actualGain, ", normalized value=", m_currentProperties.gain);
-    }
-
-    
     // Verify actual settings
     int actualWidth = static_cast<int>(m_capture.get(cv::CAP_PROP_FRAME_WIDTH));
     int actualHeight = static_cast<int>(m_capture.get(cv::CAP_PROP_FRAME_HEIGHT));
@@ -989,5 +955,35 @@ bool OpenCVCameraSource::ValidatePropertyValue(CameraPropertyType property, doub
         default:
             // All properties use 0.0-1.0 normalized range
             return value >= 0.0 && value <= 1.0;
+    }
+}
+
+void OpenCVCameraSource::ConfigureProperty(CameraPropertyType property, double configValue, double& currentValue) {
+    int openCVProp = ConvertPropertyTypeToOpenCV(property);
+    if (openCVProp == -1) {
+        return; // Property type not supported
+    }
+
+    // First, check if property is supported by getting current value
+    double currentCameraValue = GetOpenCVProperty(openCVProp);
+    if (currentCameraValue < 0) {
+        return; // Property not supported by camera
+    }
+
+    // Property is supported, detect its range once and cache it
+    CameraPropertyRange range = DetectPropertyRange(openCVProp);
+
+    // Set config value if specified (>= 0.0)
+    if (configValue >= 0.0) {
+        double cameraValue = ConvertFromNormalizedValue(configValue, range);
+        if (SetOpenCVProperty(openCVProp, cameraValue)) {
+            // Re-read actual value after setting
+            currentCameraValue = GetOpenCVProperty(openCVProp);
+        }
+    }
+
+    // Update normalized current value from actual camera value (using cached range)
+    if (currentCameraValue >= 0) {
+        currentValue = ConvertToNormalizedValue(currentCameraValue, range);
     }
 }
