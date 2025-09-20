@@ -3,6 +3,10 @@
 #include "../CameraFrame.h"
 #include <string>
 #include <functional>
+#include <limits>
+#include <cmath>
+#include <vector>
+#include <set>
 
 /**
  * Camera source type enumeration
@@ -100,47 +104,34 @@ struct CameraStats {
  * Camera property types for runtime control
  */
 enum class CameraPropertyType {
-    BRIGHTNESS,         // Camera brightness (0-100)
-    CONTRAST,           // Camera contrast (0-100)
-    SATURATION,         // Camera saturation (0-100)
-    GAIN                // Camera gain (0-100)
+    BRIGHTNESS,         // Camera brightness (0.0-1.0)
+    CONTRAST,           // Camera contrast (0.0-1.0)
+    SATURATION,         // Camera saturation (0.0-1.0)
+    GAIN                // Camera gain (0.0-1.0)
 };
 
-/**
- * Camera property range information
- */
-struct CameraPropertyRange {
-    int min = 0;                    // Minimum value
-    int max = 100;                  // Maximum value
-    int defaultValue = 50;          // Default value
-    int step = 1;                   // Step size
-    bool supported = false;         // Whether property is supported
-
-    CameraPropertyRange() = default;
-    CameraPropertyRange(int minVal, int maxVal, int defVal, int stepVal = 1, bool isSupported = true)
-        : min(minVal), max(maxVal), defaultValue(defVal), step(stepVal), supported(isSupported) {}
-};
 
 /**
  * Camera properties structure for batch operations
+ * Uses normalized values in range [0.0, 1.0]. NaN indicates unchanged/unset.
  */
 struct CameraProperties {
-    int brightness = -1;            // -1 means unchanged/auto
-    int contrast = -1;              // -1 means unchanged/auto
-    int saturation = -1;            // -1 means unchanged/auto
-    int gain = -1;                  // -1 means unchanged/auto
+    double brightness = std::numeric_limits<double>::quiet_NaN();  // NaN means unchanged/auto
+    double contrast = std::numeric_limits<double>::quiet_NaN();    // NaN means unchanged/auto
+    double saturation = std::numeric_limits<double>::quiet_NaN();  // NaN means unchanged/auto
+    double gain = std::numeric_limits<double>::quiet_NaN();        // NaN means unchanged/auto
 
     CameraProperties() = default;
 
-    // Check if any property is set (not -1)
+    // Check if any property is set (not NaN)
     bool HasChanges() const {
-        return brightness != -1 || contrast != -1 ||
-               saturation != -1 || gain != -1;
+        return !std::isnan(brightness) || !std::isnan(contrast) ||
+               !std::isnan(saturation) || !std::isnan(gain);
     }
 
     // Reset all properties to unchanged state
     void Reset() {
-        brightness = contrast = saturation = gain = -1;
+        brightness = contrast = saturation = gain = std::numeric_limits<double>::quiet_NaN();
     }
 };
 
@@ -261,18 +252,18 @@ public:
     /**
      * Set a camera property at runtime.
      * @param property Property type to set
-     * @param value Property value (typically 0-100 range)
+     * @param value Property value in normalized range [0.0, 1.0]
      * @return true if property was set successfully
      */
-    virtual bool SetCameraProperty(CameraPropertyType property, int value) = 0;
+    virtual bool SetCameraProperty(CameraPropertyType property, double value) = 0;
 
     /**
      * Get current value of a camera property.
      * @param property Property type to get
-     * @param value Output parameter for property value
+     * @param value Output parameter for property value in normalized range [0.0, 1.0]
      * @return true if property was retrieved successfully
      */
-    virtual bool GetCameraProperty(CameraPropertyType property, int& value) const = 0;
+    virtual bool GetCameraProperty(CameraPropertyType property, double& value) const = 0;
 
     /**
      * Set multiple camera properties at once.
@@ -288,11 +279,10 @@ public:
     virtual CameraProperties GetCameraProperties() const = 0;
 
     /**
-     * Get property range information.
-     * @param property Property type to query
-     * @return Range information for the property
+     * Get supported camera properties.
+     * @return Set of properties supported by this camera source
      */
-    virtual CameraPropertyRange GetPropertyRange(CameraPropertyType property) const = 0;
+    virtual std::set<CameraPropertyType> GetSupportedProperties() const = 0;
     
 protected:
     CameraDeviceInfo m_deviceInfo;

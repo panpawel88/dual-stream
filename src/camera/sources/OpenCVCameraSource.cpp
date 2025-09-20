@@ -64,51 +64,43 @@ bool OpenCVCameraSource::ConfigureCamera() {
         m_capture.set(cv::CAP_PROP_FPS, m_config.frameRate);
     }
     
-    // Set camera properties if specified
+    // Set camera properties if specified (convert from config's 0-100 range to normalized 0-1)
     if (m_config.brightness >= 0) {
-        SetOpenCVProperty(cv::CAP_PROP_BRIGHTNESS, m_config.brightness / 100.0);
-        // Get actual value set by camera
-        double actualBrightness = GetOpenCVProperty(cv::CAP_PROP_BRIGHTNESS);
-        if (actualBrightness >= 0) {
-            m_currentProperties.brightness = static_cast<int>(actualBrightness * 100.0);
-        }
+        double normalizedBrightness = m_config.brightness / 100.0;
+        SetCameraProperty(CameraPropertyType::BRIGHTNESS, normalizedBrightness);
     }
     if (m_config.contrast >= 0) {
-        SetOpenCVProperty(cv::CAP_PROP_CONTRAST, m_config.contrast / 100.0);
-        // Get actual value set by camera
-        double actualContrast = GetOpenCVProperty(cv::CAP_PROP_CONTRAST);
-        if (actualContrast >= 0) {
-            m_currentProperties.contrast = static_cast<int>(actualContrast * 100.0);
-        }
+        double normalizedContrast = m_config.contrast / 100.0;
+        SetCameraProperty(CameraPropertyType::CONTRAST, normalizedContrast);
     }
 
     // Initialize actual property values from camera using proper range conversion
     double actualBrightness = GetOpenCVProperty(cv::CAP_PROP_BRIGHTNESS);
     if (actualBrightness >= 0) {
         CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_BRIGHTNESS);
-        m_currentProperties.brightness = static_cast<int>(ConvertToUIValue(actualBrightness, range));
-        LOG_DEBUG("Initial brightness: camera value=", actualBrightness, ", UI value=", m_currentProperties.brightness, "%");
+        m_currentProperties.brightness = ConvertToNormalizedValue(actualBrightness, range);
+        LOG_DEBUG("Initial brightness: camera value=", actualBrightness, ", normalized value=", m_currentProperties.brightness);
     }
 
     double actualContrast = GetOpenCVProperty(cv::CAP_PROP_CONTRAST);
     if (actualContrast >= 0) {
         CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_CONTRAST);
-        m_currentProperties.contrast = static_cast<int>(ConvertToUIValue(actualContrast, range));
-        LOG_DEBUG("Initial contrast: camera value=", actualContrast, ", UI value=", m_currentProperties.contrast, "%");
+        m_currentProperties.contrast = ConvertToNormalizedValue(actualContrast, range);
+        LOG_DEBUG("Initial contrast: camera value=", actualContrast, ", normalized value=", m_currentProperties.contrast);
     }
 
     double actualSaturation = GetOpenCVProperty(cv::CAP_PROP_SATURATION);
     if (actualSaturation >= 0) {
         CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_SATURATION);
-        m_currentProperties.saturation = static_cast<int>(ConvertToUIValue(actualSaturation, range));
-        LOG_DEBUG("Initial saturation: camera value=", actualSaturation, ", UI value=", m_currentProperties.saturation, "%");
+        m_currentProperties.saturation = ConvertToNormalizedValue(actualSaturation, range);
+        LOG_DEBUG("Initial saturation: camera value=", actualSaturation, ", normalized value=", m_currentProperties.saturation);
     }
 
     double actualGain = GetOpenCVProperty(cv::CAP_PROP_GAIN);
     if (actualGain >= 0) {
         CameraPropertyRange range = DetectPropertyRange(cv::CAP_PROP_GAIN);
-        m_currentProperties.gain = static_cast<int>(ConvertToUIValue(actualGain, range));
-        LOG_DEBUG("Initial gain: camera value=", actualGain, ", UI value=", m_currentProperties.gain, "%");
+        m_currentProperties.gain = ConvertToNormalizedValue(actualGain, range);
+        LOG_DEBUG("Initial gain: camera value=", actualGain, ", normalized value=", m_currentProperties.gain);
     }
 
     
@@ -488,7 +480,7 @@ bool OpenCVCameraSource::SetOpenCVProperty(int propId, double value) {
     return success;
 }
 
-CameraPropertyRange OpenCVCameraSource::DetectPropertyRange(int openCVPropId) const {
+OpenCVCameraSource::CameraPropertyRange OpenCVCameraSource::DetectPropertyRange(int openCVPropId) const {
     CameraPropertyRange range;
 
     if (!m_capture.isOpened()) {
@@ -568,27 +560,26 @@ CameraPropertyRange OpenCVCameraSource::DetectPropertyRange(int openCVPropId) co
     return range;
 }
 
-double OpenCVCameraSource::ConvertToUIValue(double cameraValue, const CameraPropertyRange& range) const {
+double OpenCVCameraSource::ConvertToNormalizedValue(double cameraValue, const CameraPropertyRange& range) const {
     if (!range.supported || range.max <= range.min) {
         // Fallback: assume 0-1 range
-        return cameraValue * 100.0;
+        return cameraValue;
     }
 
-    // Map camera range to 0-100 UI range
+    // Map camera range to 0-1 normalized range
     double normalized = (cameraValue - static_cast<double>(range.min)) / (static_cast<double>(range.max) - static_cast<double>(range.min));
-    normalized = std::max(0.0, std::min(1.0, normalized)); // Clamp to [0,1]
-    return normalized * 100.0;
+    return std::max(0.0, std::min(1.0, normalized)); // Clamp to [0,1]
 }
 
-double OpenCVCameraSource::ConvertFromUIValue(int uiValue, const CameraPropertyRange& range) const {
+double OpenCVCameraSource::ConvertFromNormalizedValue(double normalizedValue, const CameraPropertyRange& range) const {
     if (!range.supported || range.max <= range.min) {
         // Fallback: assume 0-1 range
-        return uiValue / 100.0;
+        return normalizedValue;
     }
 
-    // Map UI range (0-100) to camera range
-    double normalized = uiValue / 100.0;
-    return static_cast<double>(range.min) + normalized * (static_cast<double>(range.max) - static_cast<double>(range.min));
+    // Map normalized range (0-1) to camera range
+    double clamped = std::max(0.0, std::min(1.0, normalizedValue)); // Clamp to [0,1]
+    return static_cast<double>(range.min) + clamped * (static_cast<double>(range.max) - static_cast<double>(range.min));
 }
 
 int OpenCVCameraSource::ConvertBackendToOpenCV(CameraBackend backend) const {
@@ -752,7 +743,7 @@ bool OpenCVCameraSource::TryOpenVideoFile(const std::string& filename, CameraBac
 }
 
 // Runtime property control implementation
-bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, int value) {
+bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, double value) {
     if (!ValidatePropertyValue(property, value)) {
         UpdateLastError("Invalid property value: " + std::to_string(value));
         return false;
@@ -784,22 +775,22 @@ bool OpenCVCameraSource::SetCameraProperty(CameraPropertyType property, int valu
     return true;
 }
 
-bool OpenCVCameraSource::GetCameraProperty(CameraPropertyType property, int& value) const {
+bool OpenCVCameraSource::GetCameraProperty(CameraPropertyType property, double& value) const {
     std::lock_guard<std::mutex> lock(m_propertyMutex);
 
     switch (property) {
         case CameraPropertyType::BRIGHTNESS:
             value = m_currentProperties.brightness;
-            return m_currentProperties.brightness != -1;
+            return !std::isnan(m_currentProperties.brightness);
         case CameraPropertyType::CONTRAST:
             value = m_currentProperties.contrast;
-            return m_currentProperties.contrast != -1;
+            return !std::isnan(m_currentProperties.contrast);
         case CameraPropertyType::SATURATION:
             value = m_currentProperties.saturation;
-            return m_currentProperties.saturation != -1;
+            return !std::isnan(m_currentProperties.saturation);
         case CameraPropertyType::GAIN:
             value = m_currentProperties.gain;
-            return m_currentProperties.gain != -1;
+            return !std::isnan(m_currentProperties.gain);
         default:
             return false;
     }
@@ -813,34 +804,34 @@ bool OpenCVCameraSource::SetCameraProperties(const CameraProperties& properties)
     std::lock_guard<std::mutex> lock(m_propertyMutex);
 
     // Validate all properties first
-    if (properties.brightness != -1 && !ValidatePropertyValue(CameraPropertyType::BRIGHTNESS, properties.brightness)) {
+    if (!std::isnan(properties.brightness) && !ValidatePropertyValue(CameraPropertyType::BRIGHTNESS, properties.brightness)) {
         UpdateLastError("Invalid brightness value: " + std::to_string(properties.brightness));
         return false;
     }
-    if (properties.contrast != -1 && !ValidatePropertyValue(CameraPropertyType::CONTRAST, properties.contrast)) {
+    if (!std::isnan(properties.contrast) && !ValidatePropertyValue(CameraPropertyType::CONTRAST, properties.contrast)) {
         UpdateLastError("Invalid contrast value: " + std::to_string(properties.contrast));
         return false;
     }
-    if (properties.saturation != -1 && !ValidatePropertyValue(CameraPropertyType::SATURATION, properties.saturation)) {
+    if (!std::isnan(properties.saturation) && !ValidatePropertyValue(CameraPropertyType::SATURATION, properties.saturation)) {
         UpdateLastError("Invalid saturation value: " + std::to_string(properties.saturation));
         return false;
     }
-    if (properties.gain != -1 && !ValidatePropertyValue(CameraPropertyType::GAIN, properties.gain)) {
+    if (!std::isnan(properties.gain) && !ValidatePropertyValue(CameraPropertyType::GAIN, properties.gain)) {
         UpdateLastError("Invalid gain value: " + std::to_string(properties.gain));
         return false;
     }
 
     // Copy valid properties to pending
-    if (properties.brightness != -1) {
+    if (!std::isnan(properties.brightness)) {
         m_pendingProperties.brightness = properties.brightness;
     }
-    if (properties.contrast != -1) {
+    if (!std::isnan(properties.contrast)) {
         m_pendingProperties.contrast = properties.contrast;
     }
-    if (properties.saturation != -1) {
+    if (!std::isnan(properties.saturation)) {
         m_pendingProperties.saturation = properties.saturation;
     }
-    if (properties.gain != -1) {
+    if (!std::isnan(properties.gain)) {
         m_pendingProperties.gain = properties.gain;
     }
 
@@ -854,30 +845,26 @@ CameraProperties OpenCVCameraSource::GetCameraProperties() const {
     return m_currentProperties;
 }
 
-CameraPropertyRange OpenCVCameraSource::GetPropertyRange(CameraPropertyType property) const {
+std::set<CameraPropertyType> OpenCVCameraSource::GetSupportedProperties() const {
+    std::set<CameraPropertyType> supportedProperties;
+
     if (!m_capture.isOpened()) {
-        return CameraPropertyRange{0, 100, 50, 1, false};
+        return supportedProperties;
     }
 
-    switch (property) {
-        case CameraPropertyType::BRIGHTNESS:
-        case CameraPropertyType::CONTRAST:
-        case CameraPropertyType::SATURATION:
-        case CameraPropertyType::GAIN: {
-            // Query actual current value using proper range detection
-            int openCVProp = ConvertPropertyTypeToOpenCV(property);
-            if (openCVProp != -1) {
-                CameraPropertyRange range = DetectPropertyRange(openCVProp);
-                if (range.supported) {
-                    int currentAsInt = range.defaultValue;
-                    return CameraPropertyRange{0, 100, currentAsInt, 1, true};
-                }
+    // Check which properties are supported by trying to get their current values
+    for (auto property : {CameraPropertyType::BRIGHTNESS, CameraPropertyType::CONTRAST,
+                         CameraPropertyType::SATURATION, CameraPropertyType::GAIN}) {
+        int openCVProp = ConvertPropertyTypeToOpenCV(property);
+        if (openCVProp != -1) {
+            double currentValue = GetOpenCVProperty(openCVProp);
+            if (currentValue >= 0) {
+                supportedProperties.insert(property);
             }
-            return CameraPropertyRange{0, 100, 50, 1, true};
         }
-        default:
-            return CameraPropertyRange{0, 100, 50, 1, false};
     }
+
+    return supportedProperties;
 }
 
 void OpenCVCameraSource::ApplyPendingProperties() {
@@ -892,19 +879,19 @@ void OpenCVCameraSource::ApplyPendingProperties() {
 
     // Apply properties in optimal order to minimize camera reconfiguration
     // 1. Apply basic properties first (less likely to cause reconfiguration)
-    if (m_pendingProperties.brightness != -1) {
+    if (!std::isnan(m_pendingProperties.brightness)) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::BRIGHTNESS);
         if (openCVProp != -1) {
             CameraPropertyRange range = DetectPropertyRange(openCVProp);
-            double setValue = ConvertFromUIValue(m_pendingProperties.brightness, range);
+            double setValue = ConvertFromNormalizedValue(m_pendingProperties.brightness, range);
 
-            LOG_DEBUG("Setting brightness: UI value=", m_pendingProperties.brightness, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
+            LOG_DEBUG("Setting brightness: normalized value=", m_pendingProperties.brightness, ", camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
 
             if (SetOpenCVProperty(openCVProp, setValue)) {
                 double actualValue = GetOpenCVProperty(openCVProp);
                 if (actualValue >= 0) {
-                    m_currentProperties.brightness = static_cast<int>(ConvertToUIValue(actualValue, range));
-                    LOG_DEBUG("Brightness applied: target=", m_pendingProperties.brightness, "%, actual camera value=", actualValue, ", UI value=", m_currentProperties.brightness, "%");
+                    m_currentProperties.brightness = ConvertToNormalizedValue(actualValue, range);
+                    LOG_DEBUG("Brightness applied: target=", m_pendingProperties.brightness, ", actual camera value=", actualValue, ", normalized value=", m_currentProperties.brightness);
                 }
             } else {
                 LOG_WARNING("Failed to set brightness to ", m_pendingProperties.brightness);
@@ -912,19 +899,19 @@ void OpenCVCameraSource::ApplyPendingProperties() {
         }
     }
 
-    if (m_pendingProperties.contrast != -1) {
+    if (!std::isnan(m_pendingProperties.contrast)) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::CONTRAST);
         if (openCVProp != -1) {
             CameraPropertyRange range = DetectPropertyRange(openCVProp);
-            double setValue = ConvertFromUIValue(m_pendingProperties.contrast, range);
+            double setValue = ConvertFromNormalizedValue(m_pendingProperties.contrast, range);
 
-            LOG_DEBUG("Setting contrast: UI value=", m_pendingProperties.contrast, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
+            LOG_DEBUG("Setting contrast: normalized value=", m_pendingProperties.contrast, ", camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
 
             if (SetOpenCVProperty(openCVProp, setValue)) {
                 double actualValue = GetOpenCVProperty(openCVProp);
                 if (actualValue >= 0) {
-                    m_currentProperties.contrast = static_cast<int>(ConvertToUIValue(actualValue, range));
-                    LOG_DEBUG("Contrast applied: target=", m_pendingProperties.contrast, "%, actual camera value=", actualValue, ", UI value=", m_currentProperties.contrast, "%");
+                    m_currentProperties.contrast = ConvertToNormalizedValue(actualValue, range);
+                    LOG_DEBUG("Contrast applied: target=", m_pendingProperties.contrast, ", actual camera value=", actualValue, ", normalized value=", m_currentProperties.contrast);
                 }
             } else {
                 LOG_WARNING("Failed to set contrast to ", m_pendingProperties.contrast);
@@ -932,19 +919,19 @@ void OpenCVCameraSource::ApplyPendingProperties() {
         }
     }
 
-    if (m_pendingProperties.saturation != -1) {
+    if (!std::isnan(m_pendingProperties.saturation)) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::SATURATION);
         if (openCVProp != -1) {
             CameraPropertyRange range = DetectPropertyRange(openCVProp);
-            double setValue = ConvertFromUIValue(m_pendingProperties.saturation, range);
+            double setValue = ConvertFromNormalizedValue(m_pendingProperties.saturation, range);
 
-            LOG_DEBUG("Setting saturation: UI value=", m_pendingProperties.saturation, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
+            LOG_DEBUG("Setting saturation: normalized value=", m_pendingProperties.saturation, ", camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
 
             if (SetOpenCVProperty(openCVProp, setValue)) {
                 double actualValue = GetOpenCVProperty(openCVProp);
                 if (actualValue >= 0) {
-                    m_currentProperties.saturation = static_cast<int>(ConvertToUIValue(actualValue, range));
-                    LOG_DEBUG("Saturation applied: target=", m_pendingProperties.saturation, "%, actual camera value=", actualValue, ", UI value=", m_currentProperties.saturation, "%");
+                    m_currentProperties.saturation = ConvertToNormalizedValue(actualValue, range);
+                    LOG_DEBUG("Saturation applied: target=", m_pendingProperties.saturation, ", actual camera value=", actualValue, ", normalized value=", m_currentProperties.saturation);
                 }
             } else {
                 LOG_WARNING("Failed to set saturation to ", m_pendingProperties.saturation);
@@ -952,19 +939,19 @@ void OpenCVCameraSource::ApplyPendingProperties() {
         }
     }
 
-    if (m_pendingProperties.gain != -1) {
+    if (!std::isnan(m_pendingProperties.gain)) {
         int openCVProp = ConvertPropertyTypeToOpenCV(CameraPropertyType::GAIN);
         if (openCVProp != -1) {
             CameraPropertyRange range = DetectPropertyRange(openCVProp);
-            double setValue = ConvertFromUIValue(m_pendingProperties.gain, range);
+            double setValue = ConvertFromNormalizedValue(m_pendingProperties.gain, range);
 
-            LOG_DEBUG("Setting gain: UI value=", m_pendingProperties.gain, "%, camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
+            LOG_DEBUG("Setting gain: normalized value=", m_pendingProperties.gain, ", camera value=", setValue, " (range: ", range.min, "-", range.max, ")");
 
             if (SetOpenCVProperty(openCVProp, setValue)) {
                 double actualValue = GetOpenCVProperty(openCVProp);
                 if (actualValue >= 0) {
-                    m_currentProperties.gain = static_cast<int>(ConvertToUIValue(actualValue, range));
-                    LOG_DEBUG("Gain applied: target=", m_pendingProperties.gain, "%, actual camera value=", actualValue, ", UI value=", m_currentProperties.gain, "%");
+                    m_currentProperties.gain = ConvertToNormalizedValue(actualValue, range);
+                    LOG_DEBUG("Gain applied: target=", m_pendingProperties.gain, ", actual camera value=", actualValue, ", normalized value=", m_currentProperties.gain);
                 }
             } else {
                 LOG_WARNING("Failed to set gain to ", m_pendingProperties.gain);
@@ -993,14 +980,14 @@ int OpenCVCameraSource::ConvertPropertyTypeToOpenCV(CameraPropertyType property)
     }
 }
 
-bool OpenCVCameraSource::ValidatePropertyValue(CameraPropertyType property, int value) const {
+bool OpenCVCameraSource::ValidatePropertyValue(CameraPropertyType property, double value) const {
     switch (property) {
         case CameraPropertyType::BRIGHTNESS:
         case CameraPropertyType::CONTRAST:
         case CameraPropertyType::SATURATION:
         case CameraPropertyType::GAIN:
         default:
-            // All properties use 0-100 range
-            return value >= 0 && value <= 100;
+            // All properties use 0.0-1.0 normalized range
+            return value >= 0.0 && value <= 1.0;
     }
 }

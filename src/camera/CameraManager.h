@@ -246,7 +246,7 @@ public:
      * @param value Property value (typically 0-100 range)
      * @return true if property was set successfully
      */
-    bool SetCameraProperty(CameraPropertyType property, int value);
+    bool SetCameraProperty(CameraPropertyType property, double value);
 
     /**
      * Get current value of a camera property.
@@ -255,7 +255,7 @@ public:
      * @param value Output parameter for property value
      * @return true if property was retrieved successfully
      */
-    bool GetCameraProperty(CameraPropertyType property, int& value) const;
+    bool GetCameraProperty(CameraPropertyType property, double& value) const;
 
     /**
      * Set multiple camera properties at once.
@@ -273,12 +273,11 @@ public:
     CameraProperties GetAllCameraProperties() const;
 
     /**
-     * Get property range information.
+     * Get supported camera properties.
      *
-     * @param property Property type to query
-     * @return Range information for the property
+     * @return Set of supported properties
      */
-    CameraPropertyRange GetPropertyRange(CameraPropertyType property) const;
+    std::set<CameraPropertyType> GetSupportedProperties() const;
 
 private:
     mutable std::mutex m_mutex;
