@@ -55,10 +55,10 @@ private:
 
     // UI state
     bool m_previewEnabled;
-    int m_brightness;
-    int m_contrast;
-    int m_saturation;
-    int m_gain;
+    float m_brightness;
+    float m_contrast;
+    float m_saturation;
+    float m_gain;
 
     // Frame preview
     std::shared_ptr<const CameraFrame> m_currentFrame;
@@ -87,7 +87,7 @@ private:
     void DrawCameraInfo();
 
     // Property handling
-    void UpdateCameraProperty(CameraPropertyType property, int value);
+    void UpdateCameraProperty(CameraPropertyType property, float value);
     void ResetPropertiesToDefaults();
     void SyncUIWithCameraProperties();
 
