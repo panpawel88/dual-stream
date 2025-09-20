@@ -403,6 +403,8 @@ if(ENABLE_CAMERA_SUPPORT)
         src/camera/processing/ListenerProcessor.cpp
         src/camera/processing/FaceDetectionSwitchingTrigger.cpp
         src/camera/CameraManager.cpp
+        src/camera/ui/CameraFrameTexture.cpp
+        src/camera/ui/CameraControlUI.cpp
     )
 endif()
 

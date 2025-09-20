@@ -19,6 +19,7 @@
 #include "video/triggers/SwitchingTriggerFactory.h"
 #include "camera/CameraManager.h"
 #include "camera/processing/FaceDetectionSwitchingTrigger.h"
+#include "camera/ui/CameraControlUI.h"
 #include "core/PerformanceStatistics.h"
 #include "rendering/D3D11Renderer.h"
 #include "ui/GlobalInputHandler.h"
@@ -279,6 +280,18 @@ int main(int argc, char* argv[]) {
     // Register performance statistics with UI registry
     PerformanceStatistics& stats = PerformanceStatistics::GetInstance();
     UIRegistry::GetInstance().RegisterDrawable(&stats);
+
+    // Register camera control UI if camera is available
+    std::shared_ptr<CameraControlUI> cameraControlUI;
+    if (cameraManager && cameraManager->IsInitialized()) {
+        cameraControlUI = std::make_shared<CameraControlUI>();
+        if (cameraControlUI->Initialize(cameraManager.get(), renderer.get())) {
+            UIRegistry::GetInstance().RegisterDrawable(cameraControlUI.get());
+            LOG_INFO("Camera control UI registered");
+        } else {
+            LOG_WARNING("Failed to initialize camera control UI");
+        }
+    }
     
     // Main loop timing variables
     auto loopStartTime = std::chrono::high_resolution_clock::now();
