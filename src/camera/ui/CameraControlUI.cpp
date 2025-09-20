@@ -171,7 +171,7 @@ void CameraControlUI::DrawCameraProperties() {
 
     // Auto exposure checkbox
     if (ImGui::Checkbox("Auto Exposure", &m_autoExposure)) {
-        // Note: Auto exposure would need to be implemented in camera sources
+        UpdateCameraProperty(CameraPropertyType::AUTO_EXPOSURE, m_autoExposure ? 1 : 0);
         propertyChanged = true;
     }
 
@@ -340,6 +340,12 @@ void CameraControlUI::SyncUIWithCameraProperties() {
     if (properties.exposure >= 0) m_exposure = properties.exposure;
     if (properties.saturation >= 0) m_saturation = properties.saturation;
     if (properties.gain >= 0) m_gain = properties.gain;
+
+    // Sync auto-exposure state
+    int autoExpValue;
+    if (m_cameraManager->GetCameraProperty(CameraPropertyType::AUTO_EXPOSURE, autoExpValue)) {
+        m_autoExposure = (autoExpValue > 0);
+    }
 }
 
 bool CameraControlUI::ShouldUpdatePreview() const {
