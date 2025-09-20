@@ -12,6 +12,9 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
+// Include OpenGL headers (always available)
+#include "../../rendering/OpenGLHeaders.h"
+
 /**
  * Camera frame to texture converter for ImGui display.
  * Handles both DirectX 11 and OpenGL backends with caching.
