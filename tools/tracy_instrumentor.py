@@ -39,6 +39,12 @@ class TracyInstrumentor:
         self.preprocessor_line = re.compile(r'^\s*#')
         self.empty_line = re.compile(r'^\s*$')
 
+        # Context tracking patterns
+        self.extern_c_start = re.compile(r'extern\s+"C"\s*\{')
+        self.extern_c_end = re.compile(r'\}')
+        self.extern_c_inline = re.compile(r'extern\s+"C"\s*\{[^}]*\}')
+        self.switch_statement = re.compile(r'^\s*switch\s*\(', re.MULTILINE)
+
         # Patterns to skip
         self.skip_patterns = [
             re.compile(r'^\s*[A-Za-z_]\w*\s*\(\s*\)\s*\{\s*\}'),     # Empty functions
@@ -46,7 +52,23 @@ class TracyInstrumentor:
             re.compile(r'^\s*~[A-Za-z_]\w*\s*\('),                   # Destructors
             re.compile(r'^\s*operator[^\(]*\('),                     # Operators
             re.compile(r'^\s*(?:get|set)[A-Z]\w*\s*\([^)]*\)\s*\{.*\}\s*$'),  # Simple getters/setters
+            re.compile(r'^\s*case\s+[^:]+:'),                       # Switch cases
+            re.compile(r'^\s*default\s*:'),                         # Default cases
+            re.compile(r'^\s*\{[^}]*\}\s*,?\s*$'),                   # Array/struct initializers
+            re.compile(r'=\s*\{'),                                  # Assignment with braces
+            re.compile(r'^\s*\[\s*[^\]]*\]\s*\([^)]*\)\s*\{'),      # Lambda functions
+            re.compile(r'^\s*auto\s+[^=]*=\s*\[[^\]]*\]'),          # Lambda assignments
         ]
+
+        # Local type definition patterns
+        self.local_struct_pattern = re.compile(r'^\s*struct\s+[A-Za-z_]\w*\s*\{')
+        self.local_class_pattern = re.compile(r'^\s*class\s+[A-Za-z_]\w*\s*\{')
+        self.local_enum_pattern = re.compile(r'^\s*enum\s+(?:class\s+)?[A-Za-z_]\w*\s*\{')
+        self.local_union_pattern = re.compile(r'^\s*union\s+[A-Za-z_]\w*\s*\{')
+
+        # String literal patterns
+        self.raw_string_start = re.compile(r'R"([^(]*)\(')
+        self.string_literal = re.compile(r'"([^"\\]|\\.)*"')
 
         # Files to exclude from instrumentation
         self.exclude_files = {
@@ -91,6 +113,166 @@ class TracyInstrumentor:
 
         return False
 
+    def is_in_context(self, lines: List[str], line_idx: int, context_type: str) -> bool:
+        """Check if current line is within a specific context (extern C or switch)."""
+        if context_type == 'extern_c':
+            # Look backward for extern "C" {
+            extern_c_depth = 0
+            for i in range(line_idx, -1, -1):
+                line = lines[i].strip()
+                if self.extern_c_end.match(line):
+                    extern_c_depth += 1
+                elif self.extern_c_start.match(line):
+                    extern_c_depth -= 1
+                    if extern_c_depth < 0:
+                        return True
+            return False
+        elif context_type == 'switch':
+            # Look backward for switch statement
+            brace_depth = 0
+            for i in range(line_idx, -1, -1):
+                line = lines[i].strip()
+                if line.endswith('}'):
+                    brace_depth += 1
+                elif line.endswith('{'):
+                    brace_depth -= 1
+                    if brace_depth < 0 and self.switch_statement.search(line):
+                        return True
+                elif brace_depth == 0 and self.switch_statement.search(line):
+                    return True
+            return False
+        return False
+
+    def is_valid_function_signature(self, func_info: Dict[str, str], lines: List[str], line_idx: int) -> bool:
+        """Enhanced validation of function signatures."""
+        signature = func_info['signature']
+        func_name = func_info['function_name']
+
+        # Basic validation
+        if not func_name or len(func_name) < 2:
+            return False
+
+        # Check for patterns that indicate this is not a function
+        for pattern in self.skip_patterns:
+            if pattern.search(signature):
+                return False
+
+        # Must have parentheses
+        if '(' not in signature or ')' not in signature:
+            return False
+
+        # Check context - skip if in extern "C" or switch
+        if self.is_in_context(lines, line_idx, 'extern_c'):
+            return False
+        if self.is_in_context(lines, line_idx, 'switch'):
+            return False
+
+        # Skip nested functions (local classes, lambdas in functions)
+        if self.is_nested_function(lines, line_idx):
+            return False
+
+        # Skip functions that are too close to previous instrumentation
+        if self.has_recent_tracy_annotation(lines, line_idx):
+            return False
+
+        # Skip if we're inside a local type definition (struct, class, enum, union)
+        if self.is_inside_local_type_definition(lines, line_idx):
+            return False
+
+        # Skip if we're inside a string literal (especially raw string literals with shader code)
+        if self.is_inside_string_literal(lines, line_idx):
+            return False
+
+        # Ensure this looks like a real function declaration/definition
+        # Must have return type or be a constructor/method
+        has_return_type = any(keyword in signature for keyword in
+                            ['void', 'int', 'bool', 'char', 'float', 'double', 'auto', 'static', 'virtual', 'inline'])
+        is_constructor = func_info['class_name'] and func_name == func_info['class_name']
+        is_method = func_info['class_name'] is not None
+
+        return has_return_type or is_constructor or is_method
+
+    def is_nested_function(self, lines: List[str], line_idx: int) -> bool:
+        """Check if this function is nested inside another function."""
+        brace_depth = 0
+
+        # Look backward to see if we're already inside a function
+        for i in range(line_idx - 1, max(0, line_idx - 50), -1):
+            line = lines[i].strip()
+
+            # Count braces
+            brace_depth += line.count('}') - line.count('{')
+
+            # If we're inside braces and find another opening brace with function-like signature
+            if brace_depth < 0:
+                if ('{' in line and '(' in line and ')' in line and
+                    not line.startswith('//') and not line.startswith('/*')):
+                    return True
+
+        return False
+
+    def has_recent_tracy_annotation(self, lines: List[str], line_idx: int) -> bool:
+        """Check if there's already a Tracy annotation very close to this location."""
+        # Look at nearby lines for existing Tracy annotations
+        for i in range(max(0, line_idx - 3), min(len(lines), line_idx + 3)):
+            if 'PROFILE_' in lines[i]:
+                return True
+        return False
+
+    def is_inside_local_type_definition(self, lines: List[str], line_idx: int) -> bool:
+        """Check if current line is inside a local type definition (struct, class, enum, union)."""
+        # Look backward to see if we're inside a local type definition
+        brace_depth = 0
+
+        for i in range(line_idx - 1, max(0, line_idx - 20), -1):
+            line = lines[i].strip()
+
+            # Count braces to understand nesting
+            brace_depth += line.count('}') - line.count('{')
+
+            # If we find an opening brace with local type definition pattern
+            if brace_depth < 0:
+                # Check if this line contains a local type definition
+                if (self.local_struct_pattern.match(line) or
+                    self.local_class_pattern.match(line) or
+                    self.local_enum_pattern.match(line) or
+                    self.local_union_pattern.match(line)):
+                    return True
+
+                # If we hit another opening brace that's not a type definition, we're not in one
+                if '{' in line:
+                    break
+
+        return False
+
+    def is_inside_string_literal(self, lines: List[str], line_idx: int) -> bool:
+        """Check if current line is inside a string literal (especially raw string literals)."""
+        # Look backward to see if we're inside a raw string literal
+        for i in range(line_idx - 1, max(0, line_idx - 50), -1):
+            line = lines[i]
+
+            # Check for raw string literal start
+            raw_match = self.raw_string_start.search(line)
+            if raw_match:
+                delimiter = raw_match.group(1)
+                end_pattern = f'){delimiter}"'
+
+                # Check if we've found the closing delimiter
+                found_end = False
+                for j in range(i, line_idx + 1):
+                    if end_pattern in lines[j]:
+                        found_end = True
+                        break
+
+                # If we haven't found the end, we're inside the raw string
+                if not found_end:
+                    return True
+
+            # For regular string literals, we need more sophisticated parsing
+            # but since most issues are with raw strings, this should handle the main case
+
+        return False
+
     def get_zone_name(self, file_path: Path, func_name: str, class_name: str = None) -> str:
         """Generate appropriate zone name based on file path and function."""
         # Check for subsystem-specific zones
@@ -124,22 +306,79 @@ class TracyInstrumentor:
         return self.instrumented_marker in content or "PROFILE_ZONE" in content
 
     def add_tracy_include(self, content: str) -> str:
-        """Add Tracy include to file if not present."""
+        """Add Tracy include to file if not present, avoiding extern C blocks."""
         if self.tracy_include in content:
             return content
 
-        # Find the first non-comment, non-blank line after existing includes
+        # Handle inline extern "C" blocks first by splitting them
+        content = self._split_inline_extern_c_blocks(content)
+
         lines = content.split('\n')
         insert_pos = 0
+        extern_c_depth = 0
 
         for i, line in enumerate(lines):
-            if line.strip().startswith('#include'):
-                insert_pos = i + 1
-            elif line.strip() and not line.strip().startswith('//') and not line.strip().startswith('/*'):
-                break
+            stripped = line.strip()
+
+            # Track extern "C" blocks with proper brace counting
+            if self.extern_c_start.search(stripped):
+                extern_c_depth += stripped.count('{')
+                continue
+            elif stripped == '}' and extern_c_depth > 0:
+                extern_c_depth -= 1
+                # Insert after extern "C" block ends completely
+                if extern_c_depth == 0:
+                    insert_pos = i + 1
+                continue
+
+            # Only process includes outside extern "C" blocks
+            if extern_c_depth == 0:
+                if stripped.startswith('#include'):
+                    insert_pos = i + 1
+                elif stripped and not stripped.startswith('//') and not stripped.startswith('/*') and not self.preprocessor_line.match(stripped):
+                    break
 
         lines.insert(insert_pos, self.tracy_include)
         return '\n'.join(lines)
+
+    def _split_inline_extern_c_blocks(self, content: str) -> str:
+        """Split inline extern C blocks to separate lines for proper processing."""
+        # Find all inline extern "C" { ... } patterns and split them
+        def split_extern_c(match):
+            full_match = match.group(0)
+            # Split: extern "C" { -> includes -> }
+            parts = []
+
+            # Find the opening brace
+            start_pos = full_match.find('{')
+            if start_pos == -1:
+                return full_match
+
+            # Add extern "C" {
+            parts.append(full_match[:start_pos + 1])
+
+            # Find the closing brace
+            end_pos = full_match.rfind('}')
+            if end_pos == -1:
+                return full_match
+
+            # Extract content between braces
+            middle_content = full_match[start_pos + 1:end_pos]
+
+            # Split includes and other content
+            for part in middle_content.split('#include'):
+                if part.strip():
+                    if not part.startswith(' '):
+                        parts.append('#include' + part)
+                    else:
+                        parts.append('#include' + part)
+
+            # Add closing brace
+            parts.append('}')
+
+            return '\n'.join(parts)
+
+        return self.extern_c_inline.sub(split_extern_c, content)
 
     def parse_function_signature(self, lines: List[str], start_idx: int) -> Optional[Dict[str, str]]:
         """Parse function signature from lines starting at start_idx."""
@@ -207,10 +446,13 @@ class TracyInstrumentor:
         if self.is_already_instrumented(content):
             return False, f"File {file_path} is already instrumented"
 
+        # First, add Tracy include using sophisticated method
+        content_with_include = self.add_tracy_include(content)
+        lines = content_with_include.splitlines()
+
         # Process line by line for fast instrumentation
         instrumented_lines = []
         instrumented_count = 0
-        tracy_include_added = False
 
         # Add instrumentation marker
         instrumented_lines.append(f"{self.instrumented_marker}\n")
@@ -225,47 +467,39 @@ class TracyInstrumentor:
                 self.comment_line.match(stripped) or
                 self.preprocessor_line.match(stripped)):
 
-                # Add Tracy include after other includes
-                if not tracy_include_added and stripped.startswith('#include'):
-                    instrumented_lines.append(line)
-                    # Look ahead to see if there are more includes
-                    next_idx = i + 1
-                    while (next_idx < len(lines) and
-                           (not lines[next_idx].strip() or
-                            lines[next_idx].strip().startswith('#include'))):
-                        next_idx += 1
-                    # Add Tracy include after last include
-                    if next_idx - 1 == i:  # This is the last include
-                        instrumented_lines.append(f"{self.tracy_include}\n")
-                        tracy_include_added = True
-                else:
-                    instrumented_lines.append(line)
+                instrumented_lines.append(line)
                 i += 1
                 continue
 
             # Check for function opening brace
             if '{' in stripped and stripped.endswith('{'):
-                # Parse function signature
-                func_info = self.parse_function_signature(lines, i)
-
-                if func_info and not self.should_skip_function_info(func_info):
-                    # Add the line with opening brace
+                # First check if this line itself is a local type definition
+                if (self.local_struct_pattern.match(stripped) or
+                    self.local_class_pattern.match(stripped) or
+                    self.local_enum_pattern.match(stripped) or
+                    self.local_union_pattern.match(stripped)):
+                    # This is a local type definition - skip instrumentation
                     instrumented_lines.append(line)
-
-                    # Add Tracy instrumentation
-                    zone_name = self.get_zone_name(file_path, func_info['function_name'], func_info['class_name'])
-                    instrumented_lines.append(f"    {zone_name};\n")
-                    instrumented_count += 1
                 else:
-                    instrumented_lines.append(line)
+                    # Parse function signature
+                    func_info = self.parse_function_signature(lines, i)
+
+                    if (func_info and
+                        not self.should_skip_function_info(func_info) and
+                        self.is_valid_function_signature(func_info, lines, i)):
+                        # Add the line with opening brace
+                        instrumented_lines.append(line)
+
+                        # Add Tracy instrumentation
+                        zone_name = self.get_zone_name(file_path, func_info['function_name'], func_info['class_name'])
+                        instrumented_lines.append(f"    {zone_name};\n")
+                        instrumented_count += 1
+                    else:
+                        instrumented_lines.append(line)
             else:
                 instrumented_lines.append(line)
 
             i += 1
-
-        # Add Tracy include at the beginning if not added yet
-        if not tracy_include_added:
-            instrumented_lines.insert(1, f"{self.tracy_include}\n")
 
         if instrumented_count == 0:
             return False, f"No functions found to instrument in {file_path}"
@@ -276,7 +510,8 @@ class TracyInstrumentor:
         # Write instrumented file
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(instrumented_lines)
+                # Join with newlines to preserve file structure
+                f.write('\n'.join(instrumented_lines))
             return True, f"Instrumented {instrumented_count} functions in {file_path}"
         except Exception as e:
             return False, f"Failed to write {file_path}: {e}"
