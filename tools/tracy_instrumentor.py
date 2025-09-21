@@ -29,35 +29,15 @@ class TracyInstrumentor:
         self.instrumented_marker = "// TRACY_INSTRUMENTED"
         self.tracy_include = '#include "core/TracyProfiler.h"'
 
-        # Patterns for function detection
-        self.function_pattern = re.compile(
-            r'^(?!.*(?:inline|template|static.*inline))'  # Not inline/template
-            r'(?:\s*(?:virtual|static|explicit|constexpr)?)*\s*'  # Optional modifiers
-            r'(?:(?:const\s+)?(?:unsigned\s+)?(?:signed\s+)?'     # Optional type modifiers
-            r'(?:void|bool|int|float|double|char|wchar_t|size_t|'  # Basic types
-            r'std::\w+|[A-Z]\w*(?:::\w+)*)\s*[\*&]*)\s+'          # Complex types
-            r'([A-Za-z_]\w*(?:::\w+)*)'                           # Function name
-            r'\s*\([^)]*\)'                                       # Parameters
-            r'(?:\s*const)?'                                      # Optional const
-            r'\s*\{'                                              # Opening brace
-            r'(?!\s*(?://|/\*))',                                 # Not followed by comment
-            re.MULTILINE
-        )
+        # Simple patterns for fast detection - no catastrophic backtracking
+        self.function_start_pattern = re.compile(r'^[^/\n]*\{\s*$', re.MULTILINE)
+        self.class_method_pattern = re.compile(r'([A-Z]\w*)::', re.MULTILINE)
+        self.identifier_pattern = re.compile(r'\b([A-Za-z_]\w*)\s*\(')
 
-        # Class method pattern
-        self.method_pattern = re.compile(
-            r'^(?:\s*(?:virtual|static|explicit|constexpr|inline)?)*\s*'
-            r'(?:(?:const\s+)?(?:unsigned\s+)?(?:signed\s+)?'
-            r'(?:void|bool|int|float|double|char|wchar_t|size_t|'
-            r'std::\w+|[A-Z]\w*(?:::\w+)*)\s*[\*&]*)\s+'
-            r'([A-Z]\w*)::'                                       # Class name
-            r'([A-Za-z_]\w*)'                                     # Method name
-            r'\s*\([^)]*\)'
-            r'(?:\s*const)?'
-            r'\s*\{'
-            r'(?!\s*(?://|/\*))',
-            re.MULTILINE
-        )
+        # Fast pre-filters
+        self.comment_line = re.compile(r'^\s*(?://|/\*|\*)')
+        self.preprocessor_line = re.compile(r'^\s*#')
+        self.empty_line = re.compile(r'^\s*$')
 
         # Patterns to skip
         self.skip_patterns = [
@@ -84,11 +64,31 @@ class TracyInstrumentor:
             'ui': 'PROFILE_UI_DRAW'
         }
 
-    def should_skip_function(self, func_text: str) -> bool:
-        """Check if function should be skipped from instrumentation."""
-        for pattern in self.skip_patterns:
-            if pattern.search(func_text):
-                return True
+    def should_skip_function_info(self, func_info: Dict[str, str]) -> bool:
+        """Check if function should be skipped from instrumentation based on parsed info."""
+        func_name = func_info['function_name']
+        signature = func_info['signature']
+
+        # Skip destructors
+        if func_name.startswith('~'):
+            return True
+
+        # Skip operators
+        if 'operator' in signature:
+            return True
+
+        # Skip constructors with initializer lists
+        if ':' in signature and func_info['class_name'] and func_name == func_info['class_name']:
+            return True
+
+        # Skip simple getters/setters (single line)
+        if (func_name.startswith('get') or func_name.startswith('set')) and signature.count('\n') <= 1:
+            return True
+
+        # Skip if already instrumented
+        if 'PROFILE_' in signature:
+            return True
+
         return False
 
     def get_zone_name(self, file_path: Path, func_name: str, class_name: str = None) -> str:
@@ -141,76 +141,131 @@ class TracyInstrumentor:
         lines.insert(insert_pos, self.tracy_include)
         return '\n'.join(lines)
 
-    def instrument_function(self, match: re.Match, file_path: Path) -> str:
-        """Add Tracy instrumentation to a single function."""
-        full_match = match.group(0)
+    def parse_function_signature(self, lines: List[str], start_idx: int) -> Optional[Dict[str, str]]:
+        """Parse function signature from lines starting at start_idx."""
+        # Look backwards to find the start of the function
+        signature_lines = []
+        i = start_idx
 
-        # Skip if already instrumented or should be skipped
-        if 'PROFILE_' in full_match or self.should_skip_function(full_match):
-            return full_match
+        # Go back to find the function signature
+        while i >= 0 and len(signature_lines) < 10:  # Limit search
+            line = lines[i].strip()
+            if not line or self.comment_line.match(line) or self.preprocessor_line.match(line):
+                i -= 1
+                continue
 
-        # Determine if it's a method or function
-        if '::' in full_match:
-            # Method
-            method_match = self.method_pattern.search(full_match)
-            if method_match:
-                class_name = method_match.group(1)
-                func_name = method_match.group(2)
-                zone_name = self.get_zone_name(file_path, func_name, class_name)
-            else:
-                zone_name = 'PROFILE_ZONE()'
-        else:
-            # Regular function
-            func_match = self.function_pattern.search(full_match)
+            signature_lines.insert(0, line)
+
+            # Check if we have a complete signature
+            full_sig = ' '.join(signature_lines)
+            if '(' in full_sig and ')' in full_sig and '{' in full_sig:
+                break
+            i -= 1
+
+        if not signature_lines:
+            return None
+
+        full_signature = ' '.join(signature_lines)
+
+        # Extract function name and class if present
+        class_name = None
+        func_name = None
+
+        # Check for class method
+        class_match = self.class_method_pattern.search(full_signature)
+        if class_match:
+            class_name = class_match.group(1)
+            # Find function name after ::
+            after_class = full_signature[class_match.end():]
+            func_match = self.identifier_pattern.search(after_class)
             if func_match:
                 func_name = func_match.group(1)
-                zone_name = self.get_zone_name(file_path, func_name)
-            else:
-                zone_name = 'PROFILE_ZONE()'
+        else:
+            # Regular function - find last identifier before (
+            func_match = self.identifier_pattern.search(full_signature)
+            if func_match:
+                func_name = func_match.group(1)
 
-        # Find the opening brace and add instrumentation
-        brace_pos = full_match.find('{')
-        if brace_pos == -1:
-            return full_match
+        if not func_name:
+            return None
 
-        before_brace = full_match[:brace_pos + 1]
-        after_brace = full_match[brace_pos + 1:]
-
-        # Add the profiling zone right after the opening brace
-        instrumented = f"{before_brace}\n    {zone_name};\n{after_brace}"
-
-        return instrumented
+        return {
+            'function_name': func_name,
+            'class_name': class_name,
+            'signature': full_signature
+        }
 
     def instrument_file(self, file_path: Path, preview_mode: bool = False) -> Tuple[bool, str]:
-        """Instrument a single file with Tracy profiling."""
+        """Instrument a single file with Tracy profiling using optimized line-by-line processing."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+                lines = f.readlines()
         except Exception as e:
             return False, f"Failed to read {file_path}: {e}"
 
+        content = ''.join(lines)
         if self.is_already_instrumented(content):
             return False, f"File {file_path} is already instrumented"
 
-        original_content = content
-
-        # Add Tracy include
-        content = self.add_tracy_include(content)
+        # Process line by line for fast instrumentation
+        instrumented_lines = []
+        instrumented_count = 0
+        tracy_include_added = False
 
         # Add instrumentation marker
-        content = f"{self.instrumented_marker}\n{content}"
+        instrumented_lines.append(f"{self.instrumented_marker}\n")
 
-        # Instrument functions
-        instrumented_count = 0
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
 
-        # Function instrumentation
-        def replace_func(match):
-            nonlocal instrumented_count
-            instrumented_count += 1
-            return self.instrument_function(match, file_path)
+            # Fast pre-filtering
+            if (not stripped or
+                self.comment_line.match(stripped) or
+                self.preprocessor_line.match(stripped)):
 
-        content = self.function_pattern.sub(replace_func, content)
-        content = self.method_pattern.sub(replace_func, content)
+                # Add Tracy include after other includes
+                if not tracy_include_added and stripped.startswith('#include'):
+                    instrumented_lines.append(line)
+                    # Look ahead to see if there are more includes
+                    next_idx = i + 1
+                    while (next_idx < len(lines) and
+                           (not lines[next_idx].strip() or
+                            lines[next_idx].strip().startswith('#include'))):
+                        next_idx += 1
+                    # Add Tracy include after last include
+                    if next_idx - 1 == i:  # This is the last include
+                        instrumented_lines.append(f"{self.tracy_include}\n")
+                        tracy_include_added = True
+                else:
+                    instrumented_lines.append(line)
+                i += 1
+                continue
+
+            # Check for function opening brace
+            if '{' in stripped and stripped.endswith('{'):
+                # Parse function signature
+                func_info = self.parse_function_signature(lines, i)
+
+                if func_info and not self.should_skip_function_info(func_info):
+                    # Add the line with opening brace
+                    instrumented_lines.append(line)
+
+                    # Add Tracy instrumentation
+                    zone_name = self.get_zone_name(file_path, func_info['function_name'], func_info['class_name'])
+                    instrumented_lines.append(f"    {zone_name};\n")
+                    instrumented_count += 1
+                else:
+                    instrumented_lines.append(line)
+            else:
+                instrumented_lines.append(line)
+
+            i += 1
+
+        # Add Tracy include at the beginning if not added yet
+        if not tracy_include_added:
+            instrumented_lines.insert(1, f"{self.tracy_include}\n")
 
         if instrumented_count == 0:
             return False, f"No functions found to instrument in {file_path}"
@@ -221,7 +276,7 @@ class TracyInstrumentor:
         # Write instrumented file
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+                f.writelines(instrumented_lines)
             return True, f"Instrumented {instrumented_count} functions in {file_path}"
         except Exception as e:
             return False, f"Failed to write {file_path}: {e}"
@@ -328,9 +383,9 @@ def main():
 
         if success:
             success_count += 1
-            print(f"✓ {message}")
+            print(f"[OK] {message}")
         else:
-            print(f"✗ {message}")
+            print(f"[FAIL] {message}")
 
     print(f"\nProcessed {success_count}/{len(files)} files successfully")
 
