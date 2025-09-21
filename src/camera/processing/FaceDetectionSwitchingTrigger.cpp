@@ -712,10 +712,12 @@ std::vector<cv::Rect> FaceDetectionSwitchingTrigger::PostprocessCenterFaceOutput
 
             if (confidence > scoreThreshold) {
                 // Get scale and offset for this position
-                float scaleW = std::exp(scaleData[index]) * 4.0f; // Scale width with exp transform
-                float scaleH = std::exp(scaleData[heatmapHeight * heatmapWidth + index]) * 4.0f; // Scale height with exp transform
-                float offsetX = offsetData[heatmapHeight * heatmapWidth + index]; // X offset (use second channel)
-                float offsetY = offsetData[index]; // Y offset (use first channel)
+                // Based on reference implementation: scale tensor has [height, width] channels
+                float scaleH = std::exp(scaleData[index]) * 4.0f; // Scale height (first channel)
+                float scaleW = std::exp(scaleData[heatmapHeight * heatmapWidth + index]) * 4.0f; // Scale width (second channel)
+                // Offset tensor has [y_offset, x_offset] channels
+                float offsetY = offsetData[index]; // Y offset (first channel)
+                float offsetX = offsetData[heatmapHeight * heatmapWidth + index]; // X offset (second channel)
 
                 // Calculate center position (downsampling factor is 4, +0.5 for pixel shift)
                 float centerX = (x + offsetX + 0.5f) * 4.0f;
