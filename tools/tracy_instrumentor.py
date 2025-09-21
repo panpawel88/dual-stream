@@ -76,6 +76,16 @@ class TracyInstrumentor:
             'TracyProfiler.cpp', 'TracyProfiler.h'
         }
 
+        # OpenGL/CUDA headers that conflict with Tracy's OpenGL includes
+        self.opengl_conflict_headers = {
+            'cuda_gl_interop.h',
+            'GL/gl.h',
+            'gl.h',
+            'glad/gl.h',
+            'GLES2/gl2.h',
+            'GLES3/gl3.h'
+        }
+
         # Subsystem-specific profiling zones
         self.subsystem_zones = {
             'video/decode': 'PROFILE_VIDEO_DECODE',
@@ -305,8 +315,15 @@ class TracyInstrumentor:
         """Check if file is already instrumented."""
         return self.instrumented_marker in content or "PROFILE_ZONE" in content
 
+    def has_opengl_conflicts(self, content: str) -> bool:
+        """Check if file contains OpenGL headers that conflict with Tracy."""
+        for header in self.opengl_conflict_headers:
+            if f'#include <{header}>' in content or f'#include "{header}"' in content:
+                return True
+        return False
+
     def add_tracy_include(self, content: str) -> str:
-        """Add Tracy include to file if not present, avoiding extern C blocks."""
+        """Add Tracy include to file if not present, avoiding extern C blocks and OpenGL conflicts."""
         if self.tracy_include in content:
             return content
 
@@ -316,7 +333,22 @@ class TracyInstrumentor:
         lines = content.split('\n')
         insert_pos = 0
         extern_c_depth = 0
+        has_opengl_conflicts = self.has_opengl_conflicts(content)
+        cuda_ifdef_start = -1
+        cuda_ifdef_end = -1
 
+        # If we have OpenGL conflicts, we need special handling
+        if has_opengl_conflicts:
+            # Look for CUDA ifdef blocks where OpenGL headers are included
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped == '#ifdef HAVE_CUDA':
+                    cuda_ifdef_start = i
+                elif stripped == '#endif' and cuda_ifdef_start != -1 and cuda_ifdef_end == -1:
+                    cuda_ifdef_end = i
+                    break
+
+        tracy_inserted = False
         for i, line in enumerate(lines):
             stripped = line.strip()
 
@@ -334,9 +366,25 @@ class TracyInstrumentor:
             # Only process includes outside extern "C" blocks
             if extern_c_depth == 0:
                 if stripped.startswith('#include'):
-                    insert_pos = i + 1
+                    # For OpenGL conflicts, place Tracy include BEFORE OpenGL headers in CUDA ifdef block
+                    if has_opengl_conflicts and cuda_ifdef_start != -1 and cuda_ifdef_end != -1 and not tracy_inserted:
+                        # Check if this include is an OpenGL conflict header
+                        is_opengl_header = any(header in stripped for header in self.opengl_conflict_headers)
+                        if is_opengl_header and i >= cuda_ifdef_start and i <= cuda_ifdef_end:
+                            # Place Tracy include right BEFORE this OpenGL header
+                            lines.insert(i, self.tracy_include)
+                            tracy_inserted = True
+                            break
+                        elif not is_opengl_header:
+                            insert_pos = i + 1
+                    else:
+                        insert_pos = i + 1
                 elif stripped and not stripped.startswith('//') and not stripped.startswith('/*') and not self.preprocessor_line.match(stripped):
                     break
+
+        # If we already inserted Tracy include due to OpenGL conflicts, return early
+        if tracy_inserted:
+            return '\n'.join(lines)
 
         lines.insert(insert_pos, self.tracy_include)
         return '\n'.join(lines)
