@@ -300,9 +300,10 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
                 context.isOriginalTexture = true; // Initial context represents original padded texture from decoder
                 
                 // Profile render pass execution
-#ifdef TRACY_ENABLE
-                PROFILE_GPU_D3D11_ZONE("RenderPassPipeline");
-#endif
+                // TODO: Fix Tracy D3D11 GPU profiling - temporarily disabled due to macro complexity
+                // #ifdef TRACY_ENABLE
+                // PROFILE_GPU_D3D11_ZONE("RenderPassPipeline");
+                // #endif
                 renderSuccess = m_renderPassPipeline->Execute(context, inputSRV, m_renderTargetView.Get());
             } else {
                 // Direct rendering without render passes (fallback to original behavior)
@@ -343,11 +344,12 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
     }
 
     // Collect Tracy GPU profiling data
-#ifdef TRACY_ENABLE
-    if (m_tracyGpuContextInitialized) {
-        PROFILE_GPU_D3D11_COLLECT();
-    }
-#endif
+    // TODO: Fix Tracy D3D11 GPU profiling - temporarily disabled due to macro complexity
+    // #ifdef TRACY_ENABLE
+    // if (m_tracyGpuContextInitialized) {
+    //     PROFILE_GPU_D3D11_COLLECT();
+    // }
+    // #endif
     
     return renderSuccess;
 }
