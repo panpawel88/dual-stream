@@ -470,7 +470,6 @@ add_library(dual_stream_core STATIC
     src/core/FFmpegInitializer.cpp
     src/core/Config.cpp
     src/core/PerformanceStatistics.cpp
-    src/core/TracyProfiler.cpp
     src/video/switching/VideoSwitchingStrategy.cpp
     src/video/switching/experimental/ImmediateSwitchStrategy.cpp
     src/video/switching/experimental/PredecodedSwitchStrategy.cpp

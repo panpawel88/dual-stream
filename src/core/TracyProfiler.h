@@ -138,10 +138,6 @@ public:
         return instance;
     }
 
-    // Initialize Tracy GPU contexts based on renderer type
-    void InitializeGPUContext(const char* rendererType);
-    void ShutdownGPUContext();
-
     // Enable/disable profiling at runtime
     void SetProfilingEnabled(bool enabled) { m_enabled = enabled; }
     bool IsProfilingEnabled() const { return m_enabled; }
@@ -149,7 +145,6 @@ public:
 private:
     TracyProfilerManager() = default;
     bool m_enabled = true;
-    bool m_gpuContextInitialized = false;
 };
 #else
 // Stub implementation when Tracy is disabled
@@ -160,8 +155,6 @@ public:
         return instance;
     }
 
-    void InitializeGPUContext(const char* rendererType) {}
-    void ShutdownGPUContext() {}
     void SetProfilingEnabled(bool enabled) {}
     bool IsProfilingEnabled() const { return false; }
 };
