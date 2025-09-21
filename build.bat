@@ -30,12 +30,14 @@ REM Parse command line arguments
 set BUILD_CONFIG=Release
 set CLEAN_BUILD=false
 set FORCE_CMAKE=false
+set ENABLE_TRACY=false
 
 :parse_args
 if "%1"=="" goto end_parse
 if /i "%1"=="--debug" set BUILD_CONFIG=Debug
 if /i "%1"=="--clean" set CLEAN_BUILD=true
 if /i "%1"=="--cmake" set FORCE_CMAKE=true
+if /i "%1"=="--tracy" set ENABLE_TRACY=true
 shift
 goto parse_args
 :end_parse
@@ -72,10 +74,20 @@ if "%NEED_CMAKE%"=="true" (
     echo ========================================
     echo Configuring CMake...
     echo ========================================
-    
+
     cd build
-    cmake -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" ..
-    
+
+    REM Build CMake command with optional Tracy support
+    set CMAKE_CMD=cmake -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%"
+    if "%ENABLE_TRACY%"=="true" (
+        echo Enabling Tracy profiler support...
+        set CMAKE_CMD=!CMAKE_CMD! -DENABLE_TRACY=ON
+    )
+    set CMAKE_CMD=!CMAKE_CMD! ..
+
+    echo Running: !CMAKE_CMD!
+    !CMAKE_CMD!
+
     if errorlevel 1 (
         echo ERROR: CMake configuration failed!
         cd ..
@@ -112,4 +124,5 @@ echo Build script options:
 echo   --debug     Build in Debug configuration (default: Release)
 echo   --clean     Clean build directory before building
 echo   --cmake     Force CMake reconfiguration
+echo   --tracy     Enable Tracy profiler support (-DENABLE_TRACY=ON)
 echo ========================================
