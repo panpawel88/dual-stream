@@ -5,6 +5,7 @@
 #include <string>
 #include <chrono>
 #include "IRenderer.h"
+#include "core/TracyProfiler.h"
 
 #if HAVE_CUDA
 #include <memory>
@@ -113,6 +114,11 @@ private:
     
     // Render pass pipeline
     std::unique_ptr<OpenGLRenderPassPipeline> m_renderPassPipeline;
+
+#ifdef TRACY_ENABLE
+    // Tracy GPU profiling context
+    bool m_tracyGpuContextInitialized;
+#endif
 };
 
 // Vertex structure for full-screen quad

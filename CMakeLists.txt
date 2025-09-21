@@ -111,6 +111,9 @@ target_link_libraries(FFmpeg INTERFACE
 # Optional CUDA support
 option(ENABLE_CUDA "Enable CUDA support for OpenGL renderer acceleration" ON)
 
+# Optional Tracy profiler support
+option(ENABLE_TRACY "Enable Tracy profiler support" OFF)
+
 if(ENABLE_CUDA)
     find_package(CUDAToolkit QUIET)
     if(CUDAToolkit_FOUND)
@@ -136,6 +139,32 @@ else()
     message(STATUS "CUDA support disabled by user")
     set(HAVE_CUDA FALSE)
     target_compile_definitions(FFmpeg INTERFACE HAVE_CUDA=0)
+endif()
+
+# Tracy profiler configuration
+if(ENABLE_TRACY)
+    message(STATUS "Tracy profiler enabled")
+
+    # Fetch Tracy from GitHub
+    FetchContent_Declare(
+        tracy
+        GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+        GIT_TAG v0.12.2
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
+    )
+
+    # Configure Tracy options
+    set(TRACY_ENABLE ON CACHE BOOL "Enable Tracy profiler")
+    set(TRACY_ON_DEMAND ON CACHE BOOL "Enable on-demand profiling")
+    set(TRACY_NO_FRAME_IMAGE ON CACHE BOOL "Disable frame image capture")
+    set(TRACY_NO_SYSTEM_TRACING ON CACHE BOOL "Disable system tracing")
+
+    FetchContent_MakeAvailable(tracy)
+
+    message(STATUS "Tracy profiler configured successfully")
+else()
+    message(STATUS "Tracy profiler disabled")
 endif()
 
 # ImGui Configuration (using git submodule)
@@ -441,6 +470,7 @@ add_library(dual_stream_core STATIC
     src/core/FFmpegInitializer.cpp
     src/core/Config.cpp
     src/core/PerformanceStatistics.cpp
+    src/core/TracyProfiler.cpp
     src/video/switching/VideoSwitchingStrategy.cpp
     src/video/switching/experimental/ImmediateSwitchStrategy.cpp
     src/video/switching/experimental/PredecodedSwitchStrategy.cpp
@@ -534,6 +564,12 @@ if(ENABLE_CAMERA_SUPPORT)
     if(HAVE_REALSENSE)
         target_link_libraries(dual_stream_core PUBLIC CameraRealSense)
     endif()
+endif()
+
+# Link Tracy profiler if enabled
+if(ENABLE_TRACY)
+    target_link_libraries(dual_stream_core PUBLIC TracyClient)
+    target_compile_definitions(dual_stream_core PUBLIC TRACY_ENABLE)
 endif()
 
 # Configure main executable properties
