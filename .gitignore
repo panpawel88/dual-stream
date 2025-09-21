@@ -36,3 +36,9 @@ ffmpeg/
 # Local configuration files
 .env.local
 test_config.local.json
+
+# ImGui configuration
+imgui.ini
+
+# Windows null device file
+nul
