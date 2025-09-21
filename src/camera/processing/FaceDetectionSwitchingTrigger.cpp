@@ -632,7 +632,7 @@ std::vector<cv::Rect> FaceDetectionSwitchingTrigger::DetectFacesCenterFace(const
 
         // Create blob from image
         cv::Mat blob;
-        cv::dnn::blobFromImage(preprocessed, blob, 1.0/255.0, m_config.centerfaceInputSize, cv::Scalar(0, 0, 0), true, false);
+        cv::dnn::blobFromImage(preprocessed, blob, 1.0, m_config.centerfaceInputSize, cv::Scalar(0, 0, 0), true, false);
 
         // Set input to the network
         m_centerfaceNet.setInput(blob);
@@ -712,18 +712,18 @@ std::vector<cv::Rect> FaceDetectionSwitchingTrigger::PostprocessCenterFaceOutput
 
             if (confidence > scoreThreshold) {
                 // Get scale and offset for this position
-                float scaleW = scaleData[index]; // Scale width
-                float scaleH = scaleData[heatmapHeight * heatmapWidth + index]; // Scale height
-                float offsetX = offsetData[index]; // X offset
-                float offsetY = offsetData[heatmapHeight * heatmapWidth + index]; // Y offset
+                float scaleW = std::exp(scaleData[index]) * 4.0f; // Scale width with exp transform
+                float scaleH = std::exp(scaleData[heatmapHeight * heatmapWidth + index]) * 4.0f; // Scale height with exp transform
+                float offsetX = offsetData[heatmapHeight * heatmapWidth + index]; // X offset (use second channel)
+                float offsetY = offsetData[index]; // Y offset (use first channel)
 
-                // Calculate center position (downsampling factor is 4)
-                float centerX = (x + offsetX) * 4.0f;
-                float centerY = (y + offsetY) * 4.0f;
+                // Calculate center position (downsampling factor is 4, +0.5 for pixel shift)
+                float centerX = (x + offsetX + 0.5f) * 4.0f;
+                float centerY = (y + offsetY + 0.5f) * 4.0f;
 
-                // Calculate bounding box size
-                float width = scaleW * 4.0f;
-                float height = scaleH * 4.0f;
+                // Calculate bounding box size (already transformed with exp)
+                float width = scaleW;
+                float height = scaleH;
 
                 // Convert to bounding box coordinates
                 float x1 = centerX - width / 2.0f;
