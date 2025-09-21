@@ -87,7 +87,11 @@ D3D11Renderer::D3D11Renderer()
     , m_width(0)
     , m_height(0)
     , m_frameNumber(0)
-    , m_totalTime(0.0f) {
+    , m_totalTime(0.0f)
+#ifdef TRACY_ENABLE
+    , m_tracyGpuContextInitialized(false)
+#endif
+{
     
     // Load rendering configuration from config system
     Config* config = Config::GetInstance();
@@ -181,6 +185,15 @@ bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
         LOG_INFO("D3D11 render pass pipeline disabled or failed to initialize");
     }
     
+    // Initialize Tracy GPU profiling context
+#ifdef TRACY_ENABLE
+    if (m_device && m_context) {
+        PROFILE_GPU_D3D11_CONTEXT(m_device.Get(), m_context.Get());
+        m_tracyGpuContextInitialized = true;
+        LOG_INFO("Tracy D3D11 GPU profiling context initialized");
+    }
+#endif
+
     m_initialized = true;
     LOG_INFO("D3D11 renderer initialized successfully");
     return true;
@@ -191,6 +204,8 @@ void D3D11Renderer::Cleanup() {
 }
 
 bool D3D11Renderer::Present(const RenderTexture& texture) {
+    PROFILE_RENDER();
+
     if (!m_initialized) {
         return false;
     }
@@ -284,6 +299,10 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
                 context.outputHeight = m_height;
                 context.isOriginalTexture = true; // Initial context represents original padded texture from decoder
                 
+                // Profile render pass execution
+#ifdef TRACY_ENABLE
+                PROFILE_GPU_D3D11_ZONE("RenderPassPipeline");
+#endif
                 renderSuccess = m_renderPassPipeline->Execute(context, inputSRV, m_renderTargetView.Get());
             } else {
                 // Direct rendering without render passes (fallback to original behavior)
@@ -322,6 +341,13 @@ bool D3D11Renderer::Present(const RenderTexture& texture) {
         LOG_ERROR("Failed to present frame. HRESULT: 0x", std::hex, hr);
         return false;
     }
+
+    // Collect Tracy GPU profiling data
+#ifdef TRACY_ENABLE
+    if (m_tracyGpuContextInitialized) {
+        PROFILE_GPU_D3D11_COLLECT();
+    }
+#endif
     
     return renderSuccess;
 }

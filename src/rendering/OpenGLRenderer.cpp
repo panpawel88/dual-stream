@@ -84,7 +84,11 @@ OpenGLRenderer::OpenGLRenderer()
     , wglCreateContextAttribsARB(nullptr)
     , wglSwapIntervalEXT(nullptr)
     , m_frameNumber(0)
-    , m_totalTime(0.0f) {
+    , m_totalTime(0.0f)
+#ifdef TRACY_ENABLE
+    , m_tracyGpuContextInitialized(false)
+#endif
+{
     
     // Load rendering configuration from config system
     Config* config = Config::GetInstance();
@@ -215,6 +219,13 @@ bool OpenGLRenderer::Initialize(HWND hwnd, int width, int height) {
     m_frameNumber = 0;
     m_totalTime = 0.0f;
 
+    // Initialize Tracy GPU profiling context
+#ifdef TRACY_ENABLE
+    PROFILE_GPU_OPENGL_CONTEXT();
+    m_tracyGpuContextInitialized = true;
+    LOG_INFO("Tracy OpenGL GPU profiling context initialized");
+#endif
+
     m_initialized = true;
     LOG_INFO("OpenGL renderer initialized successfully");
     return true;
@@ -225,6 +236,8 @@ void OpenGLRenderer::Cleanup() {
 }
 
 bool OpenGLRenderer::Present(const RenderTexture& texture) {
+    PROFILE_RENDER();
+
     if (!m_initialized) {
         return false;
     }
@@ -280,7 +293,14 @@ bool OpenGLRenderer::Present(const RenderTexture& texture) {
     
     // Always swap buffers, even for failed renders (shows black screen)
     SwapBuffers(m_hdc);
-    
+
+    // Collect Tracy GPU profiling data
+#ifdef TRACY_ENABLE
+    if (m_tracyGpuContextInitialized) {
+        PROFILE_GPU_OPENGL_COLLECT();
+    }
+#endif
+
     return renderSuccess;
 }
 
@@ -758,6 +778,9 @@ bool OpenGLRenderer::PresentSoftwareTexture(const RenderTexture& texture) {
         context.flipY = false; // Will be set by pipeline based on output target
         
         // Execute pipeline with our texture as input and default framebuffer as output
+#ifdef TRACY_ENABLE
+        PROFILE_GPU_OPENGL_ZONE("RenderPassPipeline");
+#endif
         return m_renderPassPipeline->Execute(context, m_texture, 0, 0);
     } else {
         // Direct rendering without render passes (fallback to original behavior)
@@ -976,6 +999,9 @@ bool OpenGLRenderer::PresentCudaTexture(const RenderTexture& texture) {
         context.flipY = false; // Will be set by pipeline based on output target
         
         // Execute pipeline with our texture as input and default framebuffer as output
+#ifdef TRACY_ENABLE
+        PROFILE_GPU_OPENGL_ZONE("RenderPassPipeline");
+#endif
         return m_renderPassPipeline->Execute(context, m_texture, 0, 0);
     } else {
         // Direct rendering without render passes (fallback to original behavior)

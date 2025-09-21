@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 #include "IRenderer.h"
 #include "renderpass/RenderPassPipeline.h"
+#include "core/TracyProfiler.h"
 #include <memory>
 
 
@@ -66,6 +67,11 @@ private:
     int m_vsyncMode;         // 0 = off, 1 = on, 2 = adaptive
     int m_bufferCount;       // Number of back buffers (1-3)
     DXGI_SWAP_EFFECT m_swapEffect; // Presentation mode
+
+#ifdef TRACY_ENABLE
+    // Tracy GPU profiling context
+    bool m_tracyGpuContextInitialized;
+#endif
     
     bool CreateDeviceAndSwapChain();
     bool CreateRenderTarget();
