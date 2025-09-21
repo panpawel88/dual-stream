@@ -7,6 +7,9 @@
 #ifdef TRACY_ENABLE
     #include <tracy/Tracy.hpp>
     #include <tracy/TracyD3D11.hpp>
+
+    // Include OpenGL headers before Tracy's OpenGL header
+    #include "../rendering/OpenGLHeaders.h"
     #include <tracy/TracyOpenGL.hpp>
 
     // Basic CPU profiling macros
