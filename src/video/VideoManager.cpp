@@ -91,7 +91,7 @@ bool VideoManager::Initialize(const std::vector<std::string>& videoPaths, IRende
         LOG_INFO("Using fallback frame rate: ", fallbackFps, " FPS");
     }
     
-    m_switchingStrategy = VideoSwitchingStrategyFactory::Create(switchingAlgorithm);
+    m_switchingStrategy = VideoSwitchingStrategyFactory::Create(switchingAlgorithm, videoPaths.size());
     if (!m_switchingStrategy) {
         LOG_ERROR("Failed to create switching strategy");
         Cleanup();
@@ -105,8 +105,12 @@ bool VideoManager::Initialize(const std::vector<std::string>& videoPaths, IRende
     }
     
     LOG_INFO("VideoManager initialized successfully");
-    LOG_INFO("Video 1 duration: ", m_videos[0].duration, " seconds");
-    LOG_INFO("Video 2 duration: ", m_videos[1].duration, " seconds");
+
+    // Log durations for all videos
+    for (size_t i = 0; i < m_videos.size(); i++) {
+        LOG_INFO("Video ", (i + 1), " duration: ", m_videos[i].duration, " seconds");
+    }
+
     LOG_INFO("Frame rate: ", frameRate, " FPS");
     LOG_INFO("Using switching strategy: ", m_switchingStrategy->GetName());
     
@@ -136,10 +140,10 @@ void VideoManager::Cleanup() {
             m_switchingStrategy.reset();
         }
         
-        for (int i = 0; i < 2; i++) {
-            m_videos[i].decoder.Cleanup();
-            m_videos[i].demuxer.Close();
-            m_videos[i].initialized = false;
+        for (auto& video : m_videos) {
+            video.decoder.Cleanup();
+            video.demuxer.Close();
+            video.initialized = false;
         }
         
         m_initialized = false;
@@ -186,10 +190,10 @@ bool VideoManager::Stop() {
     m_state = VideoState::STOPPED;
     m_pausedTime = 0.0;
     
-    for (int i = 0; i < 2; i++) {
-        m_videos[i].state = VideoState::STOPPED;
-        m_videos[i].currentTime = 0.0;
-        m_videos[i].decoder.Flush();
+    for (auto& video : m_videos) {
+        video.state = VideoState::STOPPED;
+        video.currentTime = 0.0;
+        video.decoder.Flush();
     }
     
     LOG_INFO("Playback stopped");
@@ -316,19 +320,21 @@ bool VideoManager::InitializeVideoStream(VideoStream& stream, const std::string&
 }
 
 bool VideoManager::ValidateStreams() {
-    if (!m_videos[0].initialized || !m_videos[1].initialized) {
-        return false;
+    // Check that all videos are initialized
+    for (size_t i = 0; i < m_videos.size(); i++) {
+        if (!m_videos[i].initialized) {
+            LOG_ERROR("Video ", (i + 1), " is not initialized");
+            return false;
+        }
     }
-    
-    // Log video resolutions for information
-    int width1 = m_videos[0].demuxer.GetWidth();
-    int height1 = m_videos[0].demuxer.GetHeight();
-    int width2 = m_videos[1].demuxer.GetWidth();
-    int height2 = m_videos[1].demuxer.GetHeight();
-    
-    LOG_INFO("Video 1 resolution: ", width1, "x", height1);
-    LOG_INFO("Video 2 resolution: ", width2, "x", height2);
-    
+
+    // Log all video resolutions for information
+    for (size_t i = 0; i < m_videos.size(); i++) {
+        int width = m_videos[i].demuxer.GetWidth();
+        int height = m_videos[i].demuxer.GetHeight();
+        LOG_INFO("Video ", (i + 1), " resolution: ", width, "x", height);
+    }
+
     return true;
 }
 

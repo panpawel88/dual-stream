@@ -252,6 +252,9 @@ int main(int argc, char* argv[]) {
         LOG_ERROR("Failed to create switching trigger");
         return 1;
     }
+
+    // Log the actual trigger used (may differ from requested type due to auto-detection)
+    LOG_INFO("Active switching trigger: ", switchingTrigger->GetName());
     
     // Initialize face detection if needed and store reference for main loop
     std::shared_ptr<FaceDetectionSwitchingTrigger> faceDetectionTrigger;

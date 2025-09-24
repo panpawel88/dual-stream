@@ -49,6 +49,7 @@ protected:
 class VideoSwitchingStrategyFactory {
 public:
     static std::unique_ptr<VideoSwitchingStrategy> Create(SwitchingAlgorithm algorithm);
+    static std::unique_ptr<VideoSwitchingStrategy> Create(SwitchingAlgorithm algorithm, size_t videoCount);
     static SwitchingAlgorithm ParseAlgorithm(const std::string& algorithmName);
     static std::string GetAlgorithmName(SwitchingAlgorithm algorithm);
 };

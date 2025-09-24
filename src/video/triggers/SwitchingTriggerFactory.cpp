@@ -1,22 +1,28 @@
 #include "SwitchingTriggerFactory.h"
 #include "KeyboardSwitchingTrigger.h"
+#include "NoOpSwitchingTrigger.h"
 #include "../../camera/processing/FaceDetectionSwitchingTrigger.h"
 #include <algorithm>
 #include <cctype>
 
 std::shared_ptr<ISwitchingTrigger> SwitchingTriggerFactory::Create(TriggerType triggerType, const TriggerConfig& config) {
+    // Auto-detect single video mode - use NoOp trigger when only 1 video
+    if (config.videoCount == 1) {
+        return std::make_shared<NoOpSwitchingTrigger>();
+    }
+
     switch (triggerType) {
         case TriggerType::KEYBOARD:
             if (!config.window) {
                 return nullptr; // Keyboard trigger requires window instance
             }
             return std::make_shared<KeyboardSwitchingTrigger>(config.window, config.videoCount);
-            
+
         case TriggerType::FACE_DETECTION: {
             auto trigger = std::make_shared<FaceDetectionSwitchingTrigger>(config.faceDetectionConfig);
             return trigger;
         }
-            
+
         default:
             // Default to keyboard trigger if type is unrecognized
             if (config.window) {

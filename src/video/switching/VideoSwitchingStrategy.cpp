@@ -2,6 +2,7 @@
 #include "experimental/ImmediateSwitchStrategy.h"
 #include "experimental/PredecodedSwitchStrategy.h"
 #include "KeyframeSwitchStrategy.h"
+#include "SingleVideoStrategy.h"
 #include <algorithm>
 #include <cctype>
 
@@ -16,6 +17,16 @@ std::unique_ptr<VideoSwitchingStrategy> VideoSwitchingStrategyFactory::Create(Sw
         default:
             return nullptr;
     }
+}
+
+std::unique_ptr<VideoSwitchingStrategy> VideoSwitchingStrategyFactory::Create(SwitchingAlgorithm algorithm, size_t videoCount) {
+    // Auto-detect single video mode
+    if (videoCount == 1) {
+        return std::make_unique<SingleVideoStrategy>();
+    }
+
+    // For multiple videos, use the requested algorithm
+    return Create(algorithm);
 }
 
 SwitchingAlgorithm VideoSwitchingStrategyFactory::ParseAlgorithm(const std::string& algorithmName) {

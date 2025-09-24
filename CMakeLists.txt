@@ -474,7 +474,9 @@ add_library(dual_stream_core STATIC
     src/video/switching/experimental/ImmediateSwitchStrategy.cpp
     src/video/switching/experimental/PredecodedSwitchStrategy.cpp
     src/video/switching/KeyframeSwitchStrategy.cpp
+    src/video/switching/SingleVideoStrategy.cpp
     src/video/triggers/KeyboardSwitchingTrigger.cpp
+    src/video/triggers/NoOpSwitchingTrigger.cpp
     src/video/triggers/SwitchingTriggerFactory.cpp
     ${CAMERA_SOURCES}
     # UI and overlay system
