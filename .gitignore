@@ -1,6 +1,9 @@
 # Test videos directory
 test_videos/
 
+# Data directory (models, datasets, etc.)
+data/
+
 # Build directories
 build/
 cmake-build-*/
